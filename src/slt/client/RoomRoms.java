@@ -46,7 +46,14 @@ final class RoomRoms {
         }
         try {
             Map<String, Object> m = Json.parseObject(Files.readString(f));
-            m.put("present", Files.isRegularFile(Path.of(Json.str(m, "path"))));
+            Path rom = Path.of(Json.str(m, "path"));
+            // the SLT folder was moved or renamed: the ROM is still next to rom.json
+            Path here = f.resolveSibling(rom.getFileName());
+            if (!Files.isRegularFile(rom) && Files.isRegularFile(here)) {
+                m.put("path", here.toString());
+                rom = here;
+            }
+            m.put("present", Files.isRegularFile(rom));
             return m;
         } catch (IOException | RuntimeException e) {
             return null;

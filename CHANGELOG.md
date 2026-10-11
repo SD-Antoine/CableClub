@@ -1,10 +1,11 @@
 # Nouveautés de SLT
 
-## 0.4.2
+## 0.4.2 — 2026-10-11
 
 - **Volume** : un curseur de volume dans la barre du jeu (à côté du bouton son), retenu pour les parties suivantes.
 - Correction : changer le volume dans les Réglages s'applique aussi au jeu déjà lancé (avant, seulement au lancement suivant).
 - Correction : après avoir choisi la vitesse de l'avance rapide, les touches du jeu répondent tout de suite.
+- Correction : déplacer ou renommer le dossier de SLT ne fait plus « perdre » les ROMs des salles.
 
 ## 0.4.1 — 2026-10-11
 
