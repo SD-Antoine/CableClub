@@ -511,9 +511,8 @@ export function defaultRando(gen) {
     limitGens: [],
     limitEvoRelatives: false,
     seed: randomSeed(),
-    // SLT: one ROM for everybody, or one ROM per player (then one unique Pokémon per zone)
+    // SLT: one ROM for everybody, or one ROM (one seed) per player
     perPlayer: false,
-    uniquePerZone: false,
     // SLT: secondary shop clerks randomized (never a Master Ball nor an item sold for more than its price)
     shops: gen >= 3 ? 'secondary' : 'off',
   };

@@ -1,5 +1,6 @@
 package slt.player;
 
+import slt.Ghosts;
 import slt.Json;
 import slt.Log;
 
@@ -120,19 +121,14 @@ final class Bridge {
     private boolean ghostBusy;
 
     /**
-     * Position of the player for the others: only the latest one matters, so a
-     * reading that arrives while the previous one is being sent replaces any
-     * waiting one (keeping a sprite it would have carried).
+     * Position of the player for the others: a reading that arrives while the
+     * previous one is being sent is merged with any waiting one (latest
+     * position, the way walked by both, their sprites).
      */
     void ghost(Map<String, Object> g) {
         synchronized (ghostLock) {
             if (ghostBusy) {
-                if (ghostPending != null && ghostPending.containsKey("spr") && !g.containsKey("spr")) {
-                    g.put("spr", ghostPending.get("spr"));
-                    g.put("sw", ghostPending.get("sw"));
-                    g.put("sh", ghostPending.get("sh"));
-                }
-                ghostPending = g;
+                ghostPending = Ghosts.merge(ghostPending, g);
                 return;
             }
             ghostBusy = true;

@@ -37,9 +37,10 @@ DÉMARRER
 
 PENDANT LA PARTIE
 -----------------
-- Générations 1 à 3 : vos partenaires apparaissent dans votre jeu, là où ils
-  sont sur la carte, avec leur pseudo au-dessus de la tête et une icône :
-  combat, dialogue (trois points), échange, ou déconnecté (Wi-Fi barré).
+- Générations 1 à 3 et 5 : vos partenaires apparaissent dans votre jeu, là
+  où ils sont sur la carte, avec leur pseudo au-dessus de la tête et une
+  icône : combat, dialogue (trois points), échange, ou déconnecté (Wi-Fi
+  barré).
   Ils ne s'affichent que quand vous avez la main (pas pendant un combat, un
   dialogue, un menu ou une transition).
 - À droite : l'écran de vos partenaires en direct (cliquez pour agrandir),

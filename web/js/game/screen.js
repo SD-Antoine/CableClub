@@ -93,11 +93,12 @@ export class GameScreen {
     if (!buf || buf.byteLength < 5) return;
     const v = new DataView(buf);
     const type = v.getUint8(0);
-    if (type !== 1 && type !== 2) return;
+    if (type !== 1 && type !== 2 && type !== 3) return;
     const w = v.getUint16(1, true);
     const h = v.getUint16(3, true);
-    // type 2: where the player stands, to draw the other players at the right place on this image
-    const head = type === 2 ? 14 : 5;
+    // type 2: where the player stands, to draw the other players at the right place on this image;
+    // type 3 (3D games): the camera of this image, to place them in the world
+    const head = type === 2 ? 14 : type === 3 ? 76 : 5;
     if (w * h * 4 + head > buf.byteLength) return;
     if (w !== this.w || h !== this.h) {
       this.w = w;
@@ -112,6 +113,15 @@ export class GameScreen {
       this.handlers.onFrame?.(map === 0xFFFF ? null : {
         map, x: v.getInt16(7, true), y: v.getInt16(9, true),
         ax: v.getUint8(11), ay: v.getUint8(12), ow: (v.getUint8(13) & 1) === 1, free: (v.getUint8(13) & 2) === 2,
+      });
+    } else if (type === 3) {
+      const map = v.getUint16(5, true);
+      const mtx = new Float32Array(16);
+      for (let i = 0; i < 16; i++) mtx[i] = v.getFloat32(8 + 4 * i, true);
+      // depth of this player's feet: the game draws the characters one texel per pixel there
+      const depth = v.getFloat32(72, true);
+      this.handlers.onFrame?.(map === 0xFFFF ? null : {
+        map, mtx, depth, ow: (v.getUint8(7) & 1) === 1, free: (v.getUint8(7) & 2) === 2,
       });
     }
   }

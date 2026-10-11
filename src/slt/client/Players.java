@@ -1,5 +1,6 @@
 package slt.client;
 
+import slt.Ghosts;
 import slt.Http;
 import slt.Ids;
 import slt.Json;
@@ -242,7 +243,7 @@ final class Players {
     private Map<String, Object> ghostPending;
     private boolean ghostBusy;
 
-    /** Position of the player in the game, for the other players (only the latest one is worth sending). */
+    /** Position of the player in the game, for the other players (waiting readings are merged, see {@link Ghosts}). */
     void ghost(Map<String, Object> g) {
         String room = roomId;
         if (room == null || !app.link.loggedIn()) {
@@ -250,12 +251,7 @@ final class Players {
         }
         synchronized (ghostLock) {
             if (ghostBusy) {
-                if (ghostPending != null && ghostPending.containsKey("spr") && !g.containsKey("spr")) {
-                    g.put("spr", ghostPending.get("spr"));
-                    g.put("sw", ghostPending.get("sw"));
-                    g.put("sh", ghostPending.get("sh"));
-                }
-                ghostPending = g;
+                ghostPending = Ghosts.merge(ghostPending, g);
                 return;
             }
             ghostBusy = true;

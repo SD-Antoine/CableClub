@@ -21,8 +21,8 @@ import java.util.zip.CRC32;
 import static java.lang.foreign.ValueLayout.JAVA_BYTE;
 
 /**
- * Where the player stands and what they are doing (generation 3), sampled a
- * few times per second, so the other players of the room can see them in
+ * Where the player stands and what they are doing (generation 3), read on
+ * every image, so the other players of the room can see them in
  * their own game: position to the pixel, map, state (battle, dialogue,
  * trade, menu) and the player's real sprite, read from the console's video
  * memory.
@@ -175,7 +175,8 @@ final class Gen3Presence implements Presence {
         } else {
             still = 0;
         }
-        if (still >= 1 && !battle) {
+        // at rest for a few images (read on every image): one still image can happen in the middle of a step
+        if (still >= 3 && !battle) {
             kx = posX * 16 - scrollX;
             ky = posY * 16 - scrollY;
         }
@@ -194,7 +195,8 @@ final class Gen3Presence implements Presence {
         if (kx != Integer.MIN_VALUE) {
             fx = wrap(scrollX + kx - posX * 16);
             fy = wrap(scrollY + ky - posY * 16);
-            if (Math.abs(fx) >= 16 || Math.abs(fy) >= 16) {
+            // 16 is the first image of a step: the tile changed, the background did not move yet
+            if (Math.abs(fx) > 16 || Math.abs(fy) > 16) {
                 fx = 0;
                 fy = 0;
             }

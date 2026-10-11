@@ -1,5 +1,6 @@
 package slt.player;
 
+import slt.Ghosts;
 import slt.Json;
 import slt.Log;
 
@@ -15,6 +16,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
@@ -72,6 +77,14 @@ final class Session {
     private String lastGhostKey;
     private String lastGhostSprite;
     private long lastSpriteAt;
+    // the way walked since the last message to the others: [time, map, x, y, sprite] on each image where it changed
+    private final List<Object> ghostPath = new ArrayList<>();
+    private List<Object> lastPoint;
+    private long lastPointAt;
+    private long lastSampleAt;
+    // every sprite of the player seen (walking frames, bike…): sent once to the others, then named by its id
+    private final Map<String, List<Object>> sprites = new LinkedHashMap<>();
+    private final Map<String, Long> spriteSentAt = new HashMap<>();
 
     Session(CoreHost core, Controls controls, Path stateDir, Path captureDir, boolean statesAllowed, Bridge bridge,
             String wsToken, int liveFps, int volume) throws IOException {
@@ -160,7 +173,7 @@ final class Session {
                 core.runFrame();
                 frames++;
                 frameCount = frames;
-                if (presence != null && frames % 2 == 0) {
+                if (presence != null) {
                     samplePresence();
                 }
                 long now = System.nanoTime();
@@ -216,7 +229,9 @@ final class Session {
      * Sends the current image to the window: [2, width (LE16), height (LE16), map (LE16, 0xFFFF = unknown),
      * x, y (LE16 signed, position of the player in pixels), anchor x, anchor y (bottom centre of the
      * player's sprite on the screen), flags (1 = overworld, 2 = free: the other players may be drawn)],
-     * then RGBA pixels.
+     * then RGBA pixels. 3D games: [3, width, height, map, flags, camera x projection of this image
+     * (16 LE floats, row vectors), depth of the player's feet, where sprites are drawn one texel per pixel (LE float)],
+     * then the pixels.
      */
     private void present() {
         if (!ws.hasClients()) {
@@ -228,17 +243,22 @@ final class Session {
         if (w <= 0 || h <= 0 || px.length < w * h) {
             return;
         }
-        byte[] msg = new byte[14 + w * h * 4];
-        msg[0] = 2;
+        Presence.Sample s = sample;
+        float[] view = s == null ? null : s.view();
+        int head = view != null ? 8 + 4 * view.length : 14;
+        byte[] msg = new byte[head + w * h * 4];
+        msg[0] = (byte) (view != null ? 3 : 2);
         msg[1] = (byte) w;
         msg[2] = (byte) (w >> 8);
         msg[3] = (byte) h;
         msg[4] = (byte) (h >> 8);
-        Presence.Sample s = sample;
         int map = s == null ? 0xFFFF : s.map();
         msg[5] = (byte) map;
         msg[6] = (byte) (map >> 8);
-        if (s != null) {
+        if (view != null) {
+            msg[7] = (byte) ((s.overworld() ? 1 : 0) | (s.free() ? 2 : 0));
+            java.nio.ByteBuffer.wrap(msg, 8, 4 * view.length).order(java.nio.ByteOrder.LITTLE_ENDIAN).asFloatBuffer().put(view);
+        } else if (s != null) {
             msg[7] = (byte) s.x();
             msg[8] = (byte) (s.x() >> 8);
             msg[9] = (byte) s.y();
@@ -247,7 +267,7 @@ final class Session {
             msg[12] = (byte) Math.max(0, Math.min(255, s.anchorY()));
             msg[13] = (byte) ((s.overworld() ? 1 : 0) | (s.free() ? 2 : 0));
         }
-        int o = 14;
+        int o = head;
         for (int i = 0, n = w * h; i < n; i++) {
             int p = px[i];
             msg[o] = (byte) (p >> 16);
@@ -259,7 +279,11 @@ final class Session {
         ws.frame(msg);
     }
 
-    /** Reads the player's position; tells the other players at most 10 times per second (or every 3 s at rest). */
+    /**
+     * Reads the player's position on every image: the window draws the other players with it on that very
+     * image. Tells the other players 10 times per second the way walked meanwhile, image by image, so that
+     * they replay it as it was walked (or every 3 s at rest, at once when the state changes).
+     */
     private void samplePresence() {
         Presence.Sample s;
         try {
@@ -270,26 +294,84 @@ final class Session {
             return;
         }
         sample = s;
+        long now = System.currentTimeMillis();
+        long previousSample = lastSampleAt;
+        lastSampleAt = now;
         if (s == null) {
             return;
         }
-        long now = System.currentTimeMillis();
-        String key = s.map() + ":" + s.x() + ":" + s.y() + ":" + s.overworld() + ":" + s.status() + ":" + s.spriteId();
-        if ((key.equals(lastGhostKey) || now - lastGhostAt < 100) && now - lastGhostAt < 3000) {
+        String sid = s.spriteId();
+        if (sid != null && !sprites.containsKey(sid) && presence.spritePng() != null) {
+            if (sprites.size() >= Ghosts.MAX_SPRITES) {
+                String oldest = sprites.keySet().iterator().next();
+                sprites.remove(oldest);
+                spriteSentAt.remove(oldest);
+            }
+            sprites.put(sid, List.of(presence.spritePng(), (long) presence.spriteW(), (long) presence.spriteH()));
+        }
+        boolean depth = presence.world3d();
+        if (s.overworld()) {
+            List<Object> point = depth
+                    ? List.of(now, (long) s.map(), (long) s.x(), (long) s.y(), sid == null ? "" : sid, (long) s.z())
+                    : List.of(now, (long) s.map(), (long) s.x(), (long) s.y(), sid == null ? "" : sid);
+            if (lastPoint == null || !point.subList(1, point.size()).equals(lastPoint.subList(1, lastPoint.size()))) {
+                if (lastPoint != null && previousSample > lastPointAt + 40) {
+                    // it moves again after a rest: it stood there until the previous image (no slow glide over the rest)
+                    List<Object> held = new ArrayList<>(lastPoint);
+                    held.set(0, previousSample);
+                    ghostPath.add(held);
+                }
+                lastPoint = point;
+                lastPointAt = now;
+                ghostPath.add(point);
+                if (ghostPath.size() > Ghosts.MAX_POINTS) {
+                    ghostPath.subList(0, ghostPath.size() - Ghosts.MAX_POINTS).clear();
+                }
+            }
+        }
+        String key = s.overworld() + ":" + s.status();
+        boolean changed = !key.equals(lastGhostKey);
+        if (!changed && (ghostPath.isEmpty() || now - lastGhostAt < 100) && now - lastGhostAt < 3000) {
             return;
         }
         lastGhostKey = key;
         lastGhostAt = now;
-        java.util.Map<String, Object> g = Json.map("map", (long) s.map(), "x", (long) s.x(), "y", (long) s.y(),
-                "ow", s.overworld(), "st", s.status(), "sid", s.spriteId());
-        if (s.spriteId() != null && (!s.spriteId().equals(lastGhostSprite) || now - lastSpriteAt > 10_000)) {
+        Map<String, Object> g = Json.map("map", (long) s.map(), "x", (long) s.x(), "y", (long) s.y(),
+                "ow", s.overworld(), "st", s.status(), "sid", sid, "t", now);
+        if (depth) {
+            g.put("z", (long) s.z());
+        }
+        Map<String, Object> sprs = new LinkedHashMap<>();
+        for (Object o : ghostPath) {
+            addSprite(sprs, String.valueOf(Json.arr(o).get(4)), now);
+        }
+        addSprite(sprs, sid, now);
+        if (!ghostPath.isEmpty()) {
+            g.put("pts", new ArrayList<>(ghostPath));
+            ghostPath.clear();
+        }
+        if (!sprs.isEmpty()) {
+            g.put("sprs", sprs);
+        }
+        // the current sprite on its own: for the server (players who arrive later) and older versions of SLT
+        if (sid != null && ((!sid.equals(lastGhostSprite) && now - lastSpriteAt > 1000) || now - lastSpriteAt > 10_000)) {
             lastSpriteAt = now;
             g.put("spr", presence.spritePng());
             g.put("sw", (long) presence.spriteW());
             g.put("sh", (long) presence.spriteH());
-            lastGhostSprite = s.spriteId();
+            lastGhostSprite = sid;
         }
         bridge.ghost(g);
+    }
+
+    /** A sprite named in a message, joined to it if it was not sent lately. */
+    private void addSprite(Map<String, Object> out, String id, long now) {
+        List<Object> spr = id == null ? null : sprites.get(id);
+        Long at = spriteSentAt.get(id);
+        if (spr != null && !out.containsKey(id) && (at == null || now - at > 20_000)) {
+            out.put(id, spr);
+            spriteSentAt.put(id, now);
+        }
     }
 
     /** Small JPEG of the game for the other players of the room. */

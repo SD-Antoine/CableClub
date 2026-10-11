@@ -95,6 +95,30 @@ public final class NdsReader implements GameReader {
         };
     }
 
+    /** The game ("white2"…). */
+    public String game() {
+        return game;
+    }
+
+    /** Generation 5 (Black / White, Black 2 / White 2). */
+    public boolean gen5() {
+        return layout == GEN5;
+    }
+
+    /** Console address of the current map number (u16) in the live save buffer, -1 until the save is found. */
+    public long mapAddress() {
+        return base < 0 || layout.map < 0 ? -1 : base + layout.map;
+    }
+
+    /**
+     * Console address of the player's gender (u8: 0 boy, 1 girl) in the live save buffer, generation 5
+     * only (trainer card: trainer ID at +0x14, gender at +0x21; verified on White 2), -1 until the save
+     * is found.
+     */
+    public long genderAddress() {
+        return base < 0 || layout != GEN5 ? -1 : base + layout.trainerId + trainerShift + 0x0D;
+    }
+
     @Override
     public long[][] areas() {
         return new long[][]{{RAM, RAM_SIZE}};

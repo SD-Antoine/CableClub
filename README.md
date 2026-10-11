@@ -19,14 +19,18 @@ installer). Les nouveautés de chaque version sont dans [CHANGELOG.md](CHANGELOG
 - **Le jeu s'affiche dans la fenêtre principale** de SLT (émulateurs mGBA et
   DeSmuME intégrés, son, manette Xbox, clavier configurable, écran tactile DS à
   la souris, avance rapide, plein écran).
-- **Les joueurs se voient dans le jeu** (générations 1 à 3) : chaque partenaire
-  apparaît dans votre partie, à sa vraie position sur la carte, avec son vrai
-  sprite (direction, marche, vélo), **son pseudo au-dessus de la tête** et une
-  icône d'état : combat (deux Poké Balls et un choc), dialogue (trois points qui
-  sautent), échange (deux Poké Balls et deux flèches), déconnecté (Wi-Fi barré).
-  Les partenaires ne s'affichent que quand vous avez la main (jamais par-dessus
-  un combat, un dialogue, un menu ou une transition) ; un partenaire en combat
-  reste visible là où il a quitté la carte, avec son icône.
+- **Les joueurs se voient dans le jeu** (générations 1 à 3 et 5) : chaque
+  partenaire apparaît dans votre partie, à sa vraie position sur la carte, avec
+  son vrai sprite (direction, marche, vélo), **son pseudo au-dessus de la tête**
+  et une icône d'état : combat (deux Poké Balls et un choc), dialogue (trois
+  points qui sautent), échange (deux Poké Balls et deux flèches), déconnecté
+  (Wi-Fi barré). Ses déplacements sont rejoués image par image, comme dans son
+  jeu. Les partenaires ne s'affichent que quand vous avez la main (jamais
+  par-dessus un combat, un dialogue, un menu ou une transition) ; un partenaire
+  en combat reste visible là où il a quitté la carte, avec son icône. En 5e
+  génération, le décor est en 3D : les partenaires sont placés avec la caméra
+  de votre jeu (même quand elle tourne ou zoome), plus petits au loin, et leur
+  sprite est lu dans la ROM.
 - **Échanges entre partenaires** depuis la salle ou le panneau du jeu : le
   Pokémon passe d'un jeu à l'autre en quelques secondes (chromatiques
   uniquement tant que les deux joueurs n'ont pas battu le Maître).
@@ -78,9 +82,7 @@ avancées), plus les ajouts de SLT :
 
 - **Même ROM pour tout le monde** : même jeu + mêmes options + même seed ⇒ ROM
   identique pour chaque joueur, vérifiée par son CRC avant le lancement.
-- **Une ROM différente par joueur** (option) : chaque joueur a sa seed, et le
-  premier Pokémon de chaque zone est tiré au hasard dans le Pokédex, **sans
-  remise** (un Pokémon unique par zone).
+- **Une ROM différente par joueur** (option) : chaque joueur a sa propre seed.
 - **Vendeurs secondaires** randomisés — le second vendeur des boutiques et
   Centres Pokémon, celui des Balls inhabituelles et des CT, les étages de grand
   magasin, les marchés, les herboristes… Le vendeur principal (Poké Balls,
@@ -101,7 +103,7 @@ salle ; sur un nouveau PC, on la **régénère à l'identique** (même seed) et 
 | | 1re gén. | 2e gén. | 3e gén. | 4e gén. | 5e gén. |
 |---|---|---|---|---|---|
 | Suivi (captures, zones, K.O., évolutions, badges, rencontres) | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Joueurs visibles dans le jeu (sprite, pseudo, icône d'état) | **✓ vérifié** (Rouge) | **✓ vérifié** (Cristal) | **✓ vérifié** (Rubis, Émeraude, Rouge Feu) | écrans | écrans |
+| Joueurs visibles dans le jeu (sprite, pseudo, icône d'état) | **✓ vérifié** (Rouge) | **✓ vérifié** (Cristal) | **✓ vérifié** (Rubis, Émeraude, Rouge Feu) | écrans | **✓ vérifié** (Blanche 2, à pied)⁵ |
 | Mort liée en jeu (K.O., impossible à soigner) | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Surnom du lien écrit dans le jeu | **✓ vérifié** | ✓ | **✓ vérifié** | ✓² | **✓ vérifié** (Blanc 2) |
 | Pokémon morts rangés dans le PC | **✓ vérifié** (boîte actuelle) | — (reste K.O.)³ | **✓ vérifié** (boîte MORTS) | ✓² (boîte 18 MORTS) | **✓ vérifié** (boîte 24 MORTS) |
@@ -126,12 +128,13 @@ travaille sur une copie de l'équipe et l'écraserait).
 ³ En 2e génération, la boîte courante est dans la mémoire de sauvegarde de la
 cartouche, que l'émulateur ne montre qu'en copie : SLT ne peut pas y écrire.
 ⁴ Simulé (compteur du Panthéon).
+⁵ À vélo ou en surf, le partenaire s'affiche debout (sprite de marche) ; il
+passe toujours devant le décor (jamais caché par un arbre ou un bâtiment).
 
 Pas encore fait :
 
-- **Joueurs visibles dans le jeu en 4e et 5e génération** : le décor est en 3D
-  (caméra en perspective) et le sprite du joueur n'est pas accessible ; écrans
-  côte à côte pour l'instant.
+- **Joueurs visibles dans le jeu en 4e génération** : écrans côte à côte pour
+  l'instant (la méthode de la 5e génération devrait s'y adapter).
 - **Combats entre partenaires** : un vrai combat en lien entre deux jeux
   demande un câble link / une connexion sans fil que les émulateurs intégrés ne
   savent pas faire à travers Internet.
@@ -211,13 +214,14 @@ src/slt/
   client/               application d'un joueur (API locale 127.0.0.1)
     ServerLink          connexion au serveur (requêtes + flux relayé à l'interface)
     Library, RoomRoms   ROMs du joueur, génération de la ROM de chaque salle
-    Rando, SltPatches   pont vers UPR ZX, ajouts SLT (zone unique, boutiques, lignées)
+    Rando, SltPatches   pont vers UPR ZX, ajouts SLT (boutiques, lignées)
     Players             lancement du lecteur, relais des événements / directives
     Hosting             serveur SLT intégré
     Updates             mises à jour depuis les releases GitHub
   player/               lecteur sans fenêtre : libretro via l'API FFM de Java 21
     Session, WsServer   boucle d'émulation, images vers la fenêtre en WebSocket
     TrackerHost         lecture mémoire + application des règles en jeu
+    GbPresence, Gen3Presence, Gen5Presence   joueurs visibles en jeu (Gen5Sprites : sprites lus dans la ROM)
     track/              lecteurs mémoire (GbReader, Gen3Reader, NdsReader), TrackerEngine
 web/                    interface (HTML / CSS / JS modules, sans framework)
 build.ps1               compilation + dist\SLT\SLT.exe (jpackage)

@@ -1,5 +1,13 @@
 # Nouveautés de SLT
 
+## 0.5.0 — 2026-10-11
+
+- **Partenaires visibles en jeu en 5e génération** (Noire, Blanche, Noire 2, Blanche 2) : chaque partenaire apparaît dans votre partie à sa vraie place sur la carte en 3D, placé avec la caméra de votre jeu (même quand elle tourne ou zoome), plus petit au loin, avec son vrai sprite (lu dans la ROM), son pseudo et ses icônes (combat, dialogue…). Vérifié sur Blanche 2. À vélo ou en surf, le partenaire s'affiche pour l'instant debout.
+- **Partenaires fluides** (toutes générations) : leurs déplacements sont rejoués image par image, comme dans leur jeu, au lieu d'avancer par à-coups.
+- Correction : les autres joueurs ne tremblent plus quand vous marchez (leur position sautait d'une case au début de chacun de vos pas, et pouvait avoir une image de retard sur la carte).
+- Retiré : « Un Pokémon unique par zone » (toutes les rencontres d'une zone étaient le même Pokémon tant qu'il n'était ni capturé ni mis K.O.). « Une ROM différente par joueur » donne maintenant simplement une seed à chacun. Une salle pas encore lancée peut régénérer sa ROM (bouton « Régénérer » dans la salle) ; les parties en cours gardent la leur.
+- Pour que les déplacements soient fluides, l'hôte du serveur et les joueurs doivent tous passer à cette version.
+
 ## 0.4.4 — 2026-10-11
 
 - **Correction importante** pour ceux qui rejoignent le serveur d'un ami : après une coupure de la connexion (ou juste après s'être connecté), chaque clic dans le menu ramenait à l'écran de connexion, voire au code d'invitation. La session n'était pas perdue : l'interface confondait un message du serveur avec son propre état.

@@ -66,7 +66,7 @@ export async function renderPlay(container, roomId) {
     ghostLayer.style.transform = `scale(${Math.floor(w * scale) / w}, ${Math.floor(hgt * scale) / hgt})`;
   }
 
-  // the other players inside the game (generations 1 to 3): drawn where they stand on this player's map
+  // the other players inside the game (generations 1 to 3 and 5): drawn where they stand on this player's map
   const ghosts = new GhostLayer(ghostLayer, (userId) => {
     const m = room.members.find((x) => x.userId === userId);
     const trading = (room.trades || []).some((t) => ['extract', 'swap'].includes(t.state) && (t.from === userId || t.to === userId));

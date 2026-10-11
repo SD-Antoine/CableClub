@@ -1,5 +1,6 @@
 package slt.server;
 
+import slt.Ghosts;
 import slt.Http;
 import slt.Ids;
 import slt.Json;
@@ -678,15 +679,17 @@ public final class Rooms {
     private final Map<String, Map<String, Object>> ghosts = new ConcurrentHashMap<>();
 
     /**
-     * Where a player stands in their game (generation 3): relayed at once to
-     * the other members, who draw them in their own game. The sprite travels
-     * only when it changes; the server keeps the latest one for newcomers.
+     * Where a player stands in their game: relayed at once to the other
+     * members, who draw them in their own game. The way walked since the
+     * previous message ("pts") lets them replay it smoothly; each sprite
+     * travels once ("sprs"). The server keeps the latest position and every
+     * sprite for newcomers.
      */
     void ghost(String id, Accounts.User user, Map<String, Object> body) {
         Room r = memberRoom(id, user);
         String key = r.id + "/" + user.id;
         Map<String, Object> g = new LinkedHashMap<>();
-        for (String k : List.of("map", "x", "y", "ow", "st", "sid", "spr", "sw", "sh")) {
+        for (String k : List.of("map", "x", "y", "z", "ow", "st", "sid", "spr", "sw", "sh", "t", "pts", "sprs")) {
             if (body.containsKey(k)) {
                 g.put(k, body.get(k));
             }
@@ -695,12 +698,33 @@ public final class Rooms {
         if (spr != null && spr.toString().length() > 20_000) {
             throw new Http.Fail(413, "Sprite trop grand");
         }
+        List<Object> pts = Json.arr(g.get("pts"));
+        if (pts != null) {
+            g.put("pts", Ghosts.trimPoints(pts));
+        } else {
+            g.remove("pts");
+        }
+        Map<String, Object> sprs = Json.obj(g.get("sprs"));
+        if (sprs != null && (sprs.size() > Ghosts.MAX_SPRITES || Json.stringify(sprs).length() > 400_000)) {
+            throw new Http.Fail(413, "Sprites trop grands");
+        } else if (sprs == null) {
+            g.remove("sprs");
+        }
         Map<String, Object> prev = ghosts.get(key);
         Map<String, Object> stored = new LinkedHashMap<>(g);
+        stored.remove("pts");
         if (spr == null && prev != null) {
             stored.put("spr", prev.get("spr"));
             stored.put("sw", prev.get("sw"));
             stored.put("sh", prev.get("sh"));
+        }
+        Map<String, Object> known = prev == null ? null : Json.obj(prev.get("sprs"));
+        if (known != null || sprs != null) {
+            Map<String, Object> all = new LinkedHashMap<>(known == null ? Map.of() : known);
+            if (sprs != null) {
+                all.putAll(sprs);
+            }
+            stored.put("sprs", Ghosts.trimSprites(all));
         }
         stored.put("at", System.currentTimeMillis());
         ghosts.put(key, stored);

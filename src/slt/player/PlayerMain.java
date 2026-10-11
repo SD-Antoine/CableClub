@@ -89,8 +89,8 @@ public final class PlayerMain {
             tracker.setAck(bridge::ack);
             tracker.setTradeSink(bridge::trade);
             session.setTracker(tracker);
-            // the players see each other in their games (generations 1 to 3)
-            presence[0] = Presence.forReader(tracker.engine().reader(), saves);
+            // the players see each other in their games (generations 1 to 3 and 5)
+            presence[0] = Presence.forReader(tracker.engine().reader(), saves, rom);
             if (presence[0] != null) {
                 session.setPresence(presence[0]);
             }
@@ -132,7 +132,7 @@ public final class PlayerMain {
                 tracker.directives(Json.parseObject(Files.readString(Path.of(a.get("--directives")))));
             }
         }
-        new ScriptRunner(host, scriptInput, out, tracker).run(Path.of(a.get("--script")));
+        new ScriptRunner(host, scriptInput, out, tracker, rom).run(Path.of(a.get("--script")));
         host.close();
         System.exit(0);
     }

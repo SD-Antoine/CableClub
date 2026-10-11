@@ -152,7 +152,8 @@ final class GbPresence implements Presence {
         } else {
             still = 0;
         }
-        if (still >= 1 && overworld) {
+        // at rest for a few images (read on every image): one still image can happen in the middle of a step
+        if (still >= 3 && overworld) {
             kx = posX * 16 - scrollX;
             ky = posY * 16 - scrollY;
         }
@@ -166,7 +167,8 @@ final class GbPresence implements Presence {
         if (kx != Integer.MIN_VALUE) {
             fx = wrap(scrollX + kx - posX * 16);
             fy = wrap(scrollY + ky - posY * 16);
-            if (Math.abs(fx) >= 16 || Math.abs(fy) >= 16) {
+            // 16 is the first image of a step: the tile changed, the background did not move yet
+            if (Math.abs(fx) > 16 || Math.abs(fy) > 16) {
                 fx = 0;
                 fy = 0;
             }

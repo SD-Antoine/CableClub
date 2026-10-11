@@ -1,7 +1,5 @@
 package slt.client;
 
-import com.dabomstew.pkrandom.pokemon.Encounter;
-import com.dabomstew.pkrandom.pokemon.EncounterSet;
 import com.dabomstew.pkrandom.pokemon.Evolution;
 import com.dabomstew.pkrandom.pokemon.ItemList;
 import com.dabomstew.pkrandom.pokemon.Pokemon;
@@ -16,7 +14,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -31,8 +28,6 @@ import java.util.function.Consumer;
  * the same seed, so every player who generates the room's ROM gets the same
  * bytes):
  * <ul>
- *   <li>one Pokémon per zone, drawn without replacement from the game's
- *       Pokédex (mandatory when each player has their own ROM);</li>
  *   <li>secondary shop clerks randomized, the main clerk (whose stock grows
  *       with the badges) untouched, never a Master Ball nor an item worth
  *       more when sold than when bought;</li>
@@ -50,7 +45,6 @@ final class SltPatches {
             throws IOException {
         // the original game ("Jeu original"): nothing changes, only the evolution lines are read
         boolean enabled = Json.bool(rando, "enabled", true);
-        boolean unique = enabled && (Json.bool(rando, "uniquePerZone", false) || Json.bool(rando, "perPlayer", false));
         boolean shops = enabled && "secondary".equals(Json.str(rando, "shops"));
         Path out = Path.of(romPath);
         Path tmp = out.resolveSibling(out.getFileName() + ".slt.tmp");
@@ -59,11 +53,6 @@ final class SltPatches {
             Random rng = new Random(seed ^ 0x534C54_2D53_4C54L);
             List<String> notes = new ArrayList<>();
             boolean changed = false;
-            if (unique) {
-                progress.accept("Un Pokémon unique par zone…");
-                notes.add(uniquePerZone(rh, rng) + " zones : un Pokémon unique chacune");
-                changed = true;
-            }
             if (shops && rh.generationOfPokemon() == 3) {
                 // generation 3: the shops are found in the scripts of the ROM itself (any version, any language)
                 gen3Pools[0] = itemPool(rh, false);
@@ -228,40 +217,6 @@ final class SltPatches {
             }
         }
         return false;
-    }
-
-    /**
-     * Every wild slot of a zone holds the same species, drawn without
-     * replacement among the non-legendary Pokémon of the game.
-     *
-     * @return number of zones
-     */
-    private static int uniquePerZone(RomHandler rh, Random rng) {
-        List<Pokemon> pool = new ArrayList<>();
-        for (Pokemon p : rh.getPokemon()) {
-            if (p != null && p.number > 0 && !p.isLegendary()) {
-                pool.add(p);
-            }
-        }
-        Collections.shuffle(pool, rng);
-        List<EncounterSet> sets = rh.getEncounters(true);
-        Map<String, Pokemon> byZone = new TreeMap<>();
-        int next = 0;
-        for (EncounterSet es : sets) {
-            String zone = Rando.zoneOf(es.displayName)[0].toLowerCase(java.util.Locale.ROOT);
-            Pokemon chosen = byZone.get(zone);
-            if (chosen == null) {
-                chosen = pool.get(next % pool.size());
-                next++;
-                byZone.put(zone, chosen);
-            }
-            for (Encounter e : es.encounters) {
-                e.pokemon = chosen;
-                e.formeNumber = 0;
-            }
-        }
-        rh.setEncounters(true, sets);
-        return byZone.size();
     }
 
     /**

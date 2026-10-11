@@ -25,8 +25,7 @@ export function rulesEditor(rules, { editable, onChange }) {
 export function randoLines(rando, gen) {
   const lines = summarize(rando, gen);
   if (rando?.enabled !== false) {
-    if (rando?.perPlayer) lines.push('Une ROM différente par joueur (premier Pokémon de chaque zone tiré sans remise)');
-    else if (rando?.uniquePerZone) lines.push('Un Pokémon unique par zone');
+    if (rando?.perPlayer) lines.push('Une ROM différente par joueur');
     if (rando?.shops === 'secondary') lines.push('Vendeurs secondaires aléatoires (sans Master Ball ni objet de revente)');
   }
   return lines;
@@ -57,11 +56,8 @@ export function randoEditor(rando, gen, onChange) {
       h('div', null, h('b', null, p.label), h('small', null, p.desc)))));
     const slt = rando.enabled ? h('div', { class: 'card tight' },
       h('div', { class: 'rule-row' }, h('div', { class: 'grow' }, h('b', null, 'Une ROM différente pour chaque joueur'),
-        h('small', null, 'Chaque joueur reçoit sa propre randomisation ; le premier Pokémon de chaque zone est tiré au hasard dans le Pokédex, sans remise.')),
-      switchEl(!!rando.perPlayer, (v) => { rando.perPlayer = v; if (v) rando.uniquePerZone = true; changed(); })),
-      h('div', { class: 'rule-row' }, h('div', { class: 'grow' }, h('b', null, 'Un Pokémon unique par zone'),
-        h('small', null, 'Toutes les rencontres d’une zone sont le même Pokémon, différent d’une zone à l’autre.')),
-      switchEl(!!rando.uniquePerZone || !!rando.perPlayer, (v) => { rando.uniquePerZone = v; changed(); }, { disabled: !!rando.perPlayer })),
+        h('small', null, 'Chaque joueur reçoit sa propre randomisation (sa propre seed) au lieu d’une ROM identique pour tous.')),
+      switchEl(!!rando.perPlayer, (v) => { rando.perPlayer = v; changed(); })),
       gen >= 3 ? h('div', { class: 'rule-row' }, h('div', { class: 'grow' }, h('b', null, 'Vendeurs secondaires aléatoires'),
         h('small', null, 'Le vendeur principal ne change pas. Jamais de Master Ball ni d’objet qui se revend plus cher qu’il ne s’achète.')),
       switchEl(rando.shops === 'secondary', (v) => { rando.shops = v ? 'secondary' : 'off'; changed(); })) : null,

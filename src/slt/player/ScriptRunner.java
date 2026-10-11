@@ -25,6 +25,9 @@ import static java.lang.foreign.ValueLayout.JAVA_BYTE;
  * status                   (prints what the tracker found)
  * poke 20244e9 02          copy 2024744 2024550 100     peek 2024550 16   (tests)
  * sram 75ea 16            (cartridge save memory)
+ * presence on             presence          (players drawn in game: last reading)
+ * trace LEFT 40            (holds a button, compares the position read with the scrolling of the image)
+ * trace3d DOWN 60 t/d      (3D games: where the position lands with the camera sent, + screenshots)
  * </pre>
  */
 final class ScriptRunner {
@@ -66,15 +69,17 @@ final class ScriptRunner {
     private final ScriptInput input;
     private final Path out;
     private final Session.Tracker tracker;
+    private final Path rom;
     private long frame;
     private Presence presence;
     private Presence.Sample sample;
 
-    ScriptRunner(CoreHost core, ScriptInput input, Path out, Session.Tracker tracker) {
+    ScriptRunner(CoreHost core, ScriptInput input, Path out, Session.Tracker tracker, Path rom) {
         this.core = core;
         this.input = input;
         this.out = out;
         this.tracker = tracker;
+        this.rom = rom;
     }
 
     void run(Path script) throws IOException {
@@ -173,7 +178,7 @@ final class ScriptRunner {
                 case "presence":
                     // presence on: sample every 2 frames; presence: print the last sample (+ sprite PNG)
                     if (t.length > 1 && tracker instanceof TrackerHost th) {
-                        presence = Presence.forReader(th.engine().reader(), out);
+                        presence = Presence.forReader(th.engine().reader(), out, rom);
                     } else {
                         System.out.println("PRESENCE image " + frame + " : " + sample);
                         if (presence != null && presence.spritePng() != null) {
@@ -181,6 +186,32 @@ final class ScriptRunner {
                         }
                     }
                     break;
+                case "trace":
+                    // trace BUTTON FRAMES: holds a button, reads the presence on every image and measures how
+                    // far the image itself scrolled: the position must follow the image the player sees
+                    trace(t[1], Integer.parseInt(t[2]));
+                    break;
+                case "trace3d": {
+                    // trace3d BUTTON FRAMES NAME: 3D games, where the position read lands with the camera sent with
+                    // each image (screenshots NAME-n.png, to compare with the player drawn there)
+                    input.mask = mask(t[1]);
+                    for (int i = 0, n = Integer.parseInt(t[2]); i < n; i++) {
+                        core.runFrame();
+                        frame++;
+                        Presence.Sample s = presence.sample(core);
+                        float[] m = s == null ? null : s.view();
+                        if (m != null) {
+                            double x = s.x() / 16.0, y = s.y() / 16.0, z = s.z() / 16.0;
+                            double w = x * m[3] + y * m[7] + z * m[11] + m[15];
+                            double sx = ((x * m[0] + y * m[4] + z * m[8] + m[12]) / w + 1) * 128;
+                            double sy = (1 - (x * m[1] + y * m[5] + z * m[9] + m[13]) / w) * 96;
+                            System.out.println(String.format(Locale.ROOT, "TRACE3D %d %s %.1f %.1f %s %s %s", i, t[3], sx, sy, s.spriteId(), s.status(), s.free()));
+                        }
+                        shot(out.resolve(t[3] + "-" + i + ".png"));
+                    }
+                    input.mask = 0;
+                    break;
+                }
                 case "status":
                     if (tracker instanceof TrackerHost th) {
                         StringBuilder sb = new StringBuilder("ETAT image " + frame + " : " + th.engine().reader()
@@ -218,10 +249,65 @@ final class ScriptRunner {
             if (tracker != null && frame % 30 == 0) {
                 tracker.tick(core, frame);
             }
-            if (presence != null && frame % 2 == 0) {
+            if (presence != null) {
                 sample = presence.sample(core);
             }
         }
+    }
+
+    private void trace(String button, int n) {
+        if (presence == null) {
+            throw new IllegalStateException("trace : faire « presence on » d'abord");
+        }
+        int w = core.frameWidth();
+        int h = core.frameHeight();
+        int[] prev = java.util.Arrays.copyOf(core.pixels(), w * h);
+        int camX = 0;
+        int camY = 0;
+        Presence.Sample first = presence.sample(core);
+        input.mask = mask(button);
+        for (int i = 0; i < n; i++) {
+            core.runFrame();
+            frame++;
+            Presence.Sample s = presence.sample(core);
+            int[] px = java.util.Arrays.copyOf(core.pixels(), w * h);
+            int[] d = imageShift(prev, px, w, h);
+            camX += d[0];
+            camY += d[1];
+            prev = px;
+            System.out.println(String.format(Locale.ROOT, "TRACE %d image %+d,%+d presence %s", frame, camX, camY,
+                    s == null || first == null ? "-" : String.format(Locale.ROOT, "%+d,%+d %s %s", s.x() - first.x(),
+                            s.y() - first.y(), s.free() ? "libre" : s.status(), s.anchorX() + "," + s.anchorY())));
+        }
+        input.mask = 0;
+    }
+
+    /** How far the picture moved between two images (the camera's step), outside the player in the centre. */
+    private static int[] imageShift(int[] a, int[] b, int w, int h) {
+        long best = Long.MAX_VALUE;
+        int[] r = {0, 0};
+        for (int dy = -6; dy <= 6; dy++) {
+            for (int dx = -6; dx <= 6; dx++) {
+                long sum = 0;
+                for (int y = 12; y < h - 12; y += 2) {
+                    for (int x = 12; x < w - 12; x += 2) {
+                        if (Math.abs(x - w / 2) < 20 && Math.abs(y - h / 2) < 28) {
+                            continue;
+                        }
+                        int p = b[y * w + x];
+                        int q = a[(y + dy) * w + x + dx];
+                        sum += Math.abs(((p >> 16) & 0xFF) - ((q >> 16) & 0xFF)) + Math.abs(((p >> 8) & 0xFF) - ((q >> 8) & 0xFF))
+                                + Math.abs((p & 0xFF) - (q & 0xFF));
+                    }
+                }
+                if (sum < best) {
+                    best = sum;
+                    r[0] = dx;
+                    r[1] = dy;
+                }
+            }
+        }
+        return r;
     }
 
     private static int mask(String spec) {
