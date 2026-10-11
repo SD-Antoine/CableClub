@@ -105,6 +105,9 @@ public final class PlayerMain {
         });
         poller.scheduleWithFixedDelay(() -> {
             Map<String, Object> d = bridge.directives();
+            if (d != null && d.get("volume") instanceof Number v) {
+                session.settingsVolume(v.intValue());
+            }
             if (d == null || Json.bool(d, "unknown", false)) {
                 return;
             }

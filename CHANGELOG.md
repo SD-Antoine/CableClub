@@ -1,5 +1,11 @@
 # Nouveautés de SLT
 
+## 0.4.2
+
+- **Volume** : un curseur de volume dans la barre du jeu (à côté du bouton son), retenu pour les parties suivantes.
+- Correction : changer le volume dans les Réglages s'applique aussi au jeu déjà lancé (avant, seulement au lancement suivant).
+- Correction : après avoir choisi la vitesse de l'avance rapide, les touches du jeu répondent tout de suite.
+
 ## 0.4.1 — 2026-10-11
 
 - **Mises à jour automatiques** : SLT regarde sur GitHub s'il existe une nouvelle version et la propose ; un clic la télécharge, l'installe et redémarre SLT. Vos données (salles, sauvegardes, ROMs, réglages) sont conservées. Réglages › Mises à jour : version installée, recherche manuelle, vérification automatique.

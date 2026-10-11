@@ -188,7 +188,10 @@ final class Players {
     Map<String, Object> directives() {
         String room = roomId;
         Map<String, Object> d = room == null ? null : app.link.directives(room);
-        return d == null ? Json.map("unknown", true) : d;
+        Map<String, Object> out = d == null ? Json.map("unknown", true) : new java.util.LinkedHashMap<>(d);
+        // Réglages > Volume, applied to the game already running
+        out.put("volume", app.config.num("volume", 80));
+        return out;
     }
 
     void ack(List<Object> refunds) {

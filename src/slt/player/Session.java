@@ -59,6 +59,8 @@ final class Session {
     private volatile Tracker tracker;
     private volatile int volume;
     private volatile boolean muted;
+    /** Volume of the settings last applied: a change there is applied to the running game. */
+    private volatile int settingsVolume = -1;
     private AudioOut audio;
     private long frameCount;
     private long startedAt;
@@ -349,6 +351,25 @@ final class Session {
     }
 
     // ------------------------------------------------------------ commands
+
+    /** The volume of the settings (polled every second): applied when it changes. */
+    void settingsVolume(int v) {
+        int value = Math.max(0, Math.min(100, v));
+        if (settingsVolume == -1) {
+            settingsVolume = value; // the game started with it
+            return;
+        }
+        if (value == settingsVolume) {
+            return;
+        }
+        settingsVolume = value;
+        volume = value;
+        AudioOut a = audio;
+        if (a != null) {
+            a.setVolume(volume / 100f);
+        }
+        sendInfo();
+    }
 
     private void sendInfo() {
         ws.text(Json.stringify(Json.map("t", "info", "w", (long) core.frameWidth(), "h", (long) core.frameHeight(),

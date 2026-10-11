@@ -101,8 +101,10 @@ export function renderSettings(container, { applyTheme }) {
           seg([[0, '1'], [1, '2'], [2, '3'], [3, '4']], Number(cfg.padIndex ?? 0), async (v) => { await save({ padIndex: v }); draw(); })))),
 
       section('Jeu', h('div', { class: 'list' },
-        h('div', { class: 'rule-row' }, h('div', { class: 'grow' }, h('b', null, 'Volume'), h('small', null, `${cfg.volume ?? 80} %`)),
-          h('input', { type: 'range', min: 0, max: 100, value: cfg.volume ?? 80, onchange: async (e) => { await save({ volume: Number(e.target.value) }); draw(); } })),
+        h('div', { class: 'rule-row' }, h('div', { class: 'grow' }, h('b', null, 'Volume'), h('small', { class: 'vol-label' }, `${cfg.volume ?? 80} %`)),
+          h('input', { type: 'range', class: 'vol-range', min: 0, max: 100, value: cfg.volume ?? 80, style: { width: '160px', '--fill': `${cfg.volume ?? 80}%` },
+            oninput: (e) => { e.target.style.setProperty('--fill', `${e.target.value}%`); e.target.closest('.rule-row').querySelector('.vol-label').textContent = `${e.target.value} %`; },
+            onchange: async (e) => { await save({ volume: Number(e.target.value) }); draw(); } })),
         h('div', { class: 'rule-row' }, h('div', { class: 'grow' }, h('b', null, 'Direct des partenaires'),
           h('small', null, 'Images par seconde envoyées et reçues pour voir les autres joueurs (moins = moins de connexion utilisée).')),
           seg([[0, 'Off'], [2, '2'], [4, '4'], [8, '8']], Number(cfg.liveFps ?? 4), async (v) => { await save({ liveFps: v }); draw(); })),

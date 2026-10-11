@@ -123,8 +123,30 @@ export async function renderPlay(container, roomId) {
   }
 
   // ------------------------------------------------------------ toolbar
+  // volume slider: kept across redraws, never redrawn while it is dragged
+  const volume = h('input', { type: 'range', class: 'vol-range', min: 0, max: 100, step: 1, title: 'Volume' });
+  let volTimer = null;
+  const volEnd = () => {
+    volume.blur(); // the game keys are ignored while a field has the focus
+    if (ui.dragVol) { ui.dragVol = false; if (ui.barStale) { ui.barStale = false; drawBar(); } }
+  };
+  volume.addEventListener('pointerdown', () => { ui.dragVol = true; });
+  volume.addEventListener('pointerup', volEnd);
+  volume.addEventListener('input', () => {
+    volume.style.setProperty('--fill', `${volume.value}%`);
+    volume.classList.remove('muted');
+    screen.cmd('volume', { v: Number(volume.value), muted: false });
+    clearTimeout(volTimer);
+    volTimer = setTimeout(() => local.post('/api/config', { volume: Number(volume.value) }).catch(() => {}), 400);
+  });
+  volume.addEventListener('change', volEnd);
+
   function drawBar() {
+    if (ui.dragVol) { ui.barStale = true; return; }
     const i = ui.info || {};
+    volume.value = i.volume ?? 80;
+    volume.style.setProperty('--fill', `${i.muted ? 0 : (i.volume ?? 80)}%`);
+    volume.classList.toggle('muted', !!i.muted);
     const myLive = room.members.find((m) => m.userId === user?.id)?.live || {};
     mount(bar,
       btn('', () => { location.hash = `#/salle/${roomId}`; }, { kind: 'ghost icon-only', iconName: 'back', title: 'Retour à la salle' }),
@@ -134,9 +156,10 @@ export async function renderPlay(container, roomId) {
       btn('', togglePause, { kind: ['ghost icon-only', i.paused && 'on'].filter(Boolean).join(' '), iconName: i.paused ? 'play' : 'pause', title: i.paused ? 'Reprendre (P)' : 'Pause (P)' }),
       btn('', () => screen.cmd('ff-toggle'), { kind: ['ghost icon-only', i.fast && 'on'].filter(Boolean).join(' '), iconName: 'ff', title: 'Avance rapide (T, ou maintenir Tab)' }),
       h('select', { class: 'input', style: { width: '92px', height: '32px' }, title: 'Vitesse de l’avance rapide',
-        onchange: (e) => { screen.cmd('speed', { v: Number(e.target.value) }); local.post('/api/config', { fastSpeed: Number(e.target.value) }).catch(() => {}); } },
+        onchange: (e) => { e.target.blur(); screen.cmd('speed', { v: Number(e.target.value) }); local.post('/api/config', { fastSpeed: Number(e.target.value) }).catch(() => {}); } },
       [2, 3, 4, 8, 0].map((v) => h('option', { value: v, selected: (i.speed ?? 4) === v }, v === 0 ? 'Max' : `×${v}`))),
-      btn('', () => screen.cmd('volume', { muted: !i.muted }), { kind: 'ghost icon-only', iconName: i.muted ? 'mute' : 'volume', title: i.muted ? 'Remettre le son' : 'Couper le son' }),
+      btn('', () => screen.cmd('volume', { muted: !i.muted }), { kind: 'ghost icon-only', iconName: i.muted || i.volume === 0 ? 'mute' : 'volume', title: i.muted ? 'Remettre le son' : 'Couper le son' }),
+      volume,
       i.states ? btn('', () => screen.cmd('save-state', { slot: 1 }), { kind: 'ghost icon-only', iconName: 'save', title: 'Sauvegarde d’état' }) : null,
       i.states ? btn('', () => screen.cmd('load-state', { slot: 1 }), { kind: 'ghost icon-only', iconName: 'refresh', title: 'Charger l’état' }) : null,
       btn('', fullscreen, { kind: 'ghost icon-only', iconName: 'full', title: 'Plein écran (F11)' }),

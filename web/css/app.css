@@ -370,6 +370,16 @@ textarea.input { height: auto; padding: 10px 12px; resize: vertical; }
 }
 .play-bar .title { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1; }
 .play-bar .title b { font-weight: 600; }
+.vol-range {
+  -webkit-appearance: none; appearance: none; width: 88px; height: 4px; border-radius: 4px; cursor: pointer; flex: none;
+  background: linear-gradient(to right, var(--accent) var(--fill, 80%), var(--surface-2) var(--fill, 80%));
+}
+.vol-range.muted { opacity: .45; }
+.vol-range::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; width: 14px; height: 14px; border-radius: 50%;
+  background: var(--text); border: 0; box-shadow: 0 0 0 3px var(--bg);
+}
+.vol-range:focus-visible { outline-offset: 6px; }
 .play-body { flex: 1; display: flex; min-height: 0; }
 .stage { flex: 1; position: relative; display: grid; place-items: center; min-width: 0; overflow: hidden; outline: none; }
 .stage canvas { image-rendering: pixelated; display: block; background: #000; box-shadow: 0 0 0 1px rgba(255,255,255,.04); }
