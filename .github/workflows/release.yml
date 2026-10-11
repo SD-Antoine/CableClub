@@ -33,6 +33,11 @@ jobs:
         shell: powershell
         run: .\build.ps1
 
+      # the packaged SLT must start and serve the whole interface (0.4.1 and 0.4.2 did not)
+      - name: Smoke test
+        shell: powershell
+        run: .\.github\smoke-test.ps1 -Image dist\SLT -Version $env:VERSION
+
       - name: Notes
         shell: powershell
         run: |

@@ -1,8 +1,10 @@
-build/
-dist/
-data/
-data*/
-serveur/
+# anchored to the project root: a bare "data*/" also matched web/js/data/
+# and left the interface out of the GitHub releases (0.4.1 and 0.4.2)
+/build/
+/dist/
+/data/
+/data*/
+/serveur/
 *.gb
 *.gbc
 *.gba

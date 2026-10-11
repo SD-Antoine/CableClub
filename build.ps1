@@ -115,6 +115,29 @@ $appSources = Get-ChildItem -Recurse -Filter *.java (Join-Path $Root 'src') | Fo
 Exec $javac (@('-encoding', 'UTF-8', '--release', '21', '--enable-preview', '-Xlint:all,-serial,-preview', '-cp', $UprJar, '-d', $appClasses) + $appSources)
 Copy-Item -Recurse (Join-Path $Root 'web') (Join-Path $appClasses 'web')
 
+# ---------------------------------------------------------------- checks
+Step "Verification de l'interface"
+# every module the interface imports must exist: one missing file leaves the window on "Chargement de SLT"
+$missing = @()
+Get-ChildItem -Recurse -Filter *.js (Join-Path $Root 'web\js') | ForEach-Object {
+    $text = Get-Content -Raw -Encoding UTF8 $_.FullName
+    $specs = @([regex]::Matches($text, '(?m)^\s*(?:import|export)\b[^''"]*?\bfrom\s+[''"](\.[^''"]+)[''"]')) +
+             @([regex]::Matches($text, '(?m)^\s*import\s+[''"](\.[^''"]+)[''"]')) +
+             @([regex]::Matches($text, '\bimport\(\s*[''"](\.[^''"]+)[''"]\s*\)'))
+    foreach ($m in $specs) {
+        $target = [IO.Path]::GetFullPath((Join-Path $_.DirectoryName $m.Groups[1].Value))
+        if (-not (Test-Path -LiteralPath $target)) { $missing += "$($_.Name) -> $($m.Groups[1].Value)" }
+    }
+}
+if ($missing.Count -gt 0) { throw ('Modules de l''interface introuvables : ' + ($missing -join ', ')) }
+# a file of the program ignored by git would be missing from the GitHub release
+if (Test-Path (Join-Path $Root '.git')) {
+    $ignored = @(& git -C $Root ls-files --others --ignored --exclude-standard -- web src | Where-Object { $_ })
+    if ($ignored.Count -gt 0) { throw ('Fichiers ignores par git (absents de la release GitHub) : ' + ($ignored -join ', ')) }
+    $untracked = @(& git -C $Root ls-files --others --exclude-standard -- web src | Where-Object { $_ })
+    if ($untracked.Count -gt 0) { Write-Host ('    attention, pas encore dans git : ' + ($untracked -join ', ')) -ForegroundColor Yellow }
+}
+
 $manifest = Join-Path $Build 'MANIFEST.MF'
 "Main-Class: slt.Main`r`nClass-Path: upr-zx.jar`r`nImplementation-Version: $Version`r`n" | Set-Content -Encoding ascii $manifest
 $AppJar = Join-Path $Lib 'slt.jar'

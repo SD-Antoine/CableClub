@@ -1,5 +1,10 @@
 # Nouveautés de SLT
 
+## 0.4.3 — 2026-10-11
+
+- **Correction importante** : les versions 0.4.1 et 0.4.2 téléchargées depuis GitHub restaient bloquées sur « Chargement de SLT… » (des fichiers de l'interface manquaient dans le zip). Si vous êtes dans ce cas, téléchargez cette version à la main et décompressez-la par-dessus l'ancienne : vos données sont conservées.
+- La construction vérifie désormais que l'interface est complète avant de publier une version.
+
 ## 0.4.2 — 2026-10-11
 
 - **Volume** : un curseur de volume dans la barre du jeu (à côté du bouton son), retenu pour les parties suivantes.
