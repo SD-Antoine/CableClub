@@ -1,5 +1,9 @@
 # Nouveautés de SLT
 
+## 0.4.4 — 2026-10-11
+
+- **Correction importante** pour ceux qui rejoignent le serveur d'un ami : après une coupure de la connexion (ou juste après s'être connecté), chaque clic dans le menu ramenait à l'écran de connexion, voire au code d'invitation. La session n'était pas perdue : l'interface confondait un message du serveur avec son propre état.
+
 ## 0.4.3 — 2026-10-11
 
 - **Correction importante** : les versions 0.4.1 et 0.4.2 téléchargées depuis GitHub restaient bloquées sur « Chargement de SLT… » (des fichiers de l'interface manquaient dans le zip). Si vous êtes dans ce cas, téléchargez cette version à la main et décompressez-la par-dessus l'ancienne : vos données sont conservées.

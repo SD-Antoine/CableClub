@@ -89,7 +89,10 @@ export function connectStream() {
     try { data = JSON.parse(e.data); } catch { data = e.data; }
     fn(data);
   });
-  handle('hello', (s) => { store.state = s; store.connected = true; emit('state', s); emit('hello', s); });
+  handle('hello', (s) => {
+    if (!s || !s.link) return; // only the application's own state, never a relayed server greeting
+    store.state = s; store.connected = true; emit('state', s); emit('hello', s);
+  });
   handle('link', (l) => {
     if (store.state) store.state.link = l;
     emit('state', store.state);

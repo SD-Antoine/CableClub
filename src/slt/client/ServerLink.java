@@ -629,6 +629,16 @@ final class ServerLink {
 
     private void dispatch(String event, String json) {
         try {
+            if ("hello".equals(event)) {
+                // the server's greeting (who we are there) is not relayed: the interface's own "hello"
+                // carries its whole state, and taking this one for it logged remote players out (0.4.3)
+                Map<String, Object> user = Json.obj(Json.parseObject(json).get("user"));
+                if (user != null && !user.equals(config.get("user"))) {
+                    config.set("user", user);
+                    hub.send("link", status());
+                }
+                return;
+            }
             if ("room".equals(event)) {
                 Map<String, Object> room = Json.parseObject(json);
                 Map<String, Object> d = Json.obj(room.get("directives"));
