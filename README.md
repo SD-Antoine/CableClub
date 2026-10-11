@@ -5,7 +5,7 @@ les jeux Pokémon de la **1re à la 5e génération**, chacun dans sa propre
 partie, **en se voyant en direct**, avec les règles du Soul Link **appliquées
 automatiquement dans les jeux**.
 
-**[⬇ Télécharger la dernière version](https://github.com/SD-Antoine/SLT_SoulLinkTogether/releases/latest)**
+**[⬇ Télécharger la dernière version](https://github.com/SD-Antoine/CableClub/releases/latest)**
 (`SLT-x.y.z-windows-x64.zip` : décompressez-le et lancez `SLT.exe`, rien à
 installer). Les nouveautés de chaque version sont dans [CHANGELOG.md](CHANGELOG.md).
 

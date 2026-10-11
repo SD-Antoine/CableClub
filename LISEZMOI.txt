@@ -83,7 +83,7 @@ Quand une nouvelle version sort, SLT l'annonce (lien « Mise à jour » en bas
 à gauche, et Réglages > Mises à jour). « Mettre à jour et redémarrer » la
 télécharge, la met à la place de l'ancienne et relance SLT : vos données
 (dossier « data ») ne sont pas touchées. Quittez votre partie avant.
-Toutes les versions : https://github.com/SD-Antoine/SLT_SoulLinkTogether/releases
+Toutes les versions : https://github.com/SD-Antoine/CableClub/releases
 
 
 NOUVEL ORDINATEUR / ROM PERDUE

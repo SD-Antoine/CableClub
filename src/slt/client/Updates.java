@@ -36,7 +36,7 @@ import java.util.zip.ZipInputStream;
  */
 final class Updates {
 
-    static final String REPO = "SD-Antoine/SLT_SoulLinkTogether";
+    static final String REPO = "SD-Antoine/CableClub";
     static final String PAGE = "https://github.com/" + REPO + "/releases/latest";
     private static final String API = System.getProperty("slt.updates.api", "https://api.github.com/repos/" + REPO + "/releases/latest");
     private static final long PERIOD_MS = 6 * 3600_000L;
