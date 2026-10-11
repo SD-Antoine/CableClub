@@ -1,0 +1,137 @@
+SLT — Soul Link Together
+========================
+
+Un Soul Link Pokémon à plusieurs (1 à 4 joueurs), de la 1re à la 5e
+génération : chacun joue sa partie dans la fenêtre de SLT, voit ses
+partenaires en direct, et les règles du Soul Link s'appliquent toutes seules
+dans les jeux.
+
+
+DÉMARRER
+--------
+1. Double-cliquez sur SLT.exe. Rien à installer : Java et les émulateurs
+   sont inclus. (Clic droit sur l'icône près de l'horloge > Quitter.)
+
+2. Premier lancement :
+     - « Rejoindre un serveur » : collez le CODE D'INVITATION (SLT1-…)
+       envoyé par l'ami qui héberge ;
+     - ou « Héberger sur ce PC » : votre PC devient le serveur du groupe
+       (laissez SLT ouvert pendant les parties ; Windows demande d'autoriser
+       SLT dans le pare-feu). Laissez « Accessible depuis Internet » coché si
+       vos amis jouent de chez eux : SLT ouvre lui-même le port de votre box.
+       Votre code d'invitation est dans Réglages > Serveur (bouton Copier).
+   Puis créez votre compte (identifiant + mot de passe).
+
+3. « Amis » : ajoutez vos amis par leur identifiant.
+
+4. « Mes ROMs » > « Ajouter un dossier » : le dossier qui contient les ROMs
+   de vos jeux (copies de vos cartouches). Elles ne sont jamais modifiées.
+
+5. « Salles » > « Nouvelle salle » : jeu, nombre de joueurs, règles,
+   randomisation. Invitez vos amis (ou donnez le code de la salle).
+   Chacun voit sa ROM se préparer toute seule, puis clique « Je suis prêt ».
+   Le chef de salle clique « Lancer l'aventure ».
+
+6. « Jouer » : le jeu s'ouvre dans la fenêtre. Le suivi est automatique.
+
+
+PENDANT LA PARTIE
+-----------------
+- Générations 1 à 3 : vos partenaires apparaissent dans votre jeu, là où ils
+  sont sur la carte, avec leur pseudo au-dessus de la tête et une icône :
+  combat, dialogue (trois points), échange, ou déconnecté (Wi-Fi barré).
+  Ils ne s'affichent que quand vous avez la main (pas pendant un combat, un
+  dialogue, un menu ou une transition).
+- À droite : l'écran de vos partenaires en direct (cliquez pour agrandir),
+  leur zone, leur équipe, et le journal de la salle.
+- Quand tout le monde a capturé le Pokémon d'une zone, les jeux se mettent
+  en pause et le chef de salle choisit le surnom du lien ; il est écrit dans
+  chaque jeu.
+- Le Soul Link commence vraiment quand chaque joueur a une Poké Ball : avant,
+  un Pokémon K.O. ne meurt pas.
+- Un Pokémon lié qui meurt entraîne ses âmes liées : elles sont mises K.O.,
+  ne peuvent plus être soignées et rejoignent le PC (boîte « MORTS » en
+  générations 3 à 5, boîte actuelle en génération 1 ; en génération 4 et 5
+  au prochain changement de lieu).
+- Échanges : onglet « Joueurs » de la salle ou panneau du jeu. Seuls les
+  chromatiques s'échangent tant que la Ligue n'est pas vaincue ; restez hors
+  combat le temps du transfert.
+- Capturer dans une zone déjà utilisée, un doublon, un légendaire ou un
+  Pokémon offert (si les règles l'interdisent) : le Pokémon est relâché
+  (supprimé du jeu). Un doublon ne compte pas pour la zone : le lien attend
+  que le joueur y capture un vrai Pokémon avant que le chef puisse le nommer.
+- Mettre K.O. le premier Pokémon d'une zone l'annule pour toute la salle ;
+  ceux qui l'avaient capturé récupèrent les objets utilisés.
+- Le chef de salle peut fermer l'aventure (pause pour tous), la rouvrir, et
+  modifier les règles à tout moment.
+- Le Soul Link se termine quand le Maître de la Ligue est battu (détecté
+  automatiquement, sauf en 5e génération où le chef termine) ; un bilan
+  par joueur s'affiche (captures, morts, objets, chromatiques…) et la partie
+  reste dans l'« Historique » avec tout son journal.
+
+Contrôles (AZERTY, modifiables dans Réglages) :
+  Croix : flèches     A : X     B : W     X / Y (DS) : S / Q
+  L / R : A / Z       Start : Entrée      Select : Retour arrière
+  Avance rapide : Tab (maintenir) ou T    Pause : P    Plein écran : F11
+  Écran tactile DS : souris sur l'écran du bas
+  Manettes Xbox et compatibles : reconnues automatiquement.
+
+
+MISES À JOUR
+------------
+Quand une nouvelle version sort, SLT l'annonce (lien « Mise à jour » en bas
+à gauche, et Réglages > Mises à jour). « Mettre à jour et redémarrer » la
+télécharge, la met à la place de l'ancienne et relance SLT : vos données
+(dossier « data ») ne sont pas touchées. Quittez votre partie avant.
+Toutes les versions : https://github.com/SD-Antoine/SLT_SoulLinkTogether/releases
+
+
+NOUVEL ORDINATEUR / ROM PERDUE
+------------------------------
+Ajoutez votre ROM dans « Mes ROMs », ouvrez la salle : « Régénérer » refait
+exactement la même ROM (même seed). « Récupérer ma sauvegarde du serveur »
+remet votre dernière sauvegarde (SLT en garde une copie sur le serveur).
+« Télécharger » enregistre une copie de la ROM de la salle.
+
+
+SERVEUR SEUL
+------------
+Sur un PC allumé en permanence :  SLT.exe --server
+Options : --port=47330  --data=dossier  --name="Mon serveur"
+Le code d'invitation s'affiche dans serveur\serveur.log. Par Internet :
+ouvrez le port TCP 47330 de la box vers ce PC. La connexion est chiffrée.
+
+SI UN AMI N'ARRIVE PAS À SE CONNECTER
+-------------------------------------
+SLT explique sous le champ du code pourquoi la connexion échoue (code
+copié trop tôt, adresse bloquée, port fermé…). Le détail de chaque adresse
+essayée est dans data\slt.log.
+- Il doit coller le code d'invitation, pas une adresse en 192.168.x.x
+  (elle ne marche que sur la même box).
+- Chez l'hôte, Réglages > Serveur doit indiquer en vert « Accessible depuis
+  Internet » AVANT de copier le code (sinon le code ne contient pas
+  l'adresse Internet). Si la box refuse : activez l'UPnP dans ses réglages,
+  ou ouvrez le port TCP 47330 vers le PC hôte.
+- Pare-feu Windows : si Réglages > Serveur signale que SLT est bloqué,
+  cliquez « Autoriser SLT dans le pare-feu » et répondez Oui à Windows.
+  (Piège courant : quand Windows a demandé, seule la case « Réseaux privés »
+  était cochée alors que Windows considère votre réseau comme public.)
+  Un antivirus avec son propre pare-feu doit aussi laisser passer SLT.
+- Autre solution : c'est celui dont la box s'ouvre bien qui héberge.
+- En dernier recours : Tailscale, gratuit, des deux côtés.
+
+
+DONNÉES
+-------
+Tout est dans le dossier « data » à côté de SLT.exe (réglages, bibliothèque,
+ROMs des salles, sauvegardes, serveur hébergé). S'il n'est pas accessible en
+écriture : %LOCALAPPDATA%\SLT.
+
+
+LÉGAL
+-----
+SLT est un projet de fans gratuit et non officiel, sous licence GPLv3.
+Il ne contient aucun jeu ni aucune ROM : utilisez uniquement des copies de
+jeux que vous possédez. Composants : Universal Pokemon Randomizer ZX (GPLv3),
+mGBA (MPL 2.0), DeSmuME (GPLv2+) — voir THIRD-PARTY.txt.
+Pokémon © Nintendo, Creatures, GAME FREAK.

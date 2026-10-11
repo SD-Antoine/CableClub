@@ -1,0 +1,37 @@
+SLT — composants tiers
+======================
+
+Universal Pokemon Randomizer ZX 4.6.1
+  Auteurs : Ajarmar, darkeye, cleartonic et les contributeurs du projet,
+            d'après l'Universal Pokemon Randomizer original de Dabomstew.
+  Licence : GNU General Public License v3 (voir LICENSE.txt)
+  Source  : https://github.com/Ajarmar/universal-pokemon-randomizer-zx
+            (commit 7f00eb866ed35c8fe3963f078b6a2e0979dc2b8c)
+  Usage   : moteur de randomisation, compilé sans modification dans
+            upr-zx.jar. Le script build.ps1 du code source de SLT
+            télécharge et compile exactement cette version.
+
+mGBA (cœur libretro) — Game Boy, Game Boy Color, Game Boy Advance
+  Auteurs : Vicki Pfau (endrift) et les contributeurs de mGBA.
+  Licence : Mozilla Public License 2.0
+  Source  : https://github.com/mgba-emu/mgba
+  Binaire : app\cores\mgba_libretro.dll, compilé par le projet libretro
+            (https://buildbot.libretro.com).
+
+DeSmuME (cœur libretro) — Nintendo DS
+  Auteurs : l'équipe DeSmuME et les contributeurs libretro.
+  Licence : GNU General Public License v2 ou ultérieure
+  Source  : https://github.com/libretro/desmume
+  Binaire : app\cores\desmume_libretro.dll, compilé par le projet libretro
+            (https://buildbot.libretro.com).
+
+Environnement d'exécution Java (OpenJDK / Oracle JDK 21)
+  Inclus dans le dossier "runtime" par jpackage.
+  Licence : GNU GPL v2 avec « Classpath Exception ».
+
+Le lecteur, le suivi automatique et le serveur reprennent le code de SLMPG
+(Soul Link Multi Pokémon Generation, du même auteur, GPLv3).
+
+Pokémon et tous les noms associés sont des marques déposées de Nintendo,
+Creatures Inc. et GAME FREAK inc. SLT est un projet de fans, gratuit et
+non officiel. Aucun jeu, aucune ROM ni aucune image de Nintendo n'est fourni.

@@ -1,0 +1,11 @@
+build/
+dist/
+data/
+data*/
+serveur/
+*.gb
+*.gbc
+*.gba
+*.nds
+*.sav
+*.srm

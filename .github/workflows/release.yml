@@ -1,0 +1,60 @@
+# Pushing a tag vX.Y.Z builds SLT on Windows and publishes the GitHub release
+# (zip + SHA-256). The notes are the "## X.Y.Z" section of CHANGELOG.md.
+# SLT checks the latest release to offer the update to its users.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Version
+        shell: powershell
+        run: |
+          $tag = '${{ github.ref_name }}'.TrimStart('v')
+          $version = ([regex]'VERSION = "([^"]+)"').Match((Get-Content -Raw src\slt\Version.java)).Groups[1].Value
+          if ($tag -ne $version) { throw "Le tag v$tag ne correspond pas a src\slt\Version.java ($version)" }
+          "VERSION=$version" | Out-File -Append -Encoding ascii $env:GITHUB_ENV
+
+      - name: Build
+        shell: powershell
+        run: .\build.ps1
+
+      - name: Notes
+        shell: powershell
+        run: |
+          $lines = Get-Content -Encoding UTF8 CHANGELOG.md
+          $out = New-Object System.Collections.Generic.List[string]
+          $in = $false
+          foreach ($l in $lines) {
+            if ($l -match '^## ') { if ($in) { break }; $in = $l -match ('^## ' + [regex]::Escape($env:VERSION) + '\b'); continue }
+            if ($in) { $out.Add($l) }
+          }
+          if ($out.Count -eq 0) { $out.Add("SLT $env:VERSION") }
+          $out.Add('')
+          foreach ($l in (Get-Content -Encoding UTF8 .github/release-footer.md)) { $out.Add($l.Replace('{VERSION}', $env:VERSION)) }
+          [IO.File]::WriteAllLines("$PWD\notes.md", $out, (New-Object System.Text.UTF8Encoding $false))
+
+      - name: Publish
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $zip = Get-Item "dist\SLT-$env:VERSION-windows-x64.zip"
+          $hash = (Get-FileHash -Algorithm SHA256 $zip.FullName).Hash.ToLower()
+          [IO.File]::WriteAllText("$($zip.FullName).sha256", "$hash  $($zip.Name)`n")
+          gh release create '${{ github.ref_name }}' $zip.FullName "$($zip.FullName).sha256" --title "SLT $env:VERSION" --notes-file notes.md
+          if ($LASTEXITCODE -ne 0) { throw 'gh release create a echoue' }

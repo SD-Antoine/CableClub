@@ -1,0 +1,105 @@
+// First launch: choose the SLT server (join one or host it here), then log in or create an account.
+
+import { h, mount, icon, field, seg, act } from '../ui.js';
+import { local } from '../api.js';
+import { store, refreshState, on } from '../store.js';
+import { hostAddresses } from './parts.js';
+
+export function renderWelcome(container, onDone) {
+  const ui = { step: store.state?.link?.server ? 'account' : 'server', mode: 'join', tab: 'login', hosted: false, error: null };
+  // the hosted server's banner follows the box live, without touching what is being typed
+  let fillBanner = null;
+  const off = on('host', () => { if (fillBanner) fillBanner(); });
+
+  function draw() {
+    mount(container, h('div', { class: 'welcome' }, h('div', { class: 'welcome-box' },
+      h('div', { class: 'logo' }, h('img', { src: 'img/logo.svg', alt: '' }),
+        h('div', null, h('b', null, 'SLT'), h('small', null, 'Soul Link Together — génération 1 à 5'))),
+      ui.step === 'server' ? serverStep() : accountStep())));
+  }
+
+  function serverStep() {
+    const address = h('input', { class: 'input big', placeholder: 'Code d’invitation (SLT1-…) ou adresse', value: ui.code || '' });
+    const internet = h('input', { type: 'checkbox', checked: ui.internet !== false, onchange: (e) => { ui.internet = e.target.checked; } });
+    const go = h('button', { class: 'btn primary big block', type: 'submit' }, 'Continuer');
+    const form = h('form', { class: 'stack l', onsubmit: (e) => {
+      e.preventDefault();
+      act(go, async () => {
+        ui.error = null;
+        if (ui.mode === 'host') {
+          const s = await local.post('/api/host/start', { port: 47330, use: true, internet: ui.internet !== false });
+          store.state = s;
+          ui.hosted = true;
+        } else {
+          ui.code = address.value;
+          try {
+            const r = await local.post('/api/server/use', { address: address.value });
+            store.state = r.state;
+          } catch (err) {
+            // the diagnosis is long: shown under the field rather than in a passing notification
+            ui.error = err.message;
+            draw();
+            return;
+          }
+        }
+        ui.step = 'account';
+        draw();
+      });
+    } },
+      h('div', null, h('h1', null, 'Bienvenue'), h('p', { class: 'muted mt-s' },
+        'Les comptes, les amis et les salles vivent sur un serveur SLT. Rejoignez celui de votre groupe, ou hébergez-le sur ce PC.')),
+      h('div', { class: 'stack' },
+        h('button', { type: 'button', class: ['choice', ui.mode === 'join' && 'selected'], onclick: () => { ui.mode = 'join'; draw(); } },
+          icon('server'), h('div', null, h('b', null, 'Rejoindre un serveur'), h('small', null, 'Un ami héberge déjà SLT : collez le code d’invitation qu’il vous a envoyé.'))),
+        h('button', { type: 'button', class: ['choice', ui.mode === 'host' && 'selected'], onclick: () => { ui.mode = 'host'; draw(); } },
+          icon('home'), h('div', null, h('b', null, 'Héberger sur ce PC'), h('small', null, 'Ce PC devient le serveur du groupe (laissez SLT ouvert pendant les parties).')))),
+      ui.mode === 'join' ? field('Code d’invitation ou adresse du serveur', address, 'L’hôte trouve son code dans Réglages > Serveur.') : null,
+      ui.mode === 'join' && ui.error ? h('div', { class: 'banner warn' }, icon('alert'), h('div', { class: 'small' }, ui.error)) : null,
+      ui.mode === 'host' ? h('label', { class: 'switch' }, internet, h('span', { class: 'track' }),
+        h('span', { class: 'small' }, 'Accessible depuis Internet — pour des amis qui jouent de chez eux (SLT ouvre le port de votre box)')) : null,
+      go);
+    return form;
+  }
+
+  function accountStep() {
+    const link = store.state?.link || {};
+    const user = h('input', { class: 'input', autocomplete: 'username', placeholder: 'ex. sacha' });
+    const pass = h('input', { class: 'input', type: 'password', autocomplete: ui.tab === 'login' ? 'current-password' : 'new-password' });
+    const name = h('input', { class: 'input', placeholder: 'Nom visible par vos amis (facultatif)' });
+    const submit = h('button', { class: 'btn primary big block', type: 'submit' }, ui.tab === 'login' ? 'Se connecter' : 'Créer mon compte');
+    let hosted = null;
+    if (ui.hosted) {
+      hosted = h('div');
+      fillBanner = () => {
+        const host = store.state?.host || {};
+        mount(hosted, host.running ? h('div', { class: 'banner' }, icon('info'), h('div', null, h('b', null, 'Serveur démarré. '),
+          'Créez votre compte ici. Vos amis, eux, colleront ce code d’invitation dans SLT :', hostAddresses(host, {
+            onFirewall: async () => { store.state = await local.post('/api/host/firewall', {}); fillBanner(); },
+          }))) : null);
+      };
+      fillBanner();
+    }
+    return h('form', { class: 'stack l', onsubmit: (e) => {
+      e.preventDefault();
+      act(submit, async () => {
+        const path = ui.tab === 'login' ? '/api/auth/login' : '/api/auth/register';
+        await local.post(path, { username: user.value.trim(), password: pass.value, name: name.value.trim() || undefined });
+        await refreshState();
+        onDone();
+      });
+    } },
+      h('div', null, h('h1', null, ui.tab === 'login' ? 'Connexion' : 'Créer un compte'),
+        h('p', { class: 'muted mt-s small' }, 'Serveur : ', h('span', { class: 'mono' }, link.server || '?'), ' · ',
+          h('a', { href: '#', onclick: (e) => { e.preventDefault(); ui.step = 'server'; draw(); } }, 'changer'))),
+      hosted,
+      seg([['login', 'J’ai un compte'], ['register', 'Nouveau compte']], ui.tab, (v) => { ui.tab = v; draw(); }),
+      field('Identifiant', user, ui.tab === 'register' ? '3 à 20 caractères : lettres, chiffres, « . », « - », « _ ».' : null),
+      field('Mot de passe', pass, ui.tab === 'register' ? '8 caractères minimum.' : null),
+      ui.tab === 'register' ? field('Nom affiché', name) : null,
+      submit);
+  }
+
+  draw();
+  return () => off();
+}
+

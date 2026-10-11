@@ -1,0 +1,3 @@
+# LF everywhere (the sources are written with LF; PowerShell 5.1 reads them fine)
+* text=auto eol=lf
+*.svg text eol=lf
