@@ -40,6 +40,8 @@ final class Gen5Presence implements Presence {
     private static final long SEARCH_MS = 250;
     /** Images a reading is kept at most when the picture does not change. */
     private static final int HOLD = 2;
+    /** How long the camera must stay away from the player before the game is called a battle. */
+    private static final long BATTLE_MS = 700;
     private static final int MAX_OTHERS = 32;
 
     private final NdsReader reader;
@@ -53,6 +55,9 @@ final class Gen5Presence implements Presence {
     private float[] view;
     private int offField;
     private float fieldProjection = Float.NaN;
+    /** The map the camera last followed the player on: another one (door, stairs) is a transition, no battle. */
+    private int aimedMap = -1;
+    private long battleSince;
     private int walkCode = -1;
     // last position on the field: kept while in battle or in a cutscene
     private int fieldMap = -1;
@@ -160,12 +165,20 @@ final class Gen5Presence implements Presence {
         if (aimed) {
             view = next;
             fieldProjection = next[0];
+            aimedMap = map;
             offField = 0;
         } else {
             offField++;
         }
-        boolean field = view != null && (aimed || offField <= 2);
-        boolean battle = !field && next != null && !Float.isNaN(fieldProjection) && Math.abs(next[0] - fieldProjection) > 0.05f;
+        // going through a door or a staircase: the map is another one before the camera follows the player again, with
+        // the projection of the other map (indoors, outdoors) and the camera of the old view: not a battle, and the
+        // old view is no longer the field's
+        boolean sameMap = map == aimedMap;
+        boolean field = view != null && (aimed || (offField <= 2 && sameMap));
+        boolean other = !field && sameMap && next != null && !Float.isNaN(fieldProjection) && Math.abs(next[0] - fieldProjection) > 0.05f;
+        // a camera of another kind must last: a door, a cutscene or a fade also change it for a moment
+        battleSince = other ? (battleSince == 0 ? now : battleSince) : 0;
+        boolean battle = other && now - battleSince >= BATTLE_MS;
         boolean dark = darkScreen(core);
         // a message box over the field leaves the others where they are (behind the box); a screen white all over
         // (flash of a battle starting, fade to white) is not one and hides them as a black one does
@@ -214,7 +227,7 @@ final class Gen5Presence implements Presence {
         if (m == null) {
             return;
         }
-        float[] buffer = new float[3 * MAX_OTHERS];
+        float[] buffer = new float[4 * MAX_OTHERS];
         int n = 0;
         long limit = ram.byteSize() - 0x300;
         for (int k = -63; k <= 63 && n < MAX_OTHERS; k++) {
@@ -243,12 +256,13 @@ final class Gen5Presence implements Presence {
             if (sx < -24 || sx > 280 || sy < -8 || sy > 232) {
                 continue;
             }
-            buffer[3 * n] = (float) sx;
-            buffer[3 * n + 1] = (float) sy;
-            buffer[3 * n + 2] = (float) w;
+            buffer[4 * n] = (float) sx;
+            buffer[4 * n + 1] = (float) sy;
+            buffer[4 * n + 2] = (float) w;
+            buffer[4 * n + 3] = 32;
             n++;
         }
-        s.others = java.util.Arrays.copyOf(buffer, 3 * n);
+        s.others = java.util.Arrays.copyOf(buffer, 4 * n);
     }
 
     /** The last position on the field, while the structures are not found (loading, battle…). */

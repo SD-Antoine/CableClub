@@ -13,6 +13,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 /** Everything that touches the Windows desktop: explorer, emulator, browser window, tray. */
 public final class Desktop {
@@ -87,6 +88,9 @@ public final class Desktop {
                             "--user-data-dir=" + profileDir.toAbsolutePath(),
                             "--no-first-run", "--no-default-browser-check", "--disable-sync",
                             "--disable-features=Translate,msEdgeSidebarV2,msImplicitSignin",
+                            // closing the window must end the browser (it would otherwise stay in the background, in the
+                            // hidden icons of the taskbar, with this profile)
+                            "--disable-background-mode",
                             "--window-size=1440,920").start();
                 } catch (IOException e) {
                     Log.warn("Lancement de " + exe + " impossible : " + e.getMessage());
@@ -95,6 +99,72 @@ public final class Desktop {
         }
         browse(url);
         return null;
+    }
+
+    /**
+     * Closes the application window for good: every process of the browser started with this profile, the ones that
+     * stay behind a closed window included. The main one is asked to close like the cross of the window would, the
+     * others (and the ones that do not answer within a moment) are ended.
+     */
+    public static void closeAppWindow(Path profileDir) {
+        // Java cannot read the command line of another process on Windows: Windows is asked (the folder of the profile
+        // travels by the environment, so that no character of the path needs quoting)
+        record Proc(long pid, long parent) {
+        }
+        List<Proc> mine = new ArrayList<>();
+        try {
+            ProcessBuilder pb = new ProcessBuilder("powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
+                    "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -and $_.CommandLine.IndexOf($env:CC_PROFILE, "
+                            + "[StringComparison]::OrdinalIgnoreCase) -ge 0 } | ForEach-Object { $_.ProcessId.ToString() + ' ' + $_.ParentProcessId.ToString() }");
+            pb.environment().put("CC_PROFILE", profileDir.toAbsolutePath().toString());
+            pb.redirectErrorStream(true);
+            Process ps = pb.start();
+            String out = new String(ps.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+            if (!ps.waitFor(10, TimeUnit.SECONDS)) {
+                ps.destroyForcibly();
+            }
+            long self = ProcessHandle.current().pid();
+            for (String line : out.split("\\R")) {
+                String[] f = line.trim().split("\\s+");
+                if (f.length == 2 && f[0].matches("\\d+") && f[1].matches("\\d+") && Long.parseLong(f[0]) != self) {
+                    mine.add(new Proc(Long.parseLong(f[0]), Long.parseLong(f[1])));
+                }
+            }
+        } catch (IOException | InterruptedException e) {
+            Log.warn("Fenêtre de l'application : recherche impossible : " + e.getMessage());
+            return;
+        }
+        if (mine.isEmpty()) {
+            return;
+        }
+        for (Proc p : mine) {
+            if (mine.stream().noneMatch(q -> q.pid() == p.parent())) {
+                try {
+                    // without /F: a normal close request, the browser saves its state
+                    new ProcessBuilder("taskkill", "/PID", Long.toString(p.pid())).redirectErrorStream(true)
+                            .redirectOutput(ProcessBuilder.Redirect.DISCARD).start();
+                } catch (IOException e) {
+                    Log.warn("Fermeture de la fenêtre impossible : " + e.getMessage());
+                }
+            }
+        }
+        long end = System.currentTimeMillis() + 1500;
+        for (Proc p : mine) {
+            ProcessHandle.of(p.pid()).ifPresent(h -> {
+                try {
+                    h.onExit().get(Math.max(1, end - System.currentTimeMillis()), TimeUnit.MILLISECONDS);
+                } catch (Exception e) {
+                    // still there: ended below
+                }
+            });
+        }
+        for (Proc p : mine) {
+            ProcessHandle.of(p.pid()).ifPresent(h -> {
+                if (h.isAlive()) {
+                    h.destroyForcibly();
+                }
+            });
+        }
     }
 
     public static void browse(String url) {
@@ -125,7 +195,7 @@ public final class Desktop {
             open.addActionListener(e -> onOpen.run());
             MenuItem data = new MenuItem("Dossier des données");
             data.addActionListener(e -> onData.run());
-            MenuItem quit = new MenuItem("Quitter");
+            MenuItem quit = new MenuItem("Fermer Cable Club");
             quit.addActionListener(e -> onQuit.run());
             menu.add(open);
             menu.add(data);

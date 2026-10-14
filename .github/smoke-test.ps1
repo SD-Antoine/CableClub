@@ -31,6 +31,9 @@ try {
         try { Invoke-WebRequest -UseBasicParsing "$base/$f" | Out-Null } catch { $missing += $f }
     }
     if ($missing.Count -gt 0) { throw ('Fichiers de l''interface absents de Cable Club : ' + ($missing -join ', ')) }
+    # the patch notes of this very version travel in the program (Réglages > Autres > Mise à jour)
+    $notes = (Invoke-WebRequest -UseBasicParsing "$base/api/changelog" -Headers @{ 'X-SLT' = '1' }).Content | ConvertFrom-Json
+    if (-not ($notes.sections | Where-Object { $_.version -eq $state.version -and $_.notes })) { throw "CHANGELOG.md n'a pas de notes pour la version $($state.version)" }
     Write-Host "Cable Club $($state.version) demarre et sert les $($files.Count) fichiers de l'interface."
 } finally {
     Get-Process ([IO.Path]::GetFileNameWithoutExtension($exe)) -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $exe } | Stop-Process -Force

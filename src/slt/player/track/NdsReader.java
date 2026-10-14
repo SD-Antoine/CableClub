@@ -79,6 +79,7 @@ public final class NdsReader implements GameReader {
     private int trainerShift;
     private long lastWildScan;
     private List<Mon> lastWild = List.of();
+    private volatile boolean fieldShown;
 
     public NdsReader(Layout layout, String game, GameInfo info) {
         this.layout = layout;
@@ -94,6 +95,14 @@ public final class NdsReader implements GameReader {
             case "heartgold", "soulsilver" -> new NdsReader(HGSS, game, info);
             default -> null;
         };
+    }
+
+    /**
+     * The game shows the field with the camera on the player (told by the presence in game): there is no battle, so no
+     * wild Pokémon to look for in the memory.
+     */
+    public void fieldShown(boolean on) {
+        fieldShown = on;
     }
 
     /** The game ("white2"…). */
@@ -162,7 +171,12 @@ public final class NdsReader implements GameReader {
             map = -1;
         }
         long now = System.nanoTime();
-        if (!party.isEmpty() && now - lastWildScan > WILD_SCAN_NS) {
+        if (fieldShown) {
+            // no battle on the field: a Pokémon of the player outside the party is a copy the game keeps (the starters
+            // not chosen, a gift on its way), not a wild one; the next battle is scanned at once
+            lastWild = List.of();
+            lastWildScan = 0;
+        } else if (!party.isEmpty() && now - lastWildScan > WILD_SCAN_NS) {
             lastWildScan = now;
             lastWild = scanWild(d, party, ot);
         }

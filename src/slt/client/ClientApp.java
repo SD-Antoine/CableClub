@@ -319,11 +319,16 @@ public final class ClientApp {
         }
     }
 
+    /** Closes everything: the game, the hosted server, the icon of the taskbar and the application window. */
     void quit() {
         Log.info("Fermeture de SLT");
         players.stop();
         hosting.stop();
         Desktop.removeTray();
+        // (an update restarts SLT behind the same window, which reloads itself: it stays open then)
+        if (windowed && !restarting) {
+            Desktop.closeAppWindow(dataDir.resolve("navigateur"));
+        }
         System.exit(0);
     }
 

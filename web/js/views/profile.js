@@ -1,7 +1,7 @@
 // Profiles: a player's card (any name or picture opens it) and the page where
 // the player edits theirs (picture, name, bio, favourite game and Pokémon).
 
-import { h, mount, btn, avatar, modal, act, toast, errorToast, field, confirmDialog, dateTime } from '../ui.js';
+import { h, mount, btn, avatar, modal, act, toast, errorToast, field, confirmDialog, dateTime, keepScroll } from '../ui.js';
 import { local, srv } from '../api.js';
 import { store, refreshState, refreshFriends, me } from '../store.js';
 import { GAMES, gameName } from '../data/games.js';
@@ -118,6 +118,8 @@ export function renderProfile(container) {
     const games = h('select', { class: 'input' }, h('option', { value: '' }, '—'),
       Object.keys(GAMES).map((id) => h('option', { value: id, selected: u.favGame === id }, gameName(id))));
     const mon = h('input', { class: 'input', value: u.favPokemon || '', maxlength: 24, placeholder: 'ex. Évoli' });
+    const oldPw = h('input', { class: 'input', type: 'password', autocomplete: 'current-password' });
+    const newPw = h('input', { class: 'input', type: 'password', autocomplete: 'new-password' });
     const file = h('input', { type: 'file', accept: 'image/*', style: { display: 'none' }, onchange: async (e) => {
       const f = e.target.files?.[0];
       e.target.value = '';
@@ -131,6 +133,7 @@ export function renderProfile(container) {
       } catch (err) { errorToast(err); }
     } });
 
+    const restore = keepScroll(page);
     mount(page,
       h('div', { class: 'page-head' }, h('div', null, h('h1', null, 'Mon profil'), h('p', null, 'Ce que les autres joueurs voient en cliquant sur votre nom ou votre photo.'))),
       h('div', { class: 'card' }, h('div', { class: 'row' },
@@ -154,7 +157,22 @@ export function renderProfile(container) {
             toast('Profil enregistré.', 'ok');
             draw();
           }), { kind: 'primary' }))),
+      // the account: not shown to the other players
+      h('div', { class: 'section-title' }, h('h2', null, 'Compte')),
+      h('div', { class: 'card stack' },
+        h('p', { class: 'muted small' }, `Connecté en tant que @${u.username || '?'} sur ${store.state?.link?.server || 'le serveur'}.`),
+        h('div', { class: 'grid2' }, field('Mot de passe actuel', oldPw), field('Nouveau mot de passe', newPw, '8 caractères minimum.')),
+        h('div', { class: 'row' }, btn('Changer le mot de passe', (e) => act(e.currentTarget, async () => {
+          await local.post('/api/me/password', { old: oldPw.value, new: newPw.value });
+          oldPw.value = ''; newPw.value = '';
+          toast('Mot de passe changé. Vos autres appareils devront se reconnecter.', 'ok');
+        })), h('span', { class: 'grow' }),
+        btn('Se déconnecter', async (e) => {
+          const b = e.currentTarget;
+          if (await confirmDialog('Se déconnecter', 'Le jeu en cours sera fermé.')) act(b, async () => { await local.post('/api/auth/logout'); location.hash = '#/'; location.reload(); });
+        }, { kind: 'ghost danger', iconName: 'logout' }))),
       u.createdAt ? h('p', { class: 'tiny faint center mt' }, `Compte créé le ${dateTime(u.createdAt)}`) : null);
+    restore();
   }
 
   draw();

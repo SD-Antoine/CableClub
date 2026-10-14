@@ -96,6 +96,11 @@ public final class PlayerMain {
             }
         }
         session.start();
+        // the application is gone (closed, ended): the game does not stay behind without its window
+        ProcessHandle.current().parent().ifPresent(parent -> parent.onExit().thenRun(() -> {
+            Log.info("L'application Cable Club est fermée : le jeu s'arrête.");
+            System.exit(0);
+        }));
 
         // the room's directives: shared deaths, nicknames, refunds, pauses
         ScheduledExecutorService poller = Executors.newSingleThreadScheduledExecutor(r -> {

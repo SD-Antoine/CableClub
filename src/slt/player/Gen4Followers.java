@@ -13,9 +13,13 @@ import java.nio.ByteOrder;
  * randomizer, which moves overlays about, so it is not searched there):
  *
  * <pre>
- * 12 bytes an entry, one per graphics id: u32 member of the archive, u16 751, u16 (animation), u16 832, u16 0.
+ * 12 bytes an entry, one per graphics id: u32 member of the archive, u16 (animation: 700 to 770), u16 (flags),
+ * u16 (size: 822 to 1856), u16 0. The animation and the size differ from a Pokémon to another (flying ones, big
+ * ones): only the member (297 to 862) and the last word tell a follower.
  * Graphics id 947 is member 816 (Glaceon): found through the entries of members 815 to 818 in a row, the
- * rest follows (measured on HeartGold FR: the follower of the first Pokémon, Glaceon, drawn there).
+ * rest follows (measured on HeartGold FR: the follower of the first Pokémon, Glaceon, drawn there; Butterfree,
+ * graphics id 394, is member 308 with another animation: the first version kept 183 entries of 560 and showed
+ * no follower for the others).
  * </pre>
  */
 final class Gen4Followers {
@@ -49,30 +53,37 @@ final class Gen4Followers {
             return -1;
         }
         int member = table.getInt(at);
-        boolean follower = (table.getShort(at + 4) & 0xFFFF) == 751 && (table.getShort(at + 8) & 0xFFFF) == 832;
-        return follower && member >= 297 && member < 863 ? member : -1;
+        return table.getShort(at + 10) == 0 && member >= 297 && member < 863 ? member : -1;
     }
 
-    private static ByteBuffer find(MemorySegment ram) {
+    /** Offset in the RAM of the entry of the reference member, -1 if the table is not there. */
+    static long locate(MemorySegment ram) {
         long size = ram.byteSize();
         for (long o = 0; o + 48 <= size; o += 4) {
             if (ram.get(I32, o) == MEMBER_REF - 1 && entry(ram, o) && entry(ram, o + 12) && entry(ram, o + 24) && entry(ram, o + 36)
                     && ram.get(I32, o + 12) == MEMBER_REF && ram.get(I32, o + 24) == MEMBER_REF + 1 && ram.get(I32, o + 36) == MEMBER_REF + 2) {
-                long ref = o + 12; // entry of the reference member
-                long from = ref - BEFORE;
-                long to = Math.min(size, ref + AFTER + 12);
-                if (from < 0) {
-                    return null;
-                }
-                byte[] t = new byte[BEFORE + AFTER + 12];
-                MemorySegment.copy(ram, ValueLayout.JAVA_BYTE, from, t, 0, (int) (to - from));
-                return ByteBuffer.wrap(t).order(ByteOrder.LITTLE_ENDIAN);
+                return o + 12;
             }
         }
-        return null;
+        return -1;
     }
 
+    private static ByteBuffer find(MemorySegment ram) {
+        long ref = locate(ram);
+        long from = ref - BEFORE;
+        if (ref < 0 || from < 0) {
+            return null;
+        }
+        long to = Math.min(ram.byteSize(), ref + AFTER + 12);
+        byte[] t = new byte[BEFORE + AFTER + 12];
+        MemorySegment.copy(ram, ValueLayout.JAVA_BYTE, from, t, 0, (int) (to - from));
+        return ByteBuffer.wrap(t).order(ByteOrder.LITTLE_ENDIAN);
+    }
+
+    /** An entry of the table: the last word is 0 and the animation and the size are in the ranges seen. */
     private static boolean entry(MemorySegment ram, long o) {
-        return (ram.get(U16, o + 4) & 0xFFFF) == 751 && (ram.get(U16, o + 8) & 0xFFFF) == 832 && ram.get(U16, o + 10) == 0;
+        int animation = ram.get(U16, o + 4) & 0xFFFF;
+        int size = ram.get(U16, o + 8) & 0xFFFF;
+        return animation >= 700 && animation <= 770 && size >= 800 && size <= 1900 && ram.get(U16, o + 10) == 0;
     }
 }

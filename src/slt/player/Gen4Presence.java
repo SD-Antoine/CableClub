@@ -65,6 +65,8 @@ final class Gen4Presence implements Presence {
     /** Images a reading is kept at most when the picture does not change. */
     private static final int HOLD = 2;
     private static final int FOLLOWER_ID = 253;
+    /** How long the camera must stay away from the player before the game is called a battle. */
+    private static final long BATTLE_MS = 700;
     private static final int MAX_OTHERS = 32;
 
     private final NdsReader reader;
@@ -79,6 +81,9 @@ final class Gen4Presence implements Presence {
     private float[] view;
     private int offField;
     private float fieldProjection = Float.NaN;
+    /** The map the camera last followed the player on: another one (door, stairs) is a transition, no battle. */
+    private int aimedMap = -1;
+    private long battleSince;
     // last position on the field: kept while in battle or in a cutscene
     private int fieldMap = -1;
     private int fieldX;
@@ -199,12 +204,20 @@ final class Gen4Presence implements Presence {
         if (aimed) {
             view = next;
             fieldProjection = next[0];
+            aimedMap = map;
             offField = 0;
         } else {
             offField++;
         }
-        boolean field = view != null && (aimed || offField <= 2);
-        boolean battle = !field && next != null && !Float.isNaN(fieldProjection) && Math.abs(next[0] - fieldProjection) > 0.05f;
+        // going through a door or a staircase: the map is another one before the camera follows the player again, with
+        // the projection of the other map (indoors, outdoors) and the camera of the old view: not a battle, and the
+        // old view is no longer the field's
+        boolean sameMap = map == aimedMap;
+        boolean field = view != null && (aimed || (offField <= 2 && sameMap));
+        boolean other = !field && sameMap && next != null && !Float.isNaN(fieldProjection) && Math.abs(next[0] - fieldProjection) > 0.05f;
+        // a camera of another kind must last: a door, a cutscene or a fade also change it for a moment
+        battleSince = other ? (battleSince == 0 ? now : battleSince) : 0;
+        boolean battle = other && now - battleSince >= BATTLE_MS;
         boolean dark = Gen5Presence.darkScreen(core);
         int box = field && !dark ? Gen5Presence.messageBox(core) : 0;
         boolean flash = box < 0;
@@ -381,7 +394,7 @@ final class Gen4Presence implements Presence {
         if (m == null) {
             return;
         }
-        float[] buffer = new float[3 * MAX_OTHERS];
+        float[] buffer = new float[4 * MAX_OTHERS];
         int n = 0;
         Pet pet = null;
         long limit = ram.byteSize() - 0x300;
@@ -403,19 +416,24 @@ final class Gen4Presence implements Presence {
             if (gx <= 0 || gz <= 0 || gx >= 0x10000 || gz >= 0x10000 || Math.abs((ox >> 16) - gx) > 1 || Math.abs((oz >> 16) - gz) > 1) {
                 continue;
             }
+            float size = 32;
             if (followers != null && pet == null && i32(o + 8) == FOLLOWER_ID) {
                 pet = readPet(o, ox, oy, oz, gx, gz);
+                if (pet != null) {
+                    size = Math.max(32, Math.max(pet.w(), pet.h()));
+                }
             }
             double[] f = project(m, ox / (double) FX, oy / (double) FX, oz / (double) FX);
             if (f == null || f[0] < -24 || f[0] > 280 || f[1] < -8 || f[1] > 232 || n >= MAX_OTHERS) {
                 continue;
             }
-            buffer[3 * n] = (float) f[0];
-            buffer[3 * n + 1] = (float) f[1];
-            buffer[3 * n + 2] = (float) f[2];
+            buffer[4 * n] = (float) f[0];
+            buffer[4 * n + 1] = (float) f[1];
+            buffer[4 * n + 2] = (float) f[2];
+            buffer[4 * n + 3] = size;
             n++;
         }
-        s.others = java.util.Arrays.copyOf(buffer, 3 * n);
+        s.others = java.util.Arrays.copyOf(buffer, 4 * n);
         s.pet = pet;
     }
 

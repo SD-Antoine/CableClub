@@ -13,7 +13,7 @@ import { renderFriends } from './views/friends.js';
 import { renderChat } from './views/chat.js';
 import { renderProfile, openProfile } from './views/profile.js';
 import { renderLibrary } from './views/library.js';
-import { renderSettings } from './views/settings.js';
+import { renderSettings, settingsPage, SETTINGS_MENU } from './views/settings.js';
 import { openUpdate, updateLink } from './views/update.js';
 import { watchBattles } from './views/battle.js';
 
@@ -26,8 +26,12 @@ const NAV = [
   { id: 'friends', hash: '#/amis', label: 'Amis', icon: 'friends' },
   { id: 'chat', hash: '#/chat', label: 'Chat', icon: 'chat' },
   { id: 'library', hash: '#/roms', label: 'Mes ROMs', icon: 'rom' },
-  { id: 'settings', hash: '#/reglages', label: 'Réglages', icon: 'settings' },
 ];
+
+// the « Réglages » dropdown of the rail (and « Autres » in it): open while the player is on a page of the settings,
+// then as they left it (the rail is drawn again at each news)
+let settingsOpen = false;
+let othersOpen = false;
 
 export function applyTheme(theme) {
   const t = ['onyx', 'blanc', 'nuit'].includes(theme) ? theme : 'onyx';
@@ -52,12 +56,12 @@ function parse() {
     // older links of the history (before the tabs of the modes)
     case 'historique': return parts[1] ? { id: 'room', roomId: parts[1], history: true } : { id: 'mode', mode: 'soullink', tab: 'historique' };
     case 'roms': return { id: 'library' };
-    case 'reglages': return { id: 'settings' };
+    case 'reglages': return { id: 'settings', tab: parts[1] };
     default: return MODES[parts[0]] && !MODES[parts[0]].soon ? { id: 'mode', mode: parts[0], tab: parts[1] } : { id: 'mode', mode: 'soullink' };
   }
 }
 
-function rail(active) {
+function rail(active, route) {
   const user = me();
   const link = store.state?.link || {};
   const friendsCount = store.friends.incoming.length;
@@ -79,12 +83,34 @@ function rail(active) {
       n.id === 'friends' && friendsCount ? h('span', { class: 'count' }, friendsCount) : null,
       n.id === 'chat' && unread ? h('span', { class: 'count' }, unread > 99 ? '99+' : unread) : null,
       n.id === 'chat' && !unread && globalNew ? h('span', { class: 'dot-new', title: 'Nouveaux messages dans le chat général' }) : null)),
+    settingsMenu(route),
     h('div', { class: 'spacer' }),
     updateLink(),
     h('a', { class: ['me', active === 'profile' && 'active'], href: '#/profil', title: `Mon profil · ${link.server || ''}` },
       avatar(user?.name, 1, { size: 's', online: !!link.connected, id: user?.avatar ? user.id : null, pic: user?.avatar || 0 }),
       h('div', { class: 'me-text' }, h('b', null, user?.name || '—'),
         h('small', null, link.connected ? 'Connecté' : 'Hors ligne'))));
+}
+
+/** « Réglages »: a dropdown with a page for each entry (« Autres » is a dropdown too). */
+function settingsMenu(route) {
+  const here = route?.id === 'settings' ? settingsPage(route.tab).id : null;
+  const toggle = (open, set) => () => { set(!open); refreshRail(); };
+  const entry = (m, depth) => (m.children
+    ? [h('button', { type: 'button', class: ['nav-item', 'nav-sub-item', 'nav-group', `depth-${depth}`, m.children.some((c) => c.id === here) && !othersOpen && 'active'],
+      'aria-expanded': String(othersOpen), onclick: toggle(othersOpen, (v) => { othersOpen = v; }) },
+    h('span', { class: 'label' }, m.label), icon('chevron', ['chevron', othersOpen && 'open'].filter(Boolean).join(' '))),
+    othersOpen ? h('div', { class: 'nav-sub' }, m.children.map((c) => entry(c, depth + 1))) : null]
+    : h('a', { class: ['nav-item', 'nav-sub-item', `depth-${depth}`, here === m.id && 'active'], href: `#/reglages/${m.id}` }, h('span', { class: 'label' }, m.label)));
+  return h('div', { class: 'nav-dropdown' },
+    h('button', { type: 'button', class: ['nav-item', 'nav-group', route?.id === 'settings' && !settingsOpen && 'active'], title: 'Réglages', 'aria-expanded': String(settingsOpen),
+      onclick: () => {
+        if (settingsOpen) { settingsOpen = false; refreshRail(); return; }
+        settingsOpen = true;
+        if (currentRoute?.id === 'settings') refreshRail(); else go('#/reglages/jeu');
+      } },
+    icon('settings'), h('span', { class: 'label' }, 'Réglages'), icon('chevron', ['chevron', settingsOpen && 'open'].filter(Boolean).join(' '))),
+    settingsOpen ? h('div', { class: 'nav-sub' }, SETTINGS_MENU.map((m) => entry(m, 1))) : null);
 }
 
 function activeNav(r) {
@@ -95,7 +121,7 @@ function activeNav(r) {
 
 function layout(r) {
   const main = h('main', { class: 'main', id: 'main' });
-  mount(root, h('div', { class: ['app', r.id === 'play' && 'compact'] }, rail(activeNav(r)), main));
+  mount(root, h('div', { class: ['app', r.id === 'play' && 'compact'] }, rail(activeNav(r), r), main));
   return main;
 }
 
@@ -103,6 +129,10 @@ async function route() {
   if (cleanup) { try { cleanup(); } catch (e) { console.error(e); } cleanup = null; }
   const r = parse();
   currentRoute = r;
+  if (r.id === 'settings') {
+    settingsOpen = true;
+    if (settingsPage(r.tab).id === 'mise-a-jour' || settingsPage(r.tab).id === 'donnees') othersOpen = true;
+  }
   if (!loggedIn()) {
     mount(root, h('div', { id: 'main', class: 'main' }));
     cleanup = renderWelcome(document.getElementById('main'), () => { refreshAll(); go('#/'); });
@@ -117,7 +147,7 @@ async function route() {
       case 'chat': cleanup = renderChat(main, r.ch); break;
       case 'profile': cleanup = renderProfile(main); break;
       case 'library': cleanup = renderLibrary(main); break;
-      case 'settings': cleanup = renderSettings(main, { applyTheme }); break;
+      case 'settings': cleanup = renderSettings(main, { applyTheme, tab: r.tab }); break;
       default: cleanup = renderMode(main, r.mode, r.tab); break;
     }
   } catch (e) {
@@ -130,7 +160,7 @@ async function route() {
 function refreshRail() {
   if (!loggedIn() || !currentRoute) return;
   const old = root.querySelector('.app > .rail');
-  if (old) old.replaceWith(rail(activeNav(currentRoute)));
+  if (old) old.replaceWith(rail(activeNav(currentRoute), currentRoute));
 }
 
 // ------------------------------------------------------------- naming

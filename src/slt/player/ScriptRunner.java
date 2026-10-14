@@ -33,6 +33,7 @@ import static java.lang.foreign.ValueLayout.JAVA_BYTE;
  * dumpframe NAME           (3D games: NAME.json with the camera, the other characters and the sprites, NAME.png: for a test page)
  * objects4 / objects5 / annotate NAME STRIDE / annotate5 NAME   (map objects of generation 4 and 5, boxes on a screenshot)
  * followtrace RIGHT 50 a/0/8/1 816 / findfollower a/0/8/1 297 862   (HeartGold: the Pokémon following and its texture)
+ * followtable             (HeartGold / SoulSilver: the table of the followers in the RAM: entries that differ from the usual ones)
  * btxsheet NARC 1,2,3 NAME [zoom] / btxcount NARC FIRST LAST / words ADDR COUNT   (textures of a NARC of the ROM, memory)
  * </pre>
  */
@@ -436,6 +437,9 @@ final class ScriptRunner {
                     findFollower(t[1], Integer.parseInt(t[2]), Integer.parseInt(t[3]));
                     break;
                 }
+                case "followtable":
+                    followTable();
+                    break;
                 case "objects4":
                     // objects4: generation 4, the map objects around the player (fields and first bytes)
                     objects4(t.length > 1 ? Integer.parseInt(t[1]) : 40);
@@ -772,6 +776,38 @@ final class ScriptRunner {
         }
     }
 
+    private void followTable() {
+        MemorySegment ram = core.systemRam();
+        long ref = ram == null ? -1 : Gen4Followers.locate(ram);
+        if (ref < 0) {
+            System.out.println("FOLLOWTABLE introuvable");
+            return;
+        }
+        java.lang.foreign.ValueLayout.OfInt i32 = java.lang.foreign.ValueLayout.JAVA_INT_UNALIGNED.withOrder(java.nio.ByteOrder.LITTLE_ENDIAN);
+        java.lang.foreign.ValueLayout.OfShort u16 = java.lang.foreign.ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(java.nio.ByteOrder.LITTLE_ENDIAN);
+        System.out.println(String.format("FOLLOWTABLE entrée de référence @%08X", 0x02000000L + ref));
+        int usual = 0;
+        for (int k = -1100; k <= 1100; k++) {
+            long o = ref + 12L * k;
+            if (o < 0 || o + 12 > ram.byteSize()) {
+                continue;
+            }
+            int member = ram.get(i32, o);
+            int a = ram.get(u16, o + 4) & 0xFFFF;
+            int b = ram.get(u16, o + 6) & 0xFFFF;
+            int c = ram.get(u16, o + 8) & 0xFFFF;
+            int d = ram.get(u16, o + 10) & 0xFFFF;
+            if (member >= 297 && member < 863) {
+                if (a == 751 && c == 832 && d == 0) {
+                    usual++;
+                } else {
+                    System.out.println(String.format("FOLLOWTABLE gfx %d : membre %d, mots %d %d %d %d", 947 + k, member, a, b, c, d));
+                }
+            }
+        }
+        System.out.println("FOLLOWTABLE entrées habituelles : " + usual);
+    }
+
     private void objects4(int around) {
         MemorySegment ram = core.systemRam();
         java.lang.foreign.ValueLayout.OfInt i32 = java.lang.foreign.ValueLayout.JAVA_INT_UNALIGNED.withOrder(java.nio.ByteOrder.LITTLE_ENDIAN);
@@ -889,7 +925,7 @@ final class ScriptRunner {
                     dx != 0 || dz != 0 ? "CHANGE" : "  =   ", dx, dz,
                     m == null ? "-" : String.format(Locale.ROOT, "%.1f,%.1f w%.2f", m[17], m[18], m[16]),
                     s == null ? "-" : s.status() + " " + s.spriteId() + "  " + found
-                            + (s.others() == null ? "" : "  others " + s.others().length / 3)
+                            + (s.others() == null ? "" : "  others " + s.others().length / 4)
                             + (s.pet() == null ? "" : "  pet " + s.pet().spriteId() + " at " + s.pet().x() / 16.0 + "," + s.pet().z() / 16.0)));
             prev = px;
             prevView = m != null ? m : prevView;

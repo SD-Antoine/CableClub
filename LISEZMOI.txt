@@ -66,7 +66,7 @@ PENDANT LA PARTIE
   automatiquement) ; un bilan par joueur s'affiche (captures, morts, objets,
   chromatiques…) et la partie reste dans l'« Historique » avec son journal.
 
-Contrôles (AZERTY, modifiables dans Réglages) :
+Contrôles (AZERTY, modifiables dans Réglages > Contrôles) :
   Croix : flèches     A : X     B : W     X / Y (DS) : S / Q
   L / R : A / Z       Start : Entrée      Select : Retour arrière
   Avance rapide : Tab (maintenir) ou T    Pause : P    Plein écran : F11
@@ -78,7 +78,7 @@ Contrôles (AZERTY, modifiables dans Réglages) :
 MISES À JOUR
 ------------
 Quand une nouvelle version sort, Cable Club l'annonce (lien « Mise à jour »
-en bas à gauche, et Réglages > Mises à jour). « Mettre à jour et
+en bas à gauche, et Réglages > Autres > Mise à jour). « Mettre à jour et
 redémarrer » la télécharge, la met à la place de l'ancienne et relance
 Cable Club : vos données (dossier « data ») ne sont pas touchées. Quittez
 votre partie avant.

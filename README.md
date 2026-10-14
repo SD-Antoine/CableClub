@@ -157,14 +157,14 @@ Pas encore fait :
 
 Contrôles par défaut (AZERTY) : flèches, X = A, W = B, S / Q = X / Y (DS),
 A / Z = L / R, Entrée = Start, Retour arrière = Select, Tab (maintenir) ou T =
-avance rapide, P = pause, F11 = plein écran. Modifiables dans **Réglages**.
+avance rapide, P = pause, F11 = plein écran. Modifiables dans **Réglages → Contrôles**.
 
 ### Le serveur SLT
 
 Les comptes, amis, salles, journaux et copies des sauvegardes vivent sur un
 serveur SLT :
 
-- **Dans l'application** : Réglages → « Héberger le serveur sur ce PC »
+- **Dans l'application** : Réglages → Serveur → Avancé → « Héberger un serveur sur ce PC »
   (port TCP 47330). Windows demande d'autoriser SLT dans le pare-feu.
 - **Seul**, sur un PC ou un serveur allumé en permanence :
   `CableClub.exe --server [--port=47330] [--data=dossier] [--name="Mon serveur"]`

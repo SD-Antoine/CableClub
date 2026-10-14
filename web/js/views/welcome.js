@@ -74,9 +74,11 @@ export function renderWelcome(container, onDone) {
 
   function accountStep() {
     const link = store.state?.link || {};
-    const user = h('input', { class: 'input', autocomplete: 'username', placeholder: 'ex. sacha' });
-    const pass = h('input', { class: 'input', type: 'password', autocomplete: ui.tab === 'login' ? 'current-password' : 'new-password' });
-    const name = h('input', { class: 'input', placeholder: 'Nom visible par vos amis (facultatif)' });
+    // what is typed survives a switch between « J'ai un compte » and « Nouveau compte »
+    const user = h('input', { class: 'input', autocomplete: 'username', placeholder: 'ex. sacha', value: ui.user || '', oninput: (e) => { ui.user = e.target.value; } });
+    const pass = h('input', { class: 'input', type: 'password', autocomplete: ui.tab === 'login' ? 'current-password' : 'new-password',
+      value: ui.pass || '', oninput: (e) => { ui.pass = e.target.value; } });
+    const name = h('input', { class: 'input', placeholder: 'Nom visible par vos amis (facultatif)', value: ui.shownName || '', oninput: (e) => { ui.shownName = e.target.value; } });
     const submit = h('button', { class: 'btn primary big block', type: 'submit' }, ui.tab === 'login' ? 'Se connecter' : 'Créer mon compte');
     let hosted = null;
     if (ui.hosted) {

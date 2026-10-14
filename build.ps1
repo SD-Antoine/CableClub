@@ -114,6 +114,8 @@ $appSources = Get-ChildItem -Recurse -Filter *.java (Join-Path $Root 'src') | Fo
 # the game player uses the foreign function API (preview in Java 21)
 Exec $javac (@('-encoding', 'UTF-8', '--release', '21', '--enable-preview', '-Xlint:all,-serial,-preview', '-cp', $UprJar, '-d', $appClasses) + $appSources)
 Copy-Item -Recurse (Join-Path $Root 'web') (Join-Path $appClasses 'web')
+# the patch notes, shown in Réglages > Autres > Mise à jour
+Copy-Item (Join-Path $Root 'CHANGELOG.md') (Join-Path $appClasses 'changelog.md')
 
 # ---------------------------------------------------------------- checks
 Step "Verification de l'interface"

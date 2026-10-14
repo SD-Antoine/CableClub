@@ -20,8 +20,8 @@ export const MODES = {
     blurb: 'De 1 à 10 joueurs, chacun son Nuzlocke : un Pokémon K.O. est mort, et seul le premier Pokémon sauvage rencontré dans chaque zone peut être capturé.',
   },
   // to come
-  sololocke: { name: 'Sololocke', logo: 'img/nuzlocke.svg', soon: true },
-  shinylocke: { name: 'Shinylocke', logo: 'img/nuzlocke.svg', soon: true },
+  sololocke: { name: 'Sololocke', logo: 'img/sololocke.svg', soon: true },
+  shinylocke: { name: 'Shinylocke', logo: 'img/shinylocke.svg', soon: true },
 };
 
 const TABS = [['salles', 'Mes salles'], ['publiques', 'Salles publiques'], ['historique', 'Historique']];

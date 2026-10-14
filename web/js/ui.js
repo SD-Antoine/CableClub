@@ -94,6 +94,7 @@ const ICONS = {
   globe: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20',
   block: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM4.9 4.9l14.2 14.2',
   image: 'M3 3h18v18H3zM8.5 10a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zM21 15l-5-5L5 21',
+  chevron: 'M6 9l6 6 6-6',
   swords: 'M14.5 17.5L3 6V3h3l11.5 11.5M13 19l6-6M16 16l4 4M19 21l2-2M9.5 6.5L13 3h3v3l-3.5 3.5M5 14l-2 2 3 3 2-2',
 };
 
@@ -114,7 +115,7 @@ export function btn(label, onClick, { kind = '', iconName = null, title = null, 
 }
 
 export function iconBtn(name, onClick, title, kind = 'ghost') {
-  return h('button', { class: `btn icon-only ${kind}`, title, 'aria-label': title, onclick: onClick }, icon(name));
+  return h('button', { type: 'button', class: `btn icon-only ${kind}`, title, 'aria-label': title, onclick: onClick }, icon(name));
 }
 
 export function switchEl(checked, onChange, { disabled = false } = {}) {
@@ -124,7 +125,7 @@ export function switchEl(checked, onChange, { disabled = false } = {}) {
 
 export function seg(options, value, onChange, { disabled = false } = {}) {
   return h('div', { class: 'seg' }, options.map(([v, label]) =>
-    h('button', { class: v === value ? 'active' : '', disabled, onclick: () => onChange(v) }, label)));
+    h('button', { type: 'button', class: v === value ? 'active' : '', disabled, onclick: () => onChange(v) }, label)));
 }
 
 export function field(label, control, hint) {
@@ -203,7 +204,7 @@ export function toast(text, kind = 'info', { title = null, action = null, ms = 5
   const el = h('div', { class: `toast ${kind}` },
     h('div', { class: 'grow' }, title ? h('b', null, title) : null, h('span', null, text),
       action ? h('div', null, btn(action.label, () => { action.onClick(); el.remove(); }, { kind: 'small primary' })) : null),
-    h('button', { class: 'btn ghost small icon-only', onclick: () => el.remove(), title: 'Fermer' }, icon('x')));
+    h('button', { type: 'button', class: 'btn ghost small icon-only', onclick: () => el.remove(), title: 'Fermer' }, icon('x')));
   root.appendChild(el);
   while (root.children.length > 5) root.firstChild.remove();
   if (ms) setTimeout(() => el.remove(), ms);

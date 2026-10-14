@@ -31,7 +31,8 @@ interface Presence {
      *                  drawn behind it; 0 none
      * @param others    3D games: the other characters drawn on this image (non-player characters, the player's
      *                  own Pokémon), as x, y (where their feet are on the top screen) and the depth (clip w) of
-     *                  their feet, three numbers each: the window keeps the players it draws behind them
+     *                  their feet and the size of their sprite in pixels (32; 64 for a big Pokémon), four numbers
+     *                  each: the window keeps the players it draws behind them
      * @param pet       the Pokémon following the player (HeartGold / SoulSilver), null without
      */
     record Sample(int map, int x, int y, boolean overworld, boolean free, String status, String spriteId,

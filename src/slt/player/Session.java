@@ -272,7 +272,7 @@ final class Session {
             int self = selfNumber(s);
             msg[fixed - 2] = (byte) self;
             msg[fixed - 1] = (byte) (self >> 8);
-            int count = others.length / 3;
+            int count = others.length / 4;
             msg[fixed] = (byte) count;
             msg[fixed + 1] = (byte) (count >> 8);
             java.nio.ByteBuffer.wrap(msg, fixed + 2, 4 * others.length).order(java.nio.ByteOrder.LITTLE_ENDIAN).asFloatBuffer().put(others);
@@ -330,9 +330,15 @@ final class Session {
         } catch (RuntimeException e) {
             Log.error("Présence en jeu désactivée", e);
             presence = null;
+            if (tracker instanceof TrackerHost th && th.engine().reader() instanceof slt.player.track.NdsReader nds) {
+                nds.fieldShown(false);
+            }
             return;
         }
         sample = s;
+        if (tracker instanceof TrackerHost th && th.engine().reader() instanceof slt.player.track.NdsReader nds) {
+            nds.fieldShown(s != null && ("free".equals(s.status()) || "dialogue".equals(s.status())));
+        }
         long now = System.currentTimeMillis();
         long previousSample = lastSampleAt;
         lastSampleAt = now;

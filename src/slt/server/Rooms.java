@@ -684,6 +684,12 @@ public final class Rooms {
                     r.event(m, ev, out);
                 }
             }
+            // an encounter the tracker believes in while the game shows the field is no battle (see battleFromGame)
+            Map<String, Object> seen = ghosts.get(r.id + "/" + m.userId);
+            Object shown = seen == null || System.currentTimeMillis() - Json.num(seen, "at", 0) > 10_000 ? null : seen.get("st");
+            if ("free".equals(shown) || "dialogue".equals(shown)) {
+                m.live.remove("battle");
+            }
             if (!out.changed && out.notices.isEmpty() && !out.ended) {
                 // only the live view moved (team, place): no need to send the whole room
                 hub.send(audience(r), "live", Json.map("roomId", r.id, "userId", m.userId, "live", m.live));
@@ -899,6 +905,34 @@ public final class Rooms {
             }
         }
         hub.send(others, "ghost", msg);
+        battleFromGame(r, user.id, Json.str(g, "st"));
+    }
+
+    /**
+     * "In battle" in the list of players follows what the game itself shows: the encounters seen by the tracker can be
+     * false (a Pokémon of the player found in the memory of a DS game, no battle), and a DS game tells nothing of
+     * trainer battles. A game on the field clears the mark, a game in battle sets it.
+     */
+    private void battleFromGame(Room r, String userId, String state) {
+        if (!"battle".equals(state) && !"free".equals(state) && !"dialogue".equals(state)) {
+            return;
+        }
+        synchronized (r) {
+            Room.Member m = r.member(userId);
+            if (m == null) {
+                return;
+            }
+            boolean marked = m.live.containsKey("battle");
+            if ("battle".equals(state) == marked) {
+                return;
+            }
+            if (marked) {
+                m.live.remove("battle");
+            } else {
+                m.live.put("battle", "game");
+            }
+            hub.send(audience(r), "live", Json.map("roomId", r.id, "userId", m.userId, "live", m.live));
+        }
     }
 
     /** Latest position (and sprite) of every player of the room. */

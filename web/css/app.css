@@ -137,6 +137,8 @@ code, .mono { font-family: var(--mono); font-size: .92em; }
 .update-item { color: var(--accent); font-weight: 600; margin-bottom: 4px; }
 .update-item:hover { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
 .update-notes { max-height: 300px; overflow-y: auto; padding: 12px 14px; border-radius: 10px; background: var(--surface-2); }
+.update-notes.flat { max-height: none; overflow: visible; }
+.update-notes code { font-size: 12px; }
 .update-notes p { margin: 0 0 6px; }
 .update-title { display: block; margin: 8px 0 4px; }
 .update-title:first-child { margin-top: 0; }
@@ -690,5 +692,12 @@ details.advanced[open] > summary { margin-bottom: 4px; }
 .battle-controls.end b { white-space: nowrap; }
 .rule-section { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--faint); padding: 14px 0 4px; border-bottom: 1px solid var(--line); }
 .rule-row.soon { opacity: .5; }
+/* the « Réglages » dropdown of the rail, and « Autres » inside it */
+.nav-group .icon.chevron { margin-left: auto; width: 15px; height: 15px; transition: transform .15s; }
+.nav-group .icon.chevron.open { transform: rotate(180deg); }
+.nav-sub { display: flex; flex-direction: column; gap: 1px; margin: 1px 0 6px 19px; padding-left: 8px; border-left: 1px solid var(--line); }
+.nav-sub .nav-sub { margin: 1px 0 2px 6px; }
+.nav-sub-item { padding: 6px 10px; font-size: 13.5px; }
+.app.compact .nav-sub, .app.compact .nav-group .icon.chevron { display: none; }
 .nav-item.mode-item.soon { opacity: .45; cursor: default; }
 .nav-item.mode-item.soon .chip { margin-left: auto; font-size: 10px; }

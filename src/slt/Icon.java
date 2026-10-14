@@ -6,9 +6,8 @@ import java.awt.Color;
 import java.awt.GradientPaint;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
-import java.awt.geom.Arc2D;
+import java.awt.geom.Line2D;
 import java.awt.geom.Path2D;
-import java.awt.geom.Rectangle2D;
 import java.awt.geom.RoundRectangle2D;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
@@ -21,18 +20,19 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Draws the Cable Club logo (a link cable shaped like a C, its two plugs
- * facing each other, on an onyx tile; same drawing as web/img/logo.svg) and
+ * Draws the Cable Club logo (a link cable shaped like a C, a plug at each end,
+ * on an onyx tile; same drawing as web/img/logo.svg) and
  * can write it as .ico/.png for packaging: {@code java slt.Icon out.ico out.png}.
  */
 public final class Icon {
 
-    private static final Color ONYX = new Color(0x1A, 0x1A, 0x1C);
+    private static final Color ONYX = new Color(0x16, 0x17, 0x1B);
     private static final Color LIGHT = new Color(0xEC, 0xEC, 0xE9);
+    private static final Color BOOT = new Color(0xC9, 0xCD, 0xE0);
     private static final Color METAL = new Color(0xA6, 0xAB, 0xB5);
+    private static final Color PIN = new Color(0x6B, 0x71, 0x84);
     private static final Color BLUE = new Color(0x8A, 0xA4, 0xFF);
     private static final Color VIOLET = new Color(0xB3, 0x8C, 0xFF);
-    private static final Color SPARK = new Color(0xFF, 0xD3, 0x6B);
 
     private Icon() {
     }
@@ -45,41 +45,61 @@ public final class Icon {
         // drawn in the 64 x 64 units of the SVG
         g.scale(size / 64.0, size / 64.0);
         g.setColor(ONYX);
-        g.fill(new RoundRectangle2D.Double(2, 2, 60, 60, 26, 26));
+        g.fill(new RoundRectangle2D.Double(2, 2, 60, 60, 28, 28));
 
-        // the cable: from the upper plug, round the left, to the lower plug
+        // the cable: a C that runs from one plug to the other
         Path2D cable = new Path2D.Double();
-        cable.moveTo(43.5, 18);
-        cable.curveTo(43.5, 13, 38.5, 11.8, 31, 11.8);
-        cable.append(new Arc2D.Double(31 - 20.2, 32 - 20.2, 40.4, 40.4, 90, 180, Arc2D.OPEN), true);
-        cable.curveTo(38.5, 52.2, 43.5, 51, 43.5, 46);
-        g.setPaint(new GradientPaint(10.8f, 11.8f, BLUE, 43.5f, 52.2f, VIOLET));
-        g.setStroke(new BasicStroke(6.4f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+        cable.moveTo(38, 15.5);
+        cable.curveTo(28, 15.5, 14.5, 18.5, 14.5, 32);
+        cable.curveTo(14.5, 45.5, 28, 48.5, 38, 48.5);
+        g.setPaint(new GradientPaint(14.5f, 15.5f, BLUE, 30.95f, 48.5f, VIOLET));
+        g.setStroke(new BasicStroke(7f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
         g.draw(cable);
-
-        // the plugs: body rounded on the cable side, metal tip towards the other plug
-        g.setColor(LIGHT);
-        g.fill(new RoundRectangle2D.Double(36.7, 18.6, 13.6, 7.4, 3.6, 3.6));
-        g.fill(new Rectangle2D.Double(36.7, 22, 13.6, 4));
-        g.fill(new RoundRectangle2D.Double(36.7, 38, 13.6, 7.4, 3.6, 3.6));
-        g.fill(new Rectangle2D.Double(36.7, 38, 13.6, 4));
-        g.setColor(METAL);
-        g.fill(new RoundRectangle2D.Double(40.2, 26, 6.6, 3.4, 1.4, 1.4));
-        g.fill(new RoundRectangle2D.Double(40.2, 34.6, 6.6, 3.4, 1.4, 1.4));
-
-        // the spark of the link (too thin to be seen in the smallest icons)
         if (size >= 24) {
-            Path2D spark = new Path2D.Double();
-            spark.moveTo(44.6, 29.8);
-            spark.lineTo(42.4, 32.4);
-            spark.lineTo(44.6, 32.4);
-            spark.lineTo(42.4, 35);
-            g.setColor(SPARK);
-            g.setStroke(new BasicStroke(1.3f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-            g.draw(spark);
+            // a light along the cable
+            Path2D light = new Path2D.Double();
+            light.moveTo(15.6, 26);
+            light.curveTo(16.6, 20, 22, 16.6, 30, 16.2);
+            g.setColor(new Color(255, 255, 255, 71));
+            g.setStroke(new BasicStroke(1.6f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+            g.draw(light);
         }
+
+        // the two plugs: a flared boot, a body and a metal tip with its two contacts
+        plug(g, size, 9.6, 1);
+        plug(g, size, 42.8, -1);
         g.dispose();
         return img;
+    }
+
+    /** One plug, its body from y {@code top}; {@code dir} 1: the boot flares towards the bottom edge, -1: towards the top. */
+    private static void plug(Graphics2D g, int size, double top, int dir) {
+        Path2D boot = new Path2D.Double();
+        if (dir > 0) {
+            boot.moveTo(37, 12);
+            boot.lineTo(42.4, 10.2);
+            boot.lineTo(42.4, 20.8);
+            boot.lineTo(37, 19);
+        } else {
+            boot.moveTo(37, 52);
+            boot.lineTo(42.4, 53.8);
+            boot.lineTo(42.4, 43.2);
+            boot.lineTo(37, 45);
+        }
+        boot.closePath();
+        g.setColor(BOOT);
+        g.fill(boot);
+        g.setColor(LIGHT);
+        g.fill(new RoundRectangle2D.Double(41.4, top, 11.4, 11.6, 6, 6));
+        double tip = top + 2.6;
+        g.setColor(METAL);
+        g.fill(new RoundRectangle2D.Double(51.6, tip, 7, 6.4, 2.8, 2.8));
+        if (size >= 24) {
+            g.setColor(PIN);
+            g.setStroke(new BasicStroke(1.1f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+            g.draw(new Line2D.Double(54.4, tip + 1.4, 54.4, tip + 5));
+            g.draw(new Line2D.Double(56.6, tip + 1.4, 56.6, tip + 5));
+        }
     }
 
     private static byte[] png(BufferedImage img) throws IOException {

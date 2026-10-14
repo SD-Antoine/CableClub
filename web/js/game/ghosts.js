@@ -62,6 +62,11 @@ const CHAR_X1 = 7;
 const CHAR_X2 = 24;
 const CHAR_Y1 = 6;
 const CHAR_Y2 = 31;
+// a big Pokémon (64 x 64 sprite) fills most of it
+const BIG_X1 = 0.15;
+const BIG_X2 = 0.85;
+const BIG_Y1 = 0.18;
+const BIG_Y2 = 0.98;
 
 /** The Pokémon following, in a point of the way [t, map, x, y, sprite, z, pet x, y, z, pet sprite]; null when there is none. */
 function petOf(p) {
@@ -310,12 +315,14 @@ export class GhostLayer {
     for (const n of npcs) {
       if (n.y - feetY <= 0.5) continue; // behind or level with this one: it stays in front
       const k = me.depth > 0 && n.w > 0 ? Math.max(0.25, Math.min(4, me.depth / n.w)) : 1;
-      const qx = n.x + (me.dx ?? 1) - 16 * k; // where its sprite is drawn (the sprites of the others: see place)
-      const qy = n.y - (32 - drop) * k;
-      const x1 = Math.round(qx + CHAR_X1 * k);
-      const x2 = Math.round(qx + CHAR_X2 * k);
-      const y1 = Math.round(qy + CHAR_Y1 * k);
-      const y2 = Math.round(qy + CHAR_Y2 * k);
+      const size = n.size > 32 ? n.size : 32;
+      const qx = n.x + (me.dx ?? 1) - (size / 2) * k; // where its sprite is drawn (the sprites of the others: see place)
+      const qy = n.y - (size - drop) * k;
+      const big = size > 32;
+      const x1 = Math.round(qx + (big ? BIG_X1 * size : CHAR_X1) * k);
+      const x2 = Math.round(qx + (big ? BIG_X2 * size : CHAR_X2) * k);
+      const y1 = Math.round(qy + (big ? BIG_Y1 * size : CHAR_Y1) * k);
+      const y2 = Math.round(qy + (big ? BIG_Y2 * size : CHAR_Y2) * k);
       if (x2 <= left || x1 >= left + w || y2 <= top || y1 >= top + h) continue;
       path += ` M${x1 - left} ${y1 - top}H${x2 - left}V${y2 - top}H${x1 - left}Z`;
     }

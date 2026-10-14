@@ -80,6 +80,8 @@ final class LocalApi {
             Http.json(ex, 200, state());
         });
         r.on("GET", "/api/update", (ex, p) -> Http.json(ex, 200, app.updates.status()));
+        // the patch notes of every version (the interface shows the one installed)
+        r.on("GET", "/api/changelog", (ex, p) -> Http.json(ex, 200, Changelog.view(app.appDir())));
         r.on("POST", "/api/update/check", (ex, p) -> Http.json(ex, 200, app.updates.check()));
         r.on("POST", "/api/update/install", (ex, p) ->
                 Http.json(ex, 200, Json.map("job", app.jobs.start("Mise à jour de Cable Club", app.updates::install))));

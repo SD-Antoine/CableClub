@@ -109,11 +109,11 @@ export class GameScreen {
     const h = v.getUint16(3, true);
     // type 2: where the player stands, to draw the other players at the right place on this image;
     // type 3 (3D games): the camera of this image, to place them in the world, then the other characters drawn on it
-    // (number at 94, then 12 bytes each from 96)
+    // (number at 94, then 16 bytes each from 96: x, y, depth, size of the sprite)
     let head = type === 2 ? 14 : type === 3 ? 96 : 5;
     if (type === 3) {
       if (buf.byteLength < 96) return;
-      head += 12 * v.getUint16(94, true);
+      head += 16 * v.getUint16(94, true);
     }
     if (w * h * 4 + head > buf.byteLength) return;
     this.last = buf;
@@ -154,7 +154,7 @@ export class GameScreen {
       const flags = v.getUint8(7);
       const others = [];
       for (let i = 0, n = v.getUint16(94, true); i < n; i++) {
-        others.push({ x: v.getFloat32(96 + 12 * i, true), y: v.getFloat32(100 + 12 * i, true), w: v.getFloat32(104 + 12 * i, true) });
+        others.push({ x: v.getFloat32(96 + 16 * i, true), y: v.getFloat32(100 + 16 * i, true), w: v.getFloat32(104 + 16 * i, true), size: v.getFloat32(108 + 16 * i, true) });
       }
       this.handlers.onFrame?.(map === 0xFFFF ? null : {
         map, mtx, depth, feet: { x: v.getFloat32(76, true), y: v.getFloat32(80, true) }, drop: v.getFloat32(84, true),

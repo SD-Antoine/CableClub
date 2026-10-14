@@ -301,7 +301,8 @@ export async function renderPlay(container, roomId) {
             st.url = URL.createObjectURL(blob);
             st.seq = Number(res.headers.get('X-Seq')) || st.seq + 1;
             images.set(m.userId, st);
-            const el = side.querySelector(`[data-partner="${m.userId}"] img`);
+            // the picture of the game only: the photo of the player is an image too
+            const el = side.querySelector(`[data-partner="${m.userId}"] .screen img`);
             if (el) el.src = st.url; else drawSide();
             if (ui.big === m.userId) drawBig();
           }

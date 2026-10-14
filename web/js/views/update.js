@@ -6,8 +6,22 @@ import { h, mount, modal, btn, icon, act, toast } from '../ui.js';
 import { local, pollJob } from '../api.js';
 import { store } from '../store.js';
 
-/** Release notes (Markdown from GitHub) as simple paragraphs and lists. */
-function notes(text) {
+/** A line of Markdown: **bold** and `code` become what they say, the rest stays text. */
+function inline(text) {
+  const out = [];
+  const re = /\*\*(.+?)\*\*|`(.+?)`/g;
+  let at = 0;
+  for (let m = re.exec(text); m; m = re.exec(text)) {
+    if (m.index > at) out.push(text.slice(at, m.index));
+    out.push(m[1] !== undefined ? h('b', null, m[1]) : h('code', null, m[2]));
+    at = m.index + m[0].length;
+  }
+  if (at < text.length) out.push(text.slice(at));
+  return out;
+}
+
+/** Release notes (Markdown: from GitHub, or the changelog) as simple paragraphs and lists. */
+export function releaseNotes(text, { scroll = true } = {}) {
   const out = [];
   let list = null;
   for (const raw of String(text || '').split(/\r?\n/)) {
@@ -15,17 +29,17 @@ function notes(text) {
     if (/^-{3,}$/.test(line)) break; // what follows is for the GitHub page (download instructions)
     if (!line) { list = null; continue; }
     const item = line.match(/^[-*]\s+(.*)$/);
-    const clean = (s) => s.replace(/\*\*(.+?)\*\*/g, '$1').replace(/`(.+?)`/g, '$1').replace(/^#+\s*/, '');
     if (item) {
       if (!list) { list = h('ul', { class: 'update-list' }); out.push(list); }
-      list.appendChild(h('li', null, clean(item[1])));
+      list.appendChild(h('li', null, inline(item[1])));
     } else {
       list = null;
-      out.push(h(line.startsWith('#') ? 'b' : 'p', { class: line.startsWith('#') ? 'update-title' : 'small' }, clean(line)));
+      out.push(h(line.startsWith('#') ? 'b' : 'p', { class: line.startsWith('#') ? 'update-title' : 'small' }, inline(line.replace(/^#+\s*/, ''))));
     }
   }
-  return out.length ? h('div', { class: 'update-notes' }, out) : null;
+  return out.length ? h('div', { class: ['update-notes', !scroll && 'flat'] }, out) : null;
 }
+const notes = releaseNotes;
 
 /** Waits for the new version to answer, then reloads the interface. */
 async function waitForRestart(version, setText) {
@@ -100,6 +114,8 @@ export function updateSettings(switchEl, save) {
     uptodate: 'Cable Club est à jour.',
     error: u.error || 'Vérification impossible.',
   }[u.state] || 'Pas encore vérifié.';
+  const history = h('div');
+  showChangelog(history);
   const check = btn('Rechercher une mise à jour', (e) => act(e.currentTarget, async () => {
     const s = await local.post('/api/update/check', {});
     store.state.update = s;
@@ -114,5 +130,27 @@ export function updateSettings(switchEl, save) {
     h('div', { class: 'rule-row' },
       h('div', { class: 'grow' }, h('b', null, 'Vérifier automatiquement'),
         h('small', null, 'Au démarrage puis toutes les 6 heures, Cable Club regarde s’il existe une nouvelle version sur GitHub. Rien n’est installé sans votre accord.')),
-      switchEl(cfg.updateCheck !== false, (v) => save({ updateCheck: v }))));
+      switchEl(cfg.updateCheck !== false, (v) => save({ updateCheck: v }))),
+    history);
+}
+
+// the patch notes do not change while the program runs: asked once
+let changelog = null;
+
+/** The patch note of the installed version, and the ones before it folded away. */
+function showChangelog(box) {
+  if (changelog) { drawChangelog(box); return; }
+  local.get('/api/changelog').then((r) => { changelog = r.sections || []; drawChangelog(box); }).catch(() => {});
+}
+
+function drawChangelog(box) {
+  const current = store.state?.version;
+  const mine = changelog.find((s) => s.version === current);
+  const before = changelog.filter((s) => s !== mine && (!mine || changelog.indexOf(s) > changelog.indexOf(mine)));
+  const title = (s) => `Version ${s.version}${s.date ? ` · ${s.date}` : ''}`;
+  mount(box, h('div', { class: 'stack mt' },
+    h('b', null, mine ? `Nouveautés de la version ${mine.version}${mine.date ? ` (${mine.date})` : ''}` : `Nouveautés de la version ${current || ''}`),
+    mine ? releaseNotes(mine.notes, { scroll: false }) : h('p', { class: 'small muted' }, 'Pas de notes pour cette version.'),
+    before.length ? h('details', { class: 'advanced' }, h('summary', { class: 'small muted' }, 'Versions précédentes'),
+      h('div', { class: 'stack mt' }, before.map((s) => h('div', null, h('b', { class: 'small' }, title(s)), releaseNotes(s.notes, { scroll: false }))))) : null));
 }
