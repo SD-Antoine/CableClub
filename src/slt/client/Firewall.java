@@ -27,7 +27,7 @@ final class Firewall {
     private Firewall() {
     }
 
-    /** The program friends connect to (SLT.exe once packaged, java.exe in development). */
+    /** The program friends connect to (CableClub.exe once packaged, java.exe in development). */
     static Path program() {
         return ProcessHandle.current().info().command().map(Path::of).orElse(null);
     }

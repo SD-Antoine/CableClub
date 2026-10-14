@@ -28,11 +28,11 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 /**
- * Updates of SLT from the GitHub releases: the latest release is checked at
+ * Updates of Cable Club from the GitHub releases: the latest release is checked at
  * start then every few hours; "Mettre à jour" downloads its zip, unpacks it
- * next to SLT.exe and hands over to a small PowerShell script that waits for
- * SLT to close, swaps app\, runtime\ and SLT.exe (the data folder is never
- * touched; the old files come back if anything fails) and starts SLT again.
+ * next to CableClub.exe and hands over to a small PowerShell script that waits for
+ * Cable Club to close, swaps app\, runtime\ and CableClub.exe (the data folder is never
+ * touched; the old files come back if anything fails) and starts Cable Club again.
  */
 final class Updates {
 
@@ -107,7 +107,7 @@ final class Updates {
             for (Object o : assets == null ? List.of() : assets) {
                 Map<String, Object> a = Json.obj(o);
                 String name = Json.str(a, "name");
-                if (name != null && name.matches("(SLT|CableClub)-.*-windows-x64\\.zip")) {
+                if (name != null && name.matches("CableClub-.*-windows-x64\\.zip")) {
                     zipName = name;
                     zipUrl = Json.str(a, "browser_download_url");
                     zipSize = Json.num(a, "size", 0);
@@ -142,7 +142,7 @@ final class Updates {
         return status;
     }
 
-    /** Why this copy of SLT cannot replace itself (null when it can). */
+    /** Why this copy of Cable Club cannot replace itself (null when it can). */
     private String installBlocker() {
         if (System.getProperty("jpackage.app-path") == null) {
             return "Version de développement : mettez à jour avec git.";
@@ -161,7 +161,7 @@ final class Updates {
     }
 
     /**
-     * Downloads and unpacks the latest release, then restarts SLT on it.
+     * Downloads and unpacks the latest release, then restarts Cable Club on it.
      * Runs as a job (progress shown by the interface).
      */
     Map<String, Object> install(Consumer<String> progress) throws Exception {
@@ -230,7 +230,7 @@ final class Updates {
                     "-File", script.toString(), "-SltPid", Long.toString(ProcessHandle.current().pid()))
                     .directory(appDir.toFile()).redirectErrorStream(true)
                     .redirectOutput(ProcessBuilder.Redirect.DISCARD).start();
-            Log.info("Mise à jour vers SLT " + rel.version() + " : redémarrage");
+            Log.info("Mise à jour vers Cable Club " + rel.version() + " : redémarrage");
             Thread quit = new Thread(() -> {
                 try {
                     Thread.sleep(1500);
@@ -301,7 +301,7 @@ final class Updates {
         }
     }
 
-    /** The folder of the archive that holds CableClub.exe (or SLT.exe), app\ and runtime\. */
+    /** The folder of the archive that holds CableClub.exe, app\ and runtime\. */
     private static Path findRoot(Path dir) throws IOException {
         if (complete(dir)) {
             return dir;
@@ -317,14 +317,14 @@ final class Updates {
     }
 
     private static boolean complete(Path dir) {
-        return (Files.isRegularFile(dir.resolve("SLT.exe")) || Files.isRegularFile(dir.resolve("CableClub.exe")))
+        return Files.isRegularFile(dir.resolve("CableClub.exe"))
                 && Files.isRegularFile(dir.resolve("app").resolve("slt.jar"))
                 && Files.isDirectory(dir.resolve("runtime"));
     }
 
     private Path writeScript(Path work, Path from, Path to) throws IOException {
         String s = """
-                # SLT update: waits for SLT to close, swaps the program files, starts SLT again.
+                # Cable Club update: waits for Cable Club to close, swaps the program files, starts it again.
                 param([int]$SltPid)
                 $ErrorActionPreference = 'Stop'
                 $work = %WORK%
@@ -332,9 +332,9 @@ final class Updates {
                 $to = %TO%
                 $log = %LOG%
                 function Note($m) { try { Add-Content -LiteralPath $log -Encoding UTF8 -Value ((Get-Date -Format 'yyyy-MM-dd HH:mm:ss') + ' ' + $m) } catch { } }
-                Note "Attente de la fermeture de SLT ($SltPid)"
+                Note "Attente de la fermeture de Cable Club ($SltPid)"
                 try { Wait-Process -Id $SltPid -Timeout 120 -ErrorAction Stop } catch { }
-                # the game player and any other SLT process of this folder
+                # the game player and any other process of this folder
                 for ($i = 0; $i -lt 60; $i++) {
                     $busy = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Path -and $_.Path.StartsWith($to + '\\', [StringComparison]::OrdinalIgnoreCase) })
                     if ($busy.Count -eq 0) { break }
@@ -343,8 +343,7 @@ final class Updates {
                 Start-Sleep -Milliseconds 500
                 $old = Join-Path $work 'ancienne'
                 New-Item -ItemType Directory -Force $old | Out-Null
-                # the launchers of this version (CableClub.exe, and SLT.exe while older updaters need it)
-                $parts = @('app', 'runtime') + @('CableClub.exe', 'SLT.exe' | Where-Object { Test-Path -LiteralPath (Join-Path $from $_) })
+                $parts = @('app', 'runtime', 'CableClub.exe')
                 $ok = $false
                 try {
                     foreach ($n in $parts) { $p = Join-Path $to $n; if (Test-Path -LiteralPath $p) { Move-Item -LiteralPath $p (Join-Path $old $n) } }
@@ -368,7 +367,6 @@ final class Updates {
                 $arguments = @()
                 if (Test-Path -LiteralPath $argsFile) { $arguments = @(Get-Content -LiteralPath $argsFile -Encoding UTF8 | Where-Object { $_ }) }
                 $exe = Join-Path $to 'CableClub.exe'
-                if (-not (Test-Path -LiteralPath $exe)) { $exe = Join-Path $to 'SLT.exe' }
                 if ($arguments.Count -gt 0) {
                     Start-Process -FilePath $exe -WorkingDirectory $to -ArgumentList ($arguments | ForEach-Object { '"' + $_ + '"' })
                 } else {

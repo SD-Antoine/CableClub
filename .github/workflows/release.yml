@@ -1,6 +1,6 @@
-# Pushing a tag vX.Y.Z builds SLT on Windows and publishes the GitHub release
+# Pushing a tag vX.Y.Z builds Cable Club on Windows and publishes the GitHub release
 # (zip + SHA-256). The notes are the "## X.Y.Z" section of CHANGELOG.md.
-# SLT checks the latest release to offer the update to its users.
+# Cable Club checks the latest release to offer the update to its users.
 name: Release
 
 on:
@@ -36,7 +36,7 @@ jobs:
       # the packaged SLT must start and serve the whole interface (0.4.1 and 0.4.2 did not)
       - name: Smoke test
         shell: powershell
-        run: .\.github\smoke-test.ps1 -Image dist\SLT -Version $env:VERSION
+        run: .\.github\smoke-test.ps1 -Image dist\CableClub -Version $env:VERSION
 
       - name: Notes
         shell: powershell
@@ -58,7 +58,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $zip = Get-Item "dist\SLT-$env:VERSION-windows-x64.zip"
+          $zip = Get-Item "dist\CableClub-$env:VERSION-windows-x64.zip"
           $hash = (Get-FileHash -Algorithm SHA256 $zip.FullName).Hash.ToLower()
           [IO.File]::WriteAllText("$($zip.FullName).sha256", "$hash  $($zip.Name)`n")
           gh release create '${{ github.ref_name }}' $zip.FullName "$($zip.FullName).sha256" --title "Cable Club $env:VERSION" --notes-file notes.md

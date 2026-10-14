@@ -1,4 +1,4 @@
-# SLT — Soul Link Together
+# Cable Club (anciennement SLT — Soul Link Together)
 
 Application Windows pour jouer en **Soul Link à plusieurs (1 à 4 joueurs)** sur
 les jeux Pokémon de la **1re à la 5e génération**, chacun dans sa propre
@@ -6,7 +6,7 @@ partie, **en se voyant en direct**, avec les règles du Soul Link **appliquées
 automatiquement dans les jeux**.
 
 **[⬇ Télécharger la dernière version](https://github.com/SD-Antoine/CableClub/releases/latest)**
-(`SLT-x.y.z-windows-x64.zip` : décompressez-le et lancez `SLT.exe`, rien à
+(`CableClub-x.y.z-windows-x64.zip` : décompressez-le et lancez `CableClub.exe`, rien à
 installer). Les nouveautés de chaque version sont dans [CHANGELOG.md](CHANGELOG.md).
 
 - **Comptes et amis** : chaque joueur a un compte sur le serveur SLT de son
@@ -145,9 +145,10 @@ Pas encore fait :
 
 ## Utilisation
 
-1. Lancer `SLT.exe` (Java et les émulateurs sont inclus).
-2. Premier lancement : **rejoindre le serveur** d'un ami (adresse donnée par lui)
-   ou **héberger le serveur sur ce PC**, puis créer son compte.
+1. Lancer `CableClub.exe` (Java et les émulateurs sont inclus).
+2. Premier lancement : **Serveur Cable Club (recommandé)** (play.cableclub.app),
+   ou le serveur d'un ami (code d'invitation), ou héberger le serveur sur ce PC
+   (options avancées), puis créer son compte.
 3. **Mes ROMs** → ajouter le dossier de ses ROMs.
 4. **Salles** → **Nouvelle salle** (jeu, nombre de joueurs, règles,
    randomisation) → **Inviter** ses amis.
@@ -166,7 +167,7 @@ serveur SLT :
 - **Dans l'application** : Réglages → « Héberger le serveur sur ce PC »
   (port TCP 47330). Windows demande d'autoriser SLT dans le pare-feu.
 - **Seul**, sur un PC ou un serveur allumé en permanence :
-  `SLT.exe --server [--port=47330] [--data=dossier] [--name="Mon serveur"]`
+  `CableClub.exe --server [--port=47330] [--data=dossier] [--name="Mon serveur"]`
   (le code d'invitation s'affiche dans son journal).
 
 **Jouer avec des amis à distance, sans VPN** (ce que Hamachi ou Tailscale
@@ -206,7 +207,7 @@ seulement par leur empreinte.
 
 ```
 src/slt/
-  Main                  SLT.exe : application, --server ou --player
+  Main                  CableClub.exe : application, --server ou --player
   server/               serveur SLT (JDK HttpServer, JSON sur disque, flux SSE)
     Accounts            comptes, sessions, amis
     Rooms, Room         salles, arbitre du Soul Link, journal, aperçus, sauvegardes
@@ -224,7 +225,7 @@ src/slt/
     GbPresence, Gen3Presence, Gen5Presence   joueurs visibles en jeu (Gen5Sprites : sprites lus dans la ROM)
     track/              lecteurs mémoire (GbReader, Gen3Reader, NdsReader), TrackerEngine
 web/                    interface (HTML / CSS / JS modules, sans framework)
-build.ps1               compilation + dist\SLT\SLT.exe (jpackage)
+build.ps1               compilation + dist\CableClub\CableClub.exe (jpackage)
 ```
 
 ## Compiler
@@ -232,7 +233,7 @@ build.ps1               compilation + dist\SLT\SLT.exe (jpackage)
 Prérequis : JDK 21 et git.
 
 ```powershell
-.\build.ps1              # dist\SLT\SLT.exe et dist\SLT-<version>-windows-x64.zip
+.\build.ps1              # dist\CableClub\CableClub.exe et dist\CableClub-<version>-windows-x64.zip
 .\build.ps1 -NoPackage   # compile seulement
 .\build.ps1 -Out dossier # paquet dans un autre dossier que dist (tests)
 .\run-dev.ps1            # application en mode développement (interface servie depuis web\)

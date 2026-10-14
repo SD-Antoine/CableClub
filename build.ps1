@@ -1,9 +1,9 @@
 <#
-  SLT build script (Windows, PowerShell 5.1+).
+  Cable Club build script (Windows, PowerShell 5.1+).
 
   Requirements: JDK 21+ (javac, jar, jdeps, jpackage) and git.
 
-    .\build.ps1             compile + produce dist\SLT\SLT.exe and a .zip
+    .\build.ps1             compile + produce dist\CableClub\CableClub.exe and a .zip
     .\build.ps1 -NoPackage  compile only (build\lib\*.jar), e.g. for .\run-dev.ps1
     .\build.ps1 -Out dossier   package into another folder than dist (tests)
 
@@ -107,7 +107,7 @@ foreach ($core in 'mgba', 'desmume') {
 }
 
 # ---------------------------------------------------------------- SLT
-Step 'Compilation de SLT'
+Step 'Compilation de Cable Club'
 $appClasses = Join-Path $Build 'app-classes'
 if (Test-Path $appClasses) { Remove-Item -Recurse -Force $appClasses }
 $appSources = Get-ChildItem -Recurse -Filter *.java (Join-Path $Root 'src') | ForEach-Object { $_.FullName }
@@ -158,29 +158,29 @@ foreach ($m in 'jdk.charsets', 'jdk.crypto.ec', 'jdk.localedata', 'jdk.httpserve
 }
 Write-Host "    modules : $modules"
 
-Step 'Creation de CableClub.exe et SLT.exe (jpackage)'
-$image = Join-Path $Dist 'SLT'
-# keep the user's data (rooms, saves, library, hosted server) across rebuilds
+Step 'Creation de CableClub.exe (jpackage)'
+$image = Join-Path $Dist 'CableClub'
+# keep the user's data (rooms, saves, library, hosted server) across rebuilds, including the data of
+# the folder of the program's former name (dist\SLT, until 0.6.1), which then goes away
 $dataBackup = Join-Path $Build 'data-backup'
-if (Test-Path (Join-Path $image 'data')) {
+$oldImage = Join-Path $Dist 'SLT'
+$dataFrom = if (Test-Path (Join-Path $image 'data')) { $image } elseif (Test-Path (Join-Path $oldImage 'data')) { $oldImage } else { $null }
+if ($dataFrom) {
     if (Test-Path $dataBackup) { Remove-Item -Recurse -Force $dataBackup }
-    Move-Item (Join-Path $image 'data') $dataBackup
+    # fails (and nothing is deleted) while that copy of Cable Club runs
+    Move-Item (Join-Path $dataFrom 'data') $dataBackup
 }
 if (Test-Path $image) { Remove-Item -Recurse -Force $image }
+if ((Test-Path $oldImage) -and -not (Test-Path (Join-Path $oldImage 'data'))) { Remove-Item -Recurse -Force $oldImage }
 New-Item -ItemType Directory -Force $Dist | Out-Null
 $pkgInput = Join-Path $Build 'package-input'
 if (Test-Path $pkgInput) { Remove-Item -Recurse -Force $pkgInput }
 New-Item -ItemType Directory -Force $pkgInput | Out-Null
 Copy-Item $AppJar, $UprJar $pkgInput
 Copy-Item -Recurse $Cores (Join-Path $pkgInput 'cores')
-# CableClub.exe: the name of the application; SLT.exe stays for now because the updater of
-# SLT 0.4.1 to 0.5.x expects it in the archive (and starts it again after the update)
-$launcher = Join-Path $Build 'CableClub.properties'
-"description=Cable Club`r`nicon=$($Ico -replace '\\', '/')`r`n" | Set-Content -Encoding ascii $launcher
 Exec $jpackage @(
     '--type', 'app-image',
-    '--name', 'SLT',
-    '--add-launcher', "CableClub=$launcher",
+    '--name', 'CableClub',
     '--app-version', $Version,
     '--vendor', 'Cable Club',
     '--description', 'Cable Club',
@@ -203,12 +203,12 @@ Copy-Item (Join-Path $Root 'LISEZMOI.txt') (Join-Path $image 'LISEZMOI.txt')
 Copy-Item (Join-Path $Root 'THIRD-PARTY.txt') (Join-Path $image 'THIRD-PARTY.txt')
 
 Step 'Archive zip'
-$zip = Join-Path $Dist "SLT-$Version-windows-x64.zip"
+$zip = Join-Path $Dist "CableClub-$Version-windows-x64.zip"
 if (Test-Path $zip) { Remove-Item $zip }
 Compress-Archive -Path $image -DestinationPath $zip
 if (Test-Path $dataBackup) {
     Move-Item $dataBackup (Join-Path $image 'data')
-    Write-Host '    donnees conservees : dist\SLT\data'
+    Write-Host "    donnees conservees : $image\data"
 }
 Step "Termine : $image\CableClub.exe"
 Step "Archive : $zip"

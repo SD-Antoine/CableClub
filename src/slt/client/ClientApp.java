@@ -74,7 +74,7 @@ public final class ClientApp {
         return url.endsWith("/") ? url.substring(0, url.length() - 1) : url;
     }
 
-    /** Folder of SLT.exe (packaged) or the working folder (development). */
+    /** Folder of CableClub.exe (packaged) or the working folder (development). */
     Path appDir() {
         String appPath = System.getProperty("jpackage.app-path");
         if (appPath != null) {
@@ -85,6 +85,27 @@ public final class ClientApp {
 
     List<String> launchArgs() {
         return launchArgs;
+    }
+
+    /**
+     * SLT.exe, the program's name until 0.6.1: an update leaves it next to
+     * CableClub.exe, and without its app\SLT.cfg it no longer starts.
+     */
+    private static void removeOldLauncher() {
+        String appPath = System.getProperty("jpackage.app-path");
+        if (appPath == null || !Path.of(appPath).getFileName().toString().equalsIgnoreCase("CableClub.exe")) {
+            return;
+        }
+        Path dir = Path.of(appPath).toAbsolutePath().getParent();
+        Path old = dir.resolve("SLT.exe");
+        if (Files.isRegularFile(old) && !Files.exists(dir.resolve("app").resolve("SLT.cfg"))) {
+            try {
+                Files.delete(old);
+                Log.info("Ancien SLT.exe supprimé : le programme s'appelle maintenant CableClub.exe");
+            } catch (IOException e) {
+                Log.warn("Ancien SLT.exe impossible à supprimer : " + e.getMessage());
+            }
+        }
     }
 
     public static void main(String[] args) throws Exception {
@@ -105,7 +126,8 @@ public final class ClientApp {
         Path dataDir = forcedData != null ? Path.of(forcedData).toAbsolutePath() : resolveDataDir(dev);
         Files.createDirectories(dataDir);
         Log.init(dataDir);
-        Log.info("SLT " + Version.VERSION + " — données : " + dataDir);
+        Log.info("Cable Club " + Version.VERSION + " — données : " + dataDir);
+        removeOldLauncher();
 
         Path webDir = null;
         if (dev) {
@@ -325,7 +347,7 @@ public final class ClientApp {
     }
 
     /**
-     * Portable by default: data lives next to SLT.exe in "data". Falls back to
+     * Portable by default: data lives next to CableClub.exe in "data". Falls back to
      * %LOCALAPPDATA%\SLT when that folder is not writable.
      */
     private static Path resolveDataDir(boolean dev) {

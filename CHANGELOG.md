@@ -1,5 +1,11 @@
 # Nouveautés de Cable Club (anciennement SLT)
 
+## 0.6.2 — 2026-10-14
+
+- **`SLT.exe` disparaît** : le programme s'appelle seulement `CableClub.exe`, et l'archive `CableClub-x.y.z-windows-x64.zip`. Depuis la 0.6.0 ou la 0.6.1, la mise à jour automatique s'en occupe : l'ancien `SLT.exe` est supprimé au premier lancement (un raccourci vers lui est à refaire vers `CableClub.exe`).
+- Depuis SLT 0.5.0 ou avant, la mise à jour automatique ne peut pas installer cette version : téléchargez-la, décompressez-la, puis copiez le dossier `data` de l'ancienne version à côté de `CableClub.exe` (réglages, ROMs et salles suivent).
+- Le fichier LISEZMOI fourni avec le programme présente maintenant Cable Club et le serveur officiel.
+
 ## 0.6.1 — 2026-10-14
 
 - **Correction importante** : « Serveur Cable Club (recommandé) » ne trouvait pas le serveur officiel (« Aucun serveur Cable Club ne répond à https://play.cableclub.app »), donc impossible de s'y connecter ou d'y créer un compte. Une adresse commençant par `https://` sans port visait le port des serveurs hébergés sur un PC au lieu du port HTTPS habituel. Une adresse tapée sans `https://` ni port (« play.cableclub.app ») essaie maintenant les deux.

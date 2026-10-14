@@ -14,7 +14,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Entry point of the game player ("SLT.exe --player …"), started by the SLT
+ * Entry point of the game player ("CableClub.exe --player …"), started by the SLT
  * application. No window of its own: the game appears inside the SLT window.
  * libretro cores keep global state, hence one process per game.
  */

@@ -5,9 +5,9 @@ import java.util.Arrays;
 /**
  * SLT — Soul Link Together. One executable, three roles:
  * <ul>
- *   <li>{@code SLT.exe}: the application of a player (interface, library, game);</li>
- *   <li>{@code SLT.exe --server}: the SLT server alone (accounts, friends, rooms);</li>
- *   <li>{@code SLT.exe --player …}: the game player, started by the application.</li>
+ *   <li>{@code CableClub.exe}: the application of a player (interface, library, game);</li>
+ *   <li>{@code CableClub.exe --server}: the SLT server alone (accounts, friends, rooms);</li>
+ *   <li>{@code CableClub.exe --player …}: the game player, started by the application.</li>
  * </ul>
  */
 public final class Main {

@@ -19,7 +19,7 @@ import java.util.concurrent.Executors;
 /**
  * The SLT server: accounts, friends, rooms and the Soul Link referee. It runs
  * either inside the SLT application of one player ("Héberger le serveur sur
- * ce PC") or on its own ({@code SLT.exe --server}) on an always-on machine.
+ * ce PC") or on its own ({@code CableClub.exe --server}) on an always-on machine.
  */
 public final class SltServer {
 
@@ -127,7 +127,7 @@ public final class SltServer {
         return accounts.count();
     }
 
-    /** {@code SLT.exe --server [--port=47330] [--data=dossier] [--bind=0.0.0.0] [--name=…] [--keystore=f.p12 --keystore-password=…]} */
+    /** {@code CableClub.exe --server [--port=47330] [--data=dossier] [--bind=0.0.0.0] [--name=…] [--keystore=f.p12 --keystore-password=…]} */
     public static void main(String[] args) throws Exception {
         int port = DEFAULT_PORT;
         String bind = "0.0.0.0";
