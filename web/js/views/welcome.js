@@ -6,7 +6,7 @@ import { store, refreshState, on } from '../store.js';
 import { hostAddresses } from './parts.js';
 
 // the official Cable Club server: a real (Let's Encrypt) certificate, nothing to remember or paste
-const OFFICIAL = 'https://play.cableclub.app';
+const OFFICIAL = 'https://play.cableclub.app:443';
 
 export function renderWelcome(container, onDone) {
   const ui = { step: store.state?.link?.server ? 'account' : 'server', mode: 'official', tab: 'login', hosted: false, error: null };
@@ -40,7 +40,10 @@ export function renderWelcome(container, onDone) {
             store.state = r.state;
           } catch (err) {
             // the diagnosis is long: shown under the field rather than in a passing notification
-            ui.error = err.message;
+            // (the one about hosts and invitation codes does not apply to the official server)
+            ui.error = ui.mode === 'official'
+              ? 'Le serveur Cable Club (play.cableclub.app) ne répond pas. Vérifiez votre connexion à Internet, puis réessayez dans un instant.'
+              : err.message;
             draw();
             return;
           }

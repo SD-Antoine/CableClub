@@ -74,6 +74,9 @@ final class ServerLink {
     /**
      * Addresses to try for what the player typed: "192.168.1.20", "2a01:…",
      * "monserveur.fr:47330", "https://…". Without a scheme, encrypted first.
+     * Without a port: the scheme's usual one when a scheme is given
+     * ("https://play.cableclub.app" is on 443), otherwise Cable Club's port
+     * and also the usual HTTPS port (a server behind a domain name).
      */
     static List<String> candidatesFor(String address) {
         String a = address == null ? "" : address.trim();
@@ -98,11 +101,13 @@ final class ServerLink {
         if (u.getHost() == null) {
             throw new Http.Fail(400, "Adresse invalide : " + address);
         }
-        if (u.getPort() < 0) {
-            hostPort = hostPort + ":" + slt.server.SltServer.DEFAULT_PORT;
-        }
         if (explicit) {
-            return List.of(a.substring(0, a.indexOf("://") + 3) + hostPort);
+            String scheme = lower.substring(0, lower.indexOf("://"));
+            return List.of(scheme + "://" + hostPort + (u.getPort() < 0 ? "https".equals(scheme) ? ":443" : ":80" : ""));
+        }
+        if (u.getPort() < 0) {
+            String withPort = hostPort + ":" + slt.server.SltServer.DEFAULT_PORT;
+            return List.of("https://" + withPort, "http://" + withPort, "https://" + hostPort + ":443");
         }
         return List.of("https://" + hostPort, "http://" + hostPort);
     }

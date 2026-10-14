@@ -1,5 +1,9 @@
 # Nouveautés de Cable Club (anciennement SLT)
 
+## 0.6.1 — 2026-10-14
+
+- **Correction importante** : « Serveur Cable Club (recommandé) » ne trouvait pas le serveur officiel (« Aucun serveur Cable Club ne répond à https://play.cableclub.app »), donc impossible de s'y connecter ou d'y créer un compte. Une adresse commençant par `https://` sans port visait le port des serveurs hébergés sur un PC au lieu du port HTTPS habituel. Une adresse tapée sans `https://` ni port (« play.cableclub.app ») essaie maintenant les deux.
+
 ## 0.6.0 — 2026-10-14
 
 SLT devient **Cable Club** : un seul endroit pour jouer à Pokémon à plusieurs, avec un onglet par mode de jeu (le Soul Link pour commencer).
