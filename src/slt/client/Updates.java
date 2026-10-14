@@ -107,7 +107,7 @@ final class Updates {
             for (Object o : assets == null ? List.of() : assets) {
                 Map<String, Object> a = Json.obj(o);
                 String name = Json.str(a, "name");
-                if (name != null && name.matches("SLT-.*-windows-x64\\.zip")) {
+                if (name != null && name.matches("(SLT|CableClub)-.*-windows-x64\\.zip")) {
                     zipName = name;
                     zipUrl = Json.str(a, "browser_download_url");
                     zipSize = Json.num(a, "size", 0);
@@ -155,7 +155,7 @@ final class Updates {
             Path probe = Files.createTempFile(dir, "maj", ".tmp");
             Files.delete(probe);
         } catch (IOException | SecurityException e) {
-            return "Le dossier de SLT est protégé en écriture (" + dir + ") : téléchargez la nouvelle version à la main.";
+            return "Le dossier de Cable Club est protégé en écriture (" + dir + ") : téléchargez la nouvelle version à la main.";
         }
         return null;
     }
@@ -178,7 +178,7 @@ final class Updates {
         }
         String game = Json.str(app.players.state(), "state");
         if ("starting".equals(game) || "running".equals(game)) {
-            throw new Http.Fail(409, "Quittez d'abord votre partie en cours : la mise à jour redémarre SLT.");
+            throw new Http.Fail(409, "Quittez d'abord votre partie en cours : la mise à jour redémarre Cable Club.");
         }
         synchronized (this) {
             if (installing) {
@@ -214,10 +214,10 @@ final class Updates {
             Files.delete(zip);
             Path root = findRoot(unpacked);
             if (root == null) {
-                throw new IOException("L'archive ne contient pas SLT.exe.");
+                throw new IOException("L'archive ne contient pas le programme.");
             }
 
-            progress.accept("Redémarrage de SLT…");
+            progress.accept("Redémarrage de Cable Club…");
             Path script = writeScript(work, root, appDir);
             List<String> args = new ArrayList<>(app.launchArgs());
             boolean windowClosed = app.closeWindowForRestart();
@@ -301,7 +301,7 @@ final class Updates {
         }
     }
 
-    /** The folder of the archive that holds SLT.exe, app\ and runtime\. */
+    /** The folder of the archive that holds CableClub.exe (or SLT.exe), app\ and runtime\. */
     private static Path findRoot(Path dir) throws IOException {
         if (complete(dir)) {
             return dir;
@@ -317,7 +317,8 @@ final class Updates {
     }
 
     private static boolean complete(Path dir) {
-        return Files.isRegularFile(dir.resolve("SLT.exe")) && Files.isRegularFile(dir.resolve("app").resolve("slt.jar"))
+        return (Files.isRegularFile(dir.resolve("SLT.exe")) || Files.isRegularFile(dir.resolve("CableClub.exe")))
+                && Files.isRegularFile(dir.resolve("app").resolve("slt.jar"))
                 && Files.isDirectory(dir.resolve("runtime"));
     }
 
@@ -342,7 +343,8 @@ final class Updates {
                 Start-Sleep -Milliseconds 500
                 $old = Join-Path $work 'ancienne'
                 New-Item -ItemType Directory -Force $old | Out-Null
-                $parts = @('app', 'runtime', 'SLT.exe')
+                # the launchers of this version (CableClub.exe, and SLT.exe while older updaters need it)
+                $parts = @('app', 'runtime') + @('CableClub.exe', 'SLT.exe' | Where-Object { Test-Path -LiteralPath (Join-Path $from $_) })
                 $ok = $false
                 try {
                     foreach ($n in $parts) { $p = Join-Path $to $n; if (Test-Path -LiteralPath $p) { Move-Item -LiteralPath $p (Join-Path $old $n) } }
@@ -365,7 +367,8 @@ final class Updates {
                 $argsFile = Join-Path $work 'arguments.txt'
                 $arguments = @()
                 if (Test-Path -LiteralPath $argsFile) { $arguments = @(Get-Content -LiteralPath $argsFile -Encoding UTF8 | Where-Object { $_ }) }
-                $exe = Join-Path $to 'SLT.exe'
+                $exe = Join-Path $to 'CableClub.exe'
+                if (-not (Test-Path -LiteralPath $exe)) { $exe = Join-Path $to 'SLT.exe' }
                 if ($arguments.Count -gt 0) {
                     Start-Process -FilePath $exe -WorkingDirectory $to -ArgumentList ($arguments | ForEach-Object { '"' + $_ + '"' })
                 } else {

@@ -32,9 +32,9 @@ public final class FileBrowser {
         List<Object> out = new ArrayList<>();
         Set<String> seen = new LinkedHashSet<>();
         Path home = Path.of(System.getProperty("user.home"));
-        addPlace(out, seen, "Dossier de SLT", appDir, "app");
+        addPlace(out, seen, "Dossier de Cable Club", appDir, "app");
         Path romsNext = appDir.resolve("roms");
-        addPlace(out, seen, "roms (à côté de SLT)", romsNext, "folder");
+        addPlace(out, seen, "roms (à côté de Cable Club)", romsNext, "folder");
         addPlace(out, seen, "Bureau", home.resolve("Desktop"), "folder");
         addPlace(out, seen, "Bureau (OneDrive)", home.resolve("OneDrive").resolve("Bureau"), "folder");
         addPlace(out, seen, "Bureau (OneDrive)", home.resolve("OneDrive").resolve("Desktop"), "folder");

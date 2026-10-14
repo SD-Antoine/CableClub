@@ -1,26 +1,30 @@
-// SLT interface: boot, layout, router, global notifications.
+// Cable Club interface: boot, layout, router, global notifications.
 
-import { h, mount, icon, avatar, toast, modal, field, errorToast } from './ui.js';
-import { store, on, refreshState, refreshRooms, refreshFriends, connectStream, loggedIn, me, pendingInvites } from './store.js';
+import { h, mount, icon, avatar, toast, modal, field, errorToast, setProfileOpener } from './ui.js';
+import {
+  store, on, refreshState, refreshRooms, refreshFriends, refreshChat, connectStream, loggedIn, me, pendingInvites, chatUnread, PAGE_ID,
+} from './store.js';
 import { srv, local } from './api.js';
 import { renderWelcome } from './views/welcome.js';
-import { renderHome } from './views/home.js';
+import { renderMode, MODES } from './views/mode.js';
 import { renderRoom } from './views/room.js';
 import { renderPlay } from './views/play.js';
 import { renderFriends } from './views/friends.js';
-import { renderHistory } from './views/history.js';
+import { renderChat } from './views/chat.js';
+import { renderProfile, openProfile } from './views/profile.js';
 import { renderLibrary } from './views/library.js';
 import { renderSettings } from './views/settings.js';
 import { openUpdate, updateLink } from './views/update.js';
+import { watchBattles } from './views/battle.js';
 
 const root = document.getElementById('root');
 let cleanup = null;
 let currentRoute = null;
 
+// what is not part of a game mode: friends, chat, ROMs, settings
 const NAV = [
-  { id: 'home', hash: '#/', label: 'Salles', icon: 'rooms' },
   { id: 'friends', hash: '#/amis', label: 'Amis', icon: 'friends' },
-  { id: 'history', hash: '#/historique', label: 'Historique', icon: 'history' },
+  { id: 'chat', hash: '#/chat', label: 'Chat', icon: 'chat' },
   { id: 'library', hash: '#/roms', label: 'Mes ROMs', icon: 'rom' },
   { id: 'settings', hash: '#/reglages', label: 'Réglages', icon: 'settings' },
 ];
@@ -39,14 +43,17 @@ export function go(hash) {
 function parse() {
   const parts = (location.hash || '#/').replace(/^#\/?/, '').split('/').filter(Boolean).map(decodeURIComponent);
   switch (parts[0]) {
-    case undefined: return { id: 'home' };
+    case undefined: return { id: 'mode', mode: 'soullink' };
     case 'salle': return { id: 'room', roomId: parts[1] };
     case 'jouer': return { id: 'play', roomId: parts[1] };
     case 'amis': return { id: 'friends' };
-    case 'historique': return parts[1] ? { id: 'room', roomId: parts[1], history: true } : { id: 'history' };
+    case 'chat': return { id: 'chat', ch: parts[1] || 'global' };
+    case 'profil': return { id: 'profile' };
+    // older links of the history (before the tabs of the modes)
+    case 'historique': return parts[1] ? { id: 'room', roomId: parts[1], history: true } : { id: 'mode', mode: 'soullink', tab: 'historique' };
     case 'roms': return { id: 'library' };
     case 'reglages': return { id: 'settings' };
-    default: return { id: 'home' };
+    default: return MODES[parts[0]] ? { id: 'mode', mode: parts[0], tab: parts[1] } : { id: 'mode', mode: 'soullink' };
   }
 }
 
@@ -55,24 +62,33 @@ function rail(active) {
   const link = store.state?.link || {};
   const friendsCount = store.friends.incoming.length;
   const invites = pendingInvites().length;
+  const unread = chatUnread();
+  const globalNew = (store.chat.channels || []).some((c) => c.ch === 'global' && c.unread);
   return h('nav', { class: 'rail' },
     h('div', { class: 'brand' }, h('img', { src: 'img/logo.svg', alt: '' }),
-      h('div', { class: 'brand-text' }, h('b', null, 'SLT'), h('small', null, 'Soul Link Together'))),
+      h('div', { class: 'brand-text' }, h('b', null, 'Cable Club'), h('small', null, 'Pokémon à plusieurs'))),
+    h('div', { class: 'rail-group' }, 'Modes de jeu'),
+    Object.entries(MODES).map(([id, m]) => h('a', { class: ['nav-item', 'mode-item', active === `mode:${id}` && 'active'], href: m.hash, title: m.name },
+      h('img', { src: m.logo, alt: '' }), h('span', { class: 'label' }, m.name),
+      id === 'soullink' && invites ? h('span', { class: 'count', title: 'Invitations' }, invites) : null)),
+    h('div', { class: 'rail-sep' }),
     NAV.map((n) => h('a', { class: ['nav-item', active === n.id && 'active'], href: n.hash, title: n.label },
       icon(n.icon), h('span', { class: 'label' }, n.label),
       n.id === 'friends' && friendsCount ? h('span', { class: 'count' }, friendsCount) : null,
-      n.id === 'home' && invites ? h('span', { class: 'count' }, invites) : null)),
+      n.id === 'chat' && unread ? h('span', { class: 'count' }, unread > 99 ? '99+' : unread) : null,
+      n.id === 'chat' && !unread && globalNew ? h('span', { class: 'dot-new', title: 'Nouveaux messages dans le chat général' }) : null)),
     h('div', { class: 'spacer' }),
     updateLink(),
-    h('a', { class: 'me', href: '#/reglages', title: link.server || '' },
-      avatar(user?.name, 1, { size: 's', online: !!link.connected }),
+    h('a', { class: ['me', active === 'profile' && 'active'], href: '#/profil', title: `Mon profil · ${link.server || ''}` },
+      avatar(user?.name, 1, { size: 's', online: !!link.connected, id: user?.avatar ? user.id : null, pic: user?.avatar || 0 }),
       h('div', { class: 'me-text' }, h('b', null, user?.name || '—'),
         h('small', null, link.connected ? 'Connecté' : 'Hors ligne'))));
 }
 
 function activeNav(r) {
-  if (r.id === 'room') return r.history ? 'history' : 'home';
-  return r.id === 'play' ? 'home' : r.id;
+  if (r.id === 'room' || r.id === 'play') return 'mode:soullink';
+  if (r.id === 'mode') return `mode:${r.mode}`;
+  return r.id;
 }
 
 function layout(r) {
@@ -96,10 +112,11 @@ async function route() {
       case 'room': cleanup = await renderRoom(main, r.roomId, { history: !!r.history }); break;
       case 'play': cleanup = await renderPlay(main, r.roomId); break;
       case 'friends': cleanup = renderFriends(main); break;
-      case 'history': cleanup = renderHistory(main); break;
+      case 'chat': cleanup = renderChat(main, r.ch); break;
+      case 'profile': cleanup = renderProfile(main); break;
       case 'library': cleanup = renderLibrary(main); break;
       case 'settings': cleanup = renderSettings(main, { applyTheme }); break;
-      default: cleanup = renderHome(main); break;
+      default: cleanup = renderMode(main, r.mode, r.tab); break;
     }
   } catch (e) {
     errorToast(e);
@@ -157,7 +174,7 @@ function checkNaming(room) {
 
 // ------------------------------------------------------------- boot
 async function refreshAll() {
-  await Promise.allSettled([refreshRooms(), refreshFriends()]);
+  await Promise.allSettled([refreshRooms(), refreshFriends(), refreshChat()]);
   refreshRail();
   for (const r of store.rooms.values()) checkNaming(r);
 }
@@ -174,6 +191,17 @@ async function boot() {
   on('state', () => refreshRail());
   on('friends', () => refreshRail());
   on('rooms', () => refreshRail());
+  on('chat-list', () => refreshRail());
+  setProfileOpener((id) => openProfile(id));
+  watchBattles();
+  // a private message (or a message of a room) while its conversation is not shown
+  on('chat', (d) => {
+    const m = d.msg;
+    if (!m || m.from === me()?.id || d.ch === 'global' || store.chat.open.has(d.ch) || currentRoute?.id === 'play') return;
+    const where = d.ch.startsWith('dm-') ? 'Message privé' : `Salle « ${(store.chat.channels || []).find((c) => c.ch === d.ch)?.title || '…'} »`;
+    toast(m.text.length > 140 ? `${m.text.slice(0, 140)}…` : m.text, 'info', {
+      title: `${m.name} · ${where}`, ms: 8000, action: { label: 'Répondre', onClick: () => go(`#/chat/${d.ch}`) } });
+  });
   on('session', (l) => { if (!l.loggedIn) { toast('Votre session a expiré : reconnectez-vous.', 'warn'); route(); } });
   on('room', (room) => { refreshRail(); checkNaming(room); });
   on('invite', (i) => toast(`${i.from} vous invite dans « ${i.roomName} » (${i.game}).`, 'info', {
@@ -193,11 +221,22 @@ async function boot() {
   const tellUpdate = (u) => {
     if (!u || u.state !== 'available' || toldUpdate === u.version || currentRoute?.id === 'play') return;
     toldUpdate = u.version;
-    toast(`La version ${u.version} de SLT est disponible.`, 'info', {
+    toast(`La version ${u.version} de Cable Club est disponible.`, 'info', {
       title: 'Mise à jour', ms: 15000, action: { label: 'Voir', onClick: () => openUpdate() } });
   };
   on('update', tellUpdate);
   window.addEventListener('hashchange', route);
+  // the window closes (or reloads): the application closes too unless a window comes back
+  let saidBye = false;
+  const bye = () => {
+    if (saidBye) return;
+    saidBye = true;
+    try {
+      navigator.sendBeacon('/api/ui/bye', new Blob([JSON.stringify({ t: store.state?.uiToken, page: PAGE_ID })], { type: 'text/plain' }));
+    } catch { /* closing anyway */ }
+  };
+  window.addEventListener('beforeunload', bye);
+  window.addEventListener('pagehide', bye);
   if (loggedIn()) await refreshAll();
   tellUpdate(store.state?.update);
   route();

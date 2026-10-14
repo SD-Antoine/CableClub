@@ -9,6 +9,9 @@ export const store = {
   friends: { friends: [], incoming: [], outgoing: [] },
   logs: new Map(),      // roomId -> journal lines
   connected: false,
+  // chat: the channels of this player (general, rooms, friends) with their unread count;
+  // open = channels shown right now (their new messages are read at once)
+  chat: { channels: null, online: 0, admin: false, open: new Map() },
 };
 
 const listeners = new Map();
@@ -75,15 +78,68 @@ export async function loadLogs(roomId) {
   return r.logs;
 }
 
+export async function refreshChat() {
+  if (!loggedIn()) return;
+  const r = await srv.get('/chat');
+  store.chat.channels = r.channels;
+  store.chat.online = r.online;
+  store.chat.admin = r.admin;
+  // a conversation shown right now is read (the server may not know it yet)
+  for (const c of r.channels) if (c.unread && store.chat.open.has(c.ch) && !document.hidden) markChatRead(c.ch);
+  emit('chat-list', store.chat);
+}
+
+/** Unread messages of the rooms and of the friends (the general channel only shows a dot). */
+export function chatUnread() {
+  return (store.chat.channels || []).filter((c) => c.ch !== 'global').reduce((a, c) => a + (c.unread || 0), 0);
+}
+
+/** A channel is shown (count > 0) or no longer: its new messages count as read while it is. */
+export function chatOpen(ch, on) {
+  const n = (store.chat.open.get(ch) || 0) + (on ? 1 : -1);
+  if (n > 0) store.chat.open.set(ch, n); else store.chat.open.delete(ch);
+  if (on) markChatRead(ch);
+}
+
+const readTimers = new Map();
+export function markChatRead(ch) {
+  const c = (store.chat.channels || []).find((x) => x.ch === ch);
+  const last = c?.last?.id;
+  if (c && c.unread) { c.unread = 0; emit('chat-list', store.chat); }
+  if (!last) return;
+  clearTimeout(readTimers.get(ch));
+  readTimers.set(ch, setTimeout(() => srv.post(`/chat/${encodeURIComponent(ch)}/read`, { id: last }).catch(() => {}), 400));
+}
+
+function chatArrived(d) {
+  const list = store.chat.channels;
+  const c = list?.find((x) => x.ch === d.ch);
+  const mine = d.msg?.from === me()?.id;
+  if (c) {
+    c.last = d.msg;
+    if (!mine) {
+      if (store.chat.open.has(d.ch) && !document.hidden) markChatRead(d.ch);
+      else c.unread = (c.unread || 0) + 1;
+    }
+  } else if (list) {
+    // a channel this page did not know yet (new friend, new room): the list is read again
+    refreshChat().catch(() => {});
+  }
+  emit('chat', d);
+  emit('chat-list', store.chat);
+}
+
 export function pendingInvites() {
   return [...store.rooms.values()].filter((r) => r.invited);
 }
 
 let source = null;
+// this page: its stream is forgotten at once when the window closes
+export const PAGE_ID = Math.random().toString(36).slice(2) + Date.now().toString(36);
 
 export function connectStream() {
   if (source) source.close();
-  source = new EventSource('/api/stream');
+  source = new EventSource(`/api/stream?page=${PAGE_ID}`);
   const handle = (name, fn) => source.addEventListener(name, (e) => {
     let data = null;
     try { data = JSON.parse(e.data); } catch { data = e.data; }
@@ -127,6 +183,9 @@ export function connectStream() {
     emit('presence', d);
   });
   handle('notice', (n) => emit('notice', n));
+  handle('chat', (d) => chatArrived(d));
+  handle('chat-delete', (d) => emit('chat-delete', d));
+  handle('battle', (b) => emit('battle', b));
   handle('ghost', (g) => emit('ghost', g));
   handle('friends', (f) => { refreshFriends().catch(() => {}); emit('friends-event', f); });
   handle('invite', (i) => { refreshRooms().catch(() => {}); emit('invite', i); });

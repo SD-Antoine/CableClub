@@ -24,14 +24,22 @@ interface Presence {
      *                  (generation 5: x, y = height, z)
      * @param view      3D games: camera x projection matrix of the image shown (4x4, row vectors:
      *                  screen = [x y z 1] x view), with which the window places the others, then the depth
-     *                  (clip w) of the player's feet, where sprites are drawn one texel per pixel; null in 2D
+     *                  (clip w) of the player's feet, where sprites are drawn one texel per pixel, then where
+     *                  the player's feet are on that image (x, y in pixels of the top screen); null in 2D
+     * @param box       a message box covers the top (1) or the bottom (2) of the screen: the others stay
+     *                  drawn behind it; 0 none
      */
     record Sample(int map, int x, int y, boolean overworld, boolean free, String status, String spriteId,
-                  int anchorX, int anchorY, int z, float[] view) {
+                  int anchorX, int anchorY, int z, float[] view, int box) {
+
+        Sample(int map, int x, int y, boolean overworld, boolean free, String status, String spriteId,
+               int anchorX, int anchorY, int z, float[] view) {
+            this(map, x, y, overworld, free, status, spriteId, anchorX, anchorY, z, view, 0);
+        }
 
         Sample(int map, int x, int y, boolean overworld, boolean free, String status, String spriteId,
                int anchorX, int anchorY) {
-            this(map, x, y, overworld, free, status, spriteId, anchorX, anchorY, 0, null);
+            this(map, x, y, overworld, free, status, spriteId, anchorX, anchorY, 0, null, 0);
         }
     }
 
@@ -44,6 +52,14 @@ interface Presence {
     int spriteW();
 
     int spriteH();
+
+    /**
+     * The sprite of the last reading is exactly the one the game draws for the player (not a stand-in such
+     * as the standing walking image on a bike): the window may redraw it over the others walking behind.
+     */
+    default boolean spriteExact() {
+        return false;
+    }
 
     /** A Pokémon arrived by trade. */
     default void tradeHappened() {
@@ -65,6 +81,10 @@ interface Presence {
         if (reader instanceof NdsReader nds && nds.gen5()) {
             Gen5Sprites.Set set = Gen5Sprites.forGame(nds.game());
             return set == null ? null : new Gen5Presence(nds, new Gen5Sprites(rom, set.narc()), set);
+        }
+        if (reader instanceof NdsReader nds) {
+            Gen5Sprites.Set set = Gen4Presence.setFor(nds.game());
+            return set == null ? null : new Gen4Presence(nds, new Gen5Sprites(rom, set.narc(), true), set);
         }
         return null;
     }

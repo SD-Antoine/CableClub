@@ -1,5 +1,5 @@
-SLT — composants tiers
-======================
+Cable Club — composants tiers
+=============================
 
 Universal Pokemon Randomizer ZX 4.6.1
   Auteurs : Ajarmar, darkeye, cleartonic et les contributeurs du projet,
@@ -24,6 +24,15 @@ DeSmuME (cœur libretro) — Nintendo DS
   Source  : https://github.com/libretro/desmume
   Binaire : app\cores\desmume_libretro.dll, compilé par le projet libretro
             (https://buildbot.libretro.com).
+
+@pkmn/sim 0.10.11 — simulateur de combat de Pokémon Showdown
+  Auteurs : Guangcong Luo et les contributeurs de Pokémon Showdown ;
+            modifications @pkmn par les contributeurs du projet pkmn.
+  Licence : MIT (Copyright (c) 2011-2026 Guangcong Luo and other contributors)
+  Source  : https://github.com/pkmn/ps (paquet npm @pkmn/sim)
+  Usage   : combats entre les joueurs d'une salle, simulés dans l'interface
+            (web/js/vendor/pkmn-sim.js, regroupé en un fichier avec esbuild,
+            sans modification).
 
 Environnement d'exécution Java (OpenJDK / Oracle JDK 21)
   Inclus dans le dossier "runtime" par jpackage.

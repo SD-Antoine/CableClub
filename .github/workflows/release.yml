@@ -61,5 +61,5 @@ jobs:
           $zip = Get-Item "dist\SLT-$env:VERSION-windows-x64.zip"
           $hash = (Get-FileHash -Algorithm SHA256 $zip.FullName).Hash.ToLower()
           [IO.File]::WriteAllText("$($zip.FullName).sha256", "$hash  $($zip.Name)`n")
-          gh release create '${{ github.ref_name }}' $zip.FullName "$($zip.FullName).sha256" --title "SLT $env:VERSION" --notes-file notes.md
+          gh release create '${{ github.ref_name }}' $zip.FullName "$($zip.FullName).sha256" --title "Cable Club $env:VERSION" --notes-file notes.md
           if ($LASTEXITCODE -ne 0) { throw 'gh release create a echoue' }

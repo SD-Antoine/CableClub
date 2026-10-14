@@ -228,7 +228,7 @@ public final class Rando {
     // ------------------------------------------------------------ tracker
 
     /** Bumped when the content of the tracker info changes (invalidates the cache). */
-    private static final String TRACKER_INFO_VERSION = "slt-1";
+    private static final String TRACKER_INFO_VERSION = "slt-2";
 
     /**
      * Data the in-game tracker needs (map and location names, species names,
@@ -251,6 +251,28 @@ public final class Rando {
             info.put("maps", MapTables.export(rh));
             info.put("locations", MapTables.locations(rh));
             info.putAll(MapTables.tracker(rh));
+            // names of the moves and abilities in the game's language (battles between players)
+            List<Object> moves = new ArrayList<>();
+            for (com.dabomstew.pkrandom.pokemon.Move mv : rh.getMoves()) {
+                moves.add(mv == null ? null : mv.name);
+            }
+            info.put("moves", moves);
+            List<Object> abilities = new ArrayList<>();
+            if (rh.abilitiesPerPokemon() > 0) {
+                for (int i = 0; i < 400; i++) {
+                    String n;
+                    try {
+                        n = rh.abilityName(i);
+                    } catch (RuntimeException e) {
+                        break;
+                    }
+                    if (i > 0 && (n == null || n.isBlank())) {
+                        break;
+                    }
+                    abilities.add(n);
+                }
+            }
+            info.put("abilities", abilities);
         }
         Files.createDirectories(cacheDir);
         Path tmp = out.resolveSibling(out.getFileName() + ".tmp");

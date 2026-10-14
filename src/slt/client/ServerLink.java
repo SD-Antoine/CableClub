@@ -39,11 +39,17 @@ final class ServerLink {
     ServerLink(Config config, LocalHub hub) {
         this.config = config;
         this.hub = hub;
-        // encrypted connections: the server is recognised by its certificate's fingerprint
+        // encrypted connections: the server is recognised by its certificate's fingerprint, until it gets a
+        // real certificate for its name (then the usual checks are enough and the fingerprint is forgotten)
         this.http = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(5))
                 .version(HttpClient.Version.HTTP_1_1)
-                .sslContext(PinnedTls.context(() -> config.str("serverPin"), null, false))
+                .sslContext(PinnedTls.context(() -> config.str("serverPin"), null, false, () -> {
+                    if (config.str("serverPin") != null) {
+                        Log.info("Le serveur a maintenant un certificat reconnu : son ancienne empreinte est oubliée");
+                        config.set("serverPin", null);
+                    }
+                }))
                 .build();
     }
 
@@ -124,12 +130,12 @@ final class ServerLink {
             }
             String host = URI.create(candidates.get(0)).getHost();
             if (host != null && Hosting.isLocalAddress(host)) {
-                throw new Http.Fail(502, "Aucun serveur SLT ne répond à " + input.trim() + ". Cette adresse ne fonctionne que sur la "
+                throw new Http.Fail(502, "Aucun serveur Cable Club ne répond à " + input.trim() + ". Cette adresse ne fonctionne que sur la "
                         + "même box (même Wi-Fi) que l'hôte. À distance, demandez à l'hôte son code d'invitation (Réglages > Serveur).");
             }
             boolean refused = probe.attempts().stream().allMatch(a -> "refused".equals(a.reason()));
-            throw new Http.Fail(502, "Aucun serveur SLT ne répond à " + input.trim()
-                    + (refused ? " (connexion refusée : SLT n'y est pas lancé, ou ce n'est pas le bon port)."
+            throw new Http.Fail(502, "Aucun serveur Cable Club ne répond à " + input.trim()
+                    + (refused ? " (connexion refusée : Cable Club n'y est pas lancé, ou ce n'est pas le bon port)."
                     : " (pas de réponse : adresse erronée, ou connexion bloquée chez l'hôte par le pare-feu ou la box).")
                     + " Le plus simple : demandez à l'hôte son code d'invitation (Réglages > Serveur).");
         }
@@ -226,11 +232,21 @@ final class ServerLink {
     }
 
     private Attempt probeOne(String url, String pin) {
+        // a typed address first gets the usual certificate checks (server behind a real certificate, such as
+        // Let's Encrypt's, renewed regularly: nothing to remember); only a certificate of its own is then
+        // accepted and remembered at the first contact
+        Attempt strict = probeOne(url, pin, false);
+        if (pin == null && url.startsWith("https://") && "tls".equals(strict.reason())) {
+            return probeOne(url, null, true);
+        }
+        return strict;
+    }
+
+    private Attempt probeOne(String url, String pin, boolean acceptAny) {
         java.util.concurrent.atomic.AtomicReference<String> seen = new java.util.concurrent.atomic.AtomicReference<>();
         HttpClient.Builder b = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).version(HttpClient.Version.HTTP_1_1);
         if (url.startsWith("https://")) {
-            // first contact with a typed address: the certificate is accepted and remembered
-            b.sslContext(PinnedTls.context(() -> pin, seen, pin == null));
+            b.sslContext(PinnedTls.context(() -> pin, seen, acceptAny));
         }
         try {
             HttpResponse<String> r = b.build().send(HttpRequest.newBuilder(URI.create(url + "/api/server"))
@@ -244,7 +260,7 @@ final class ServerLink {
             if (!"SLT".equals(Json.str(info, "app"))) {
                 return new Attempt(url, null, "not-slt");
             }
-            String fp = url.startsWith("https://") ? (pin != null ? pin : seen.get()) : null;
+            String fp = url.startsWith("https://") ? (pin != null ? pin : acceptAny ? seen.get() : null) : null;
             return new Attempt(url, new Found(url, fp, info), "ok");
         } catch (IOException | RuntimeException e) {
             return new Attempt(url, null, reason(e));
@@ -293,8 +309,8 @@ final class ServerLink {
             case "refused" -> "connexion refusée";
             case "unreachable" -> "réseau inaccessible";
             case "other-server" -> "autre serveur (certificat différent)";
-            case "tls" -> "pas un serveur SLT chiffré";
-            case "not-slt" -> "pas un serveur SLT";
+            case "tls" -> "pas un serveur Cable Club chiffré";
+            case "not-slt" -> "pas un serveur Cable Club";
             default -> "erreur";
         };
     }
@@ -321,20 +337,20 @@ final class ServerLink {
             }
         }
         if (attempts.stream().anyMatch(a -> "other-server".equals(a.reason()))) {
-            return "Un autre serveur SLT répond à l'une de ses adresses (certificat différent) : demandez à l'hôte de vous renvoyer son code.";
+            return "Un autre serveur Cable Club répond à l'une de ses adresses (certificat différent) : demandez à l'hôte de vous renvoyer son code.";
         }
         if (!internet.isEmpty()) {
             String ip = URI.create(internet.get(0).url()).getHost();
             if (internet.stream().anyMatch(a -> "tls".equals(a.reason()) || "not-slt".equals(a.reason()))) {
                 return "Un serveur répond à " + ip + " mais pas comme SLT " + slt.Version.VERSION
-                        + " : l'hôte et vous devez avoir la même version de SLT.";
+                        + " : l'hôte et vous devez avoir la même version de Cable Club.";
             }
             if (internet.stream().allMatch(a -> "refused".equals(a.reason()))) {
-                return "L'adresse Internet de l'hôte (" + ip + ") refuse la connexion : SLT n'y tourne plus (fermé, hébergement arrêté) "
+                return "L'adresse Internet de l'hôte (" + ip + ") refuse la connexion : Cable Club n'y tourne plus (fermé, hébergement arrêté) "
                         + "ou sa box ne redirige plus le port. Demandez-lui de vérifier Réglages > Serveur, puis de vous renvoyer son code.";
             }
             return "L'adresse Internet de l'hôte (" + ip + ") ne répond pas : la connexion est bloquée chez l'hôte, le plus souvent par le "
-                    + "pare-feu Windows (chez lui, Réglages > Serveur le signale avec un bouton « Autoriser SLT ») ou par sa box.";
+                    + "pare-feu Windows (chez lui, Réglages > Serveur le signale avec un bouton « Autoriser Cable Club ») ou par sa box.";
         }
         String v6note = v6.isEmpty() ? ""
                 : !ipv6Here ? " (Les adresses IPv6 de l'hôte ne servent pas ici : ce PC n'a pas d'IPv6.)"
@@ -430,7 +446,7 @@ final class ServerLink {
         try {
             r = http.send(rb.build(), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
         } catch (IOException e) {
-            throw new Http.Fail(502, "Serveur SLT injoignable (" + b + ").");
+            throw new Http.Fail(502, "Serveur Cable Club injoignable (" + b + ").");
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new Http.Fail(500, "Interrompu");

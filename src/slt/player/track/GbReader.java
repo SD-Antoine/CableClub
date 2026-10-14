@@ -17,8 +17,9 @@ import java.util.List;
  * PC: the current box lives in work RAM (gen 1) or in cartridge RAM bank 1 (gen 2); the other
  *   boxes in cartridge RAM banks 2 and 3, each: count, species list (20 + 0xFF), 20 box structures
  *   (33 / 32 bytes: the start of the party structure), 20 OT names, 20 nicknames.
- *   The emulator only shows a copy of the cartridge RAM (written back over by the game): it is
- *   read, never written.
+ *   The cartridge RAM the emulator shows is the game's own (mGBA maps it straight from the save
+ *   buffer), except after a save state was loaded: the core then works on a copy until it is
+ *   restarted, so the gen 2 box is only written while {@link #cartridgeRamLive} says so.
  * Hall of Fame: number of teams entered (more than 0 = the Champion was beaten).
  * </pre>
  */
@@ -61,6 +62,8 @@ public final class GbReader implements GameReader {
     private final String game;
     private long party = -1;
     private volatile int lastShift;
+    /** Gen 2: writes to the cartridge RAM reach the game (no save state loaded since the start). */
+    private volatile boolean cartRamLive = true;
 
     private GbReader(Layout layout, GameInfo info, String game) {
         this.layout = layout;
@@ -494,15 +497,26 @@ public final class GbReader implements GameReader {
         return 8 + 6 * layout.structSize + 6 * 11 + 6 * 11;
     }
 
+    @Override
+    public void cartridgeRamLive(boolean live) {
+        cartRamLive = live;
+    }
+
+    /** The current box may be written: gen 1 (work RAM), gen 2 while its cartridge RAM is the game's. */
+    private boolean boxWritable() {
+        return layout.gen == 1 || cartRamLive;
+    }
+
     /**
-     * Gen 1: moves a dead Pokémon from the party to the current PC box (work RAM, saved with the
-     * game; gen 1 boxes have no names). Gen 2 keeps its current box in the cartridge RAM, which the
-     * emulator only shows as a copy: dead Pokémon stay K.O. in the party there.
+     * Moves a dead Pokémon from the party to the current PC box: gen 1 in work RAM (saved with the
+     * game), gen 2 in the cartridge RAM at once (the active box; if the game is not saved after,
+     * the Pokémon is back in the party at the next start, still dead, and goes again: the box
+     * already holds it). Boxes of these games have no names to change.
      * Outside battles, never the last Pokémon, only when the box has room.
      */
     @Override
     public List<Write> deposit(Mem m, Mon mon) {
-        if (layout.gen != 1 || party < 0) {
+        if (party < 0 || !boxWritable()) {
             return null;
         }
         byte[] block = m.read(party, partyBlockBytes());
@@ -534,12 +548,57 @@ public final class GbReader implements GameReader {
             nb[1 + n] = block[1 + index];
             nb[2 + n] = (byte) 0xFF;
             System.arraycopy(block, 8 + index * size, nb, 22 + n * boxSize, boxSize);
-            nb[22 + n * boxSize + 3] = block[8 + index * size + 33]; // level kept in the box structure
+            if (layout.gen == 1) {
+                nb[22 + n * boxSize + 3] = block[8 + index * size + 33]; // level kept in the box structure
+            }
             System.arraycopy(block, 8 + 6 * size + index * 11, nb, 22 + 20 * boxSize + n * 11, 11);
             System.arraycopy(block, 8 + 6 * size + 6 * 11 + index * 11, nb, 22 + 20 * boxSize + 20 * 11 + n * 11, 11);
             out.add(new Write(target, nb));
         }
         out.add(new Write(party, partyWithout(block, index)));
+        return out;
+    }
+
+    /**
+     * Battle set: moves (gen 1 +8, gen 2 +2), stat experience (gen 1 +17, gen 2 +11: HP, Attack, Defense,
+     * Speed, Special), DVs; gen 2 also the held item (+1, the game's own ids), happiness (+27).
+     */
+    @Override
+    public java.util.Map<String, Object> battleSet(Mem m, Mon mon) {
+        byte[] s = m.read(mon.address(), layout.structSize);
+        if (s == null || mon.egg()) {
+            return null;
+        }
+        List<Object> moves = new ArrayList<>();
+        List<Object> ppUps = new ArrayList<>();
+        int mo = layout.gen == 1 ? 8 : 2;
+        int pp = layout.gen == 1 ? 29 : 23;
+        for (int i = 0; i < 4; i++) {
+            int id = s[mo + i] & 0xFF;
+            if (id != 0) {
+                moves.add((long) id);
+                ppUps.add((long) ((s[pp + i] & 0xFF) >> 6));
+            }
+        }
+        int dvs = be16(s, dvOffset());
+        int atk = (dvs >> 12) & 15;
+        int def = (dvs >> 8) & 15;
+        int spe = (dvs >> 4) & 15;
+        int spc = dvs & 15;
+        int hpDv = ((atk & 1) << 3) | ((def & 1) << 2) | ((spe & 1) << 1) | (spc & 1);
+        int se = layout.gen == 1 ? 17 : 11;
+        long[] ev = new long[5];
+        for (int i = 0; i < 5; i++) {
+            ev[i] = Math.min(255, (long) Math.ceil(Math.sqrt(be16(s, se + 2 * i))));
+        }
+        java.util.Map<String, Object> out = slt.Json.map("gen", (long) layout.gen, "species", (long) mon.species(),
+                "level", (long) mon.level(), "nickname", mon.nickname(), "moves", moves, "ppUps", ppUps, "shiny", mon.shiny(),
+                "ivs", slt.Json.map("hp", 2L * hpDv, "atk", 2L * atk, "def", 2L * def, "spa", 2L * spc, "spd", 2L * spc, "spe", 2L * spe),
+                "evs", slt.Json.map("hp", ev[0], "atk", ev[1], "def", ev[2], "spa", ev[4], "spd", ev[4], "spe", ev[3]));
+        if (layout.gen == 2) {
+            out.put("happiness", (long) (s[27] & 0xFF));
+            out.put("genderValue", (long) atk); // female when the Attack DV is under the species' threshold
+        }
         return out;
     }
 
@@ -601,7 +660,7 @@ public final class GbReader implements GameReader {
         return "la boîte actuelle du PC";
     }
 
-    /** Removes a released Pokémon from the party (never the last one) or, in gen 1, from the current box. */
+    /** Removes a released Pokémon from the party (never the last one) or from the current box. */
     @Override
     public List<Write> release(Mem m, long uid) {
         if (party < 0 || uid == 0) {
@@ -617,7 +676,7 @@ public final class GbReader implements GameReader {
                 return mons.size() <= 1 ? null : List.of(new Write(party, partyWithout(block, i)));
             }
         }
-        if (layout.gen != 1) {
+        if (!boxWritable()) {
             return null;
         }
         long cur = currentBox();

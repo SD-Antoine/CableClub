@@ -85,6 +85,9 @@ final class Session {
     // every sprite of the player seen (walking frames, bike…): sent once to the others, then named by its id
     private final Map<String, List<Object>> sprites = new LinkedHashMap<>();
     private final Map<String, Long> spriteSentAt = new HashMap<>();
+    // the player's own sprites sent to the window (3D games), by number: it redraws the player over the others behind them
+    private final Map<String, Integer> selfIds = new java.util.concurrent.ConcurrentHashMap<>();
+    private final java.util.concurrent.atomic.AtomicInteger selfCount = new java.util.concurrent.atomic.AtomicInteger();
 
     Session(CoreHost core, Controls controls, Path stateDir, Path captureDir, boolean statesAllowed, Bridge bridge,
             String wsToken, int liveFps, int volume) throws IOException {
@@ -96,7 +99,10 @@ final class Session {
         this.bridge = bridge;
         this.liveFps = Math.max(0, Math.min(10, liveFps));
         this.volume = Math.max(0, Math.min(100, volume));
-        this.ws = new WsServer(wsToken, this::command, this::sendInfo);
+        this.ws = new WsServer(wsToken, this::command, () -> {
+            selfIds.clear(); // a new window knows none of the player's sprites
+            sendInfo();
+        });
     }
 
     int wsPort() {
@@ -230,8 +236,9 @@ final class Session {
      * x, y (LE16 signed, position of the player in pixels), anchor x, anchor y (bottom centre of the
      * player's sprite on the screen), flags (1 = overworld, 2 = free: the other players may be drawn)],
      * then RGBA pixels. 3D games: [3, width, height, map, flags, camera x projection of this image
-     * (16 LE floats, row vectors), depth of the player's feet, where sprites are drawn one texel per pixel (LE float)],
-     * then the pixels.
+     * (16 LE floats, row vectors), depth of the player's feet, where sprites are drawn one texel per pixel (LE float),
+     * feet x and y on the image (LE floats), number of the player's own sprite sent as {"t":"self",…} (LE16, 0 = unknown)],
+     * then the pixels. 3D flags: 1 = overworld, 2 = free, 4 = message box on the top, 8 = on the bottom.
      */
     private void present() {
         if (!ws.hasClients()) {
@@ -245,7 +252,7 @@ final class Session {
         }
         Presence.Sample s = sample;
         float[] view = s == null ? null : s.view();
-        int head = view != null ? 8 + 4 * view.length : 14;
+        int head = view != null ? 8 + 4 * view.length + 2 : 14;
         byte[] msg = new byte[head + w * h * 4];
         msg[0] = (byte) (view != null ? 3 : 2);
         msg[1] = (byte) w;
@@ -256,8 +263,11 @@ final class Session {
         msg[5] = (byte) map;
         msg[6] = (byte) (map >> 8);
         if (view != null) {
-            msg[7] = (byte) ((s.overworld() ? 1 : 0) | (s.free() ? 2 : 0));
+            msg[7] = (byte) ((s.overworld() ? 1 : 0) | (s.free() ? 2 : 0) | (s.box() == 1 ? 4 : 0) | (s.box() == 2 ? 8 : 0));
             java.nio.ByteBuffer.wrap(msg, 8, 4 * view.length).order(java.nio.ByteOrder.LITTLE_ENDIAN).asFloatBuffer().put(view);
+            int self = selfNumber(s);
+            msg[head - 2] = (byte) self;
+            msg[head - 1] = (byte) (self >> 8);
         } else if (s != null) {
             msg[7] = (byte) s.x();
             msg[8] = (byte) (s.x() >> 8);
@@ -277,6 +287,27 @@ final class Session {
             o += 4;
         }
         ws.frame(msg);
+    }
+
+    /** Number of the player's own sprite, sent to the window the first time; 0 while it is not the game's own drawing. */
+    private int selfNumber(Presence.Sample s) {
+        Presence presence = this.presence;
+        String id = s.spriteId();
+        if (presence == null || id == null || !presence.spriteExact()) {
+            return 0;
+        }
+        Integer n = selfIds.get(id);
+        if (n == null) {
+            String png = presence.spritePng();
+            if (png == null) {
+                return 0;
+            }
+            n = selfCount.updateAndGet(c -> c >= 0xFFFF ? 1 : c + 1);
+            selfIds.put(id, n);
+            ws.text(Json.stringify(Json.map("t", "self", "n", (long) n, "png", png,
+                    "w", (long) presence.spriteW(), "h", (long) presence.spriteH())));
+        }
+        return n;
     }
 
     /**

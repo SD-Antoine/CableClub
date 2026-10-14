@@ -31,7 +31,10 @@ import java.util.function.Consumer;
  *   <li>secondary shop clerks randomized, the main clerk (whose stock grows
  *       with the badges) untouched, never a Master Ball nor an item worth
  *       more when sold than when bought;</li>
- *   <li>evolution lines of the final ROM (dupes clause of the room).</li>
+ *   <li>evolution lines of the final ROM (dupes clause of the room);</li>
+ *   <li>DS games: the room's shiny rate (the test "shiny value < 8" of the
+ *       games' only shiny function becomes "< N"; generations 2 and 3 get the
+ *       rate while playing, see the player's ShinyBoost).</li>
  * </ul>
  */
 final class SltPatches {
@@ -68,6 +71,16 @@ final class SltPatches {
                     notes.add("Boutiques : non modifiables dans ce jeu (1re et 2e générations)");
                 }
             }
+            int rate = (int) Json.num(rando, "shinyRate", 0);
+            if (rate > 0 && rate < 8192 && rh.generationOfPokemon() >= 4) {
+                progress.accept("Taux de chromatiques…");
+                if (dsShinyRate(rh, rate)) {
+                    notes.add("Chromatiques : 1 sur " + rate);
+                    changed = true;
+                } else {
+                    notes.add("Chromatiques : taux non modifiable dans cette version du jeu");
+                }
+            }
             Map<String, Object> r = new LinkedHashMap<>();
             r.put("families", families(rh));
             r.put("notes", notes);
@@ -93,6 +106,47 @@ final class SltPatches {
             notes.add(n > 0 ? n + " vendeurs secondaires randomisés" : "Boutiques : aucun vendeur secondaire trouvé");
         }
         return result;
+    }
+
+    /**
+     * The shiny test of the DS games (thumb, same in Diamond/Pearl/Platinum, HeartGold/SoulSilver and the four
+     * generation 5 games): {@code eor r0,r1; eor r0,r2; cmp r0,#8; bhs; mov r0,#1}. The constant becomes the
+     * room's threshold (65536 / rate, at most 255: 1 in 257).
+     */
+    private static final byte[] DS_SHINY = {0x48, 0x40, 0x50, 0x40, 0x08, 0x28, 0x01, (byte) 0xD2, 0x01, 0x20};
+
+    static int dsShinyThreshold(int rate) {
+        return rate <= 0 || rate >= 8192 ? 8 : Math.max(8, Math.min(255, Math.round(65536f / rate)));
+    }
+
+    private static boolean dsShinyRate(RomHandler rh, int rate) {
+        try {
+            java.lang.reflect.Field f = rh.getClass().getDeclaredField("arm9");
+            f.setAccessible(true);
+            byte[] arm9 = (byte[]) f.get(rh);
+            int at = -1;
+            for (int i = 0; i + DS_SHINY.length <= arm9.length; i++) {
+                boolean ok = true;
+                for (int k = 0; k < DS_SHINY.length && ok; k++) {
+                    ok = arm9[i + k] == DS_SHINY[k];
+                }
+                if (ok) {
+                    if (at >= 0) {
+                        Log.warn("Taux de chromatiques : plusieurs tests trouvés, ROM non modifiée");
+                        return false;
+                    }
+                    at = i;
+                }
+            }
+            if (at < 0) {
+                return false;
+            }
+            arm9[at + 4] = (byte) dsShinyThreshold(rate);
+            return true;
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            Log.warn("Taux de chromatiques : " + e.getMessage());
+            return false;
+        }
     }
 
     private static final int GEN3_LAST_ITEM = 376;

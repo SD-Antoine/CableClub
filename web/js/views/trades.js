@@ -9,12 +9,15 @@ const STEP = {
   swap: 'transfert en cours (restez hors combat)…', done: 'terminé', cancelled: 'annulé',
 };
 
+// trades are switched off for now (kept for later modes); the server refuses new offers too
+export const TRADES = false;
+
 /**
  * The trade box of a running room for one player.
  * @param compact smaller version (side panel of the game)
  */
 export function tradeBox(room, userId, { compact = false } = {}) {
-  if (room.state !== 'running' || room.members.length < 2) return null;
+  if (!TRADES || room.state !== 'running' || room.members.length < 2) return null;
   const memberName = (id) => room.members.find((x) => x.userId === id)?.name || '?';
   const recOf = (id, uid) => room.members.find((x) => x.userId === id)?.mons?.find((r) => r.uid === uid);
   const label = (r) => (r ? (r.nickname || r.speciesName || `#${r.species}`) + (r.shiny ? ' ✨' : '') : 'Pokémon');

@@ -53,6 +53,9 @@ public final class Room {
 
     static final String STARTER = "depart";
 
+    /** Trades between players: switched off for now (no new offer; a trade already running finishes). */
+    static final boolean TRADES = false;
+
     // ------------------------------------------------------------------ model
 
     /** A Pokémon of one player, as the referee knows it. */
@@ -368,6 +371,10 @@ public final class Room {
     String code;
     String name;
     String leaderId;
+    /** Game mode of the room (each mode has its tab in the interface). */
+    String mode = "soullink";
+    /** "public": listed in the public rooms, anybody may join while it is a lobby; "private": invitation or code. */
+    String visibility = "private";
     long createdAt;
     long launchedAt;
     Map<String, Object> game = new LinkedHashMap<>();
@@ -1086,6 +1093,8 @@ public final class Room {
         }
         return Json.map("room", id, "doomed", doomed, "release", release, "nicknames", nicknames, "pause", pause,
                 "refunds", new ArrayList<Object>(m.refunds), "deathBox", rule("deathBox"),
+                // shiny rate of the room (1 in N wild Pokémon; 0 = the game's): applied while playing in gen 2-3
+                "shinyRate", Json.num(rando, "shinyRate", 0),
                 "saveStates", rule("saveStates"), "state", state, "open", adventureOpen, "trade", tradeDirective(m));
     }
 
@@ -1133,6 +1142,9 @@ public final class Room {
 
     /** A player offers one of their Pokémon to a partner. */
     void offerTrade(Member m, String toUserId, String uid, Out out) {
+        if (!TRADES) {
+            throw new Http.Fail(409, "Les échanges sont désactivés pour le moment.");
+        }
         if (!"running".equals(state)) {
             throw new Http.Fail(409, "L'aventure n'est pas en cours.");
         }
@@ -1322,7 +1334,7 @@ public final class Room {
         for (Member m : members) {
             Map<String, Object> x = Json.map("userId", m.userId, "name", m.name, "slot", (long) m.slot,
                     "ready", m.ready, "rom", m.rom, "status", m.status, "online", hub.online(m.userId),
-                    "leader", isLeader(m.userId), "hasBalls", m.hasBalls);
+                    "leader", isLeader(m.userId), "hasBalls", m.hasBalls, "avatar", hub.avatar(m.userId));
             if (full) {
                 List<Object> mons = new ArrayList<>();
                 for (MonRec r : m.mons.values()) {
@@ -1335,7 +1347,8 @@ public final class Room {
             }
             ms.add(x);
         }
-        Map<String, Object> v = Json.map("id", id, "name", name, "leaderId", leaderId, "createdAt", createdAt,
+        Map<String, Object> v = Json.map("id", id, "name", name, "mode", mode, "visibility", visibility,
+                "leaderId", leaderId, "createdAt", createdAt,
                 "launchedAt", launchedAt, "game", game, "maxPlayers", (long) maxPlayers, "state", state,
                 "adventureOpen", adventureOpen, "members", ms, "ended", ended, "linkStarted", linkStarted);
         if (full) {
@@ -1371,7 +1384,8 @@ public final class Room {
         for (Zone z : zones.values()) {
             zs.add(z.toJson());
         }
-        return Json.map("version", 1L, "id", id, "code", code, "name", name, "leaderId", leaderId,
+        return Json.map("version", 1L, "id", id, "code", code, "name", name, "mode", mode, "visibility", visibility,
+                "leaderId", leaderId,
                 "createdAt", createdAt, "launchedAt", launchedAt, "game", game, "maxPlayers", (long) maxPlayers,
                 "state", state, "adventureOpen", adventureOpen, "linkStarted", linkStarted, "rules", rules, "rando", rando, "members", ms,
                 "invites", new ArrayList<Object>(invites), "history", new ArrayList<Object>(history), "zones", zs,
@@ -1385,6 +1399,8 @@ public final class Room {
         r.code = Json.str(m, "code");
         r.name = Json.str(m, "name");
         r.leaderId = Json.str(m, "leaderId");
+        r.mode = Json.str(m, "mode") == null ? "soullink" : Json.str(m, "mode");
+        r.visibility = "public".equals(Json.str(m, "visibility")) ? "public" : "private";
         r.createdAt = Json.num(m, "createdAt", 0);
         r.launchedAt = Json.num(m, "launchedAt", 0);
         Map<String, Object> game = Json.obj(m.get("game"));

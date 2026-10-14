@@ -27,6 +27,16 @@ export class GameScreen {
     this.onBlur = () => this.releaseAll();
     this.pointerDown = false;
     this.onMouse = (e) => this.mouse(e);
+    // DS: 'v' = top screen above the touch screen (as the console), 'h' = side by side (touch screen on the right)
+    this.layout = 'v';
+    this.split = false;
+    this.last = null;
+  }
+
+  /** Lays the two DS screens out one above the other ('v') or side by side ('h'); redraws the last image. */
+  setLayout(layout) {
+    this.layout = layout === 'h' ? 'h' : 'v';
+    if (this.last) { this.pending = this.last; this.draw(); }
   }
 
   connect(port, token) {
@@ -41,6 +51,7 @@ export class GameScreen {
         try { m = JSON.parse(e.data); } catch { return; }
         if (m.t === 'info') this.handlers.onInfo?.(m);
         else if (m.t === 'osd') this.handlers.onOsd?.(m.text);
+        else if (m.t === 'self') this.handlers.onSelf?.(m);
         else if (m.t === 'closed') { this.closedOnPurpose = true; this.handlers.onClosed?.(true); }
         return;
       }
@@ -98,16 +109,28 @@ export class GameScreen {
     const h = v.getUint16(3, true);
     // type 2: where the player stands, to draw the other players at the right place on this image;
     // type 3 (3D games): the camera of this image, to place them in the world
-    const head = type === 2 ? 14 : type === 3 ? 76 : 5;
+    const head = type === 2 ? 14 : type === 3 ? 86 : 5;
     if (w * h * 4 + head > buf.byteLength) return;
-    if (w !== this.w || h !== this.h) {
+    this.last = buf;
+    // the two DS screens side by side: the touch screen (lower half of the image) goes to the right
+    const split = this.layout === 'h' && w === 256 && h === 384;
+    const cw = split ? 512 : w;
+    const ch = split ? 192 : h;
+    if (w !== this.w || h !== this.h || split !== this.split) {
       this.w = w;
       this.h = h;
-      this.canvas.width = w;
-      this.canvas.height = h;
-      this.handlers.onResize?.(w, h);
+      this.split = split;
+      this.canvas.width = cw;
+      this.canvas.height = ch;
+      this.handlers.onResize?.(cw, ch);
     }
-    this.ctx.putImageData(new ImageData(new Uint8ClampedArray(buf, head, w * h * 4), w, h), 0, 0);
+    const img = new ImageData(new Uint8ClampedArray(buf, head, w * h * 4), w, h);
+    if (split) {
+      this.ctx.putImageData(img, 0, 0, 0, 0, 256, 192);
+      this.ctx.putImageData(img, 256, -192, 0, 192, 256, 192);
+    } else {
+      this.ctx.putImageData(img, 0, 0);
+    }
     if (type === 2) {
       const map = v.getUint16(5, true);
       this.handlers.onFrame?.(map === 0xFFFF ? null : {
@@ -120,8 +143,11 @@ export class GameScreen {
       for (let i = 0; i < 16; i++) mtx[i] = v.getFloat32(8 + 4 * i, true);
       // depth of this player's feet: the game draws the characters one texel per pixel there
       const depth = v.getFloat32(72, true);
+      // where the feet are on this image, the number of the sprite sent for it (0 = none) and the message box
+      const flags = v.getUint8(7);
       this.handlers.onFrame?.(map === 0xFFFF ? null : {
-        map, mtx, depth, ow: (v.getUint8(7) & 1) === 1, free: (v.getUint8(7) & 2) === 2,
+        map, mtx, depth, feet: { x: v.getFloat32(76, true), y: v.getFloat32(80, true) }, self: v.getUint16(84, true),
+        boxTop: (flags & 4) === 4, boxBottom: (flags & 8) === 8, ow: (flags & 1) === 1, free: (flags & 2) === 2,
       });
     }
   }
@@ -172,8 +198,12 @@ export class GameScreen {
     if (e.type === 'mouseup') { if (!this.pointerDown) return; this.pointerDown = false; }
     if (e.type === 'mousemove' && !this.pointerDown) return;
     const r = this.canvas.getBoundingClientRect();
-    const fx = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
-    const fy = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
+    let fx = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+    let fy = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
+    if (this.split) {
+      // side by side: back to the place on the image of the game (top screen above the touch screen)
+      if (fx >= 0.5) { fx = (fx - 0.5) * 2; fy = 0.5 + fy / 2; } else { fx *= 2; fy /= 2; }
+    }
     this.send({ t: 'touch', x: Math.round((fx * 2 - 1) * 0x7fff), y: Math.round((fy * 2 - 1) * 0x7fff), d: this.pointerDown });
   }
 }

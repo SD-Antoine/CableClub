@@ -36,12 +36,12 @@ async function waitForRestart(version, setText) {
       const s = await local.get('/api/state');
       if (s.version === version) { location.reload(); return; }
       if (s.version && Date.now() - started > 60000) {
-        setText(`SLT a redémarré sans changer de version : voyez le fichier mise-a-jour.log du dossier data.`);
+        setText(`Cable Club a redémarré sans changer de version : voyez le fichier mise-a-jour.log du dossier data.`);
         return;
       }
     } catch { /* SLT is restarting */ }
     if (Date.now() - started > 180000) {
-      setText('SLT ne répond pas encore : relancez SLT.exe si besoin.');
+      setText('Cable Club ne répond pas encore : relancez-le si besoin.');
       return;
     }
   }
@@ -57,14 +57,14 @@ export function openUpdate() {
     h('p', null, `Vous avez la version ${u.current}. La nouvelle version ${u.version} est prête${sizeMb}.`),
     notes(u.notes),
     u.installable
-      ? h('p', { class: 'tiny faint' }, 'SLT télécharge la nouvelle version, la met à la place de l’ancienne et redémarre (environ une minute). ',
+      ? h('p', { class: 'tiny faint' }, 'Cable Club télécharge la nouvelle version, la met à la place de l’ancienne et redémarre (environ une minute). ',
         'Vos données (salles, sauvegardes, ROMs, réglages) ne sont pas touchées.',
         hosting ? ' Votre serveur sera coupé quelques secondes : vos amis se reconnecteront tout seuls.' : '')
-      : h('p', { class: 'small warn' }, u.reason || 'Cette copie de SLT ne peut pas se mettre à jour seule.'),
+      : h('p', { class: 'small warn' }, u.reason || 'Cette copie de Cable Club ne peut pas se mettre à jour seule.'),
     status);
   let installBtn;
   const m = modal({
-    title: `SLT ${u.version} est disponible`,
+    title: `Cable Club ${u.version} est disponible`,
     body,
     actions: [
       { label: 'Plus tard', onClick: (close) => close() },
@@ -72,8 +72,8 @@ export function openUpdate() {
       u.installable ? (installBtn = btn('Mettre à jour et redémarrer', () => act(installBtn, async () => {
         const res = await local.post('/api/update/install', {});
         await pollJob(res.job, (s) => { status.textContent = s.message || ''; });
-        mount(body, h('div', { class: 'empty' }, icon('refresh'), h('b', null, `Installation de SLT ${u.version}…`),
-          h('p', { class: 'small muted' }, 'SLT se ferme et se rouvre tout seul sur la nouvelle version.')));
+        mount(body, h('div', { class: 'empty' }, icon('refresh'), h('b', null, `Installation de Cable Club ${u.version}…`),
+          h('p', { class: 'small muted' }, 'Cable Club se ferme et se rouvre tout seul sur la nouvelle version.')));
         const text = body.querySelector('p');
         await waitForRestart(u.version, (t) => { text.textContent = t; });
       }), { kind: 'primary', iconName: 'download' })) : null,
@@ -86,7 +86,7 @@ export function openUpdate() {
 export function updateLink() {
   const u = store.state?.update;
   if (!u || u.state !== 'available') return null;
-  return h('button', { type: 'button', class: 'nav-item update-item', title: `SLT ${u.version} est disponible`, onclick: () => openUpdate() },
+  return h('button', { type: 'button', class: 'nav-item update-item', title: `Cable Club ${u.version} est disponible`, onclick: () => openUpdate() },
     icon('download'), h('span', { class: 'label' }, `Mise à jour ${u.version}`));
 }
 
@@ -97,14 +97,14 @@ export function updateSettings(switchEl, save) {
   const when = u.checkedAt ? new Date(u.checkedAt).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : null;
   const line = {
     available: `Nouvelle version ${u.version} disponible.`,
-    uptodate: 'SLT est à jour.',
+    uptodate: 'Cable Club est à jour.',
     error: u.error || 'Vérification impossible.',
   }[u.state] || 'Pas encore vérifié.';
   const check = btn('Rechercher une mise à jour', (e) => act(e.currentTarget, async () => {
     const s = await local.post('/api/update/check', {});
     store.state.update = s;
     if (s.state === 'available') openUpdate();
-    else toast(s.state === 'uptodate' ? `SLT ${s.current} est à jour.` : (s.error || 'Vérification impossible.'), s.state === 'uptodate' ? 'ok' : 'warn');
+    else toast(s.state === 'uptodate' ? `Cable Club ${s.current} est à jour.` : (s.error || 'Vérification impossible.'), s.state === 'uptodate' ? 'ok' : 'warn');
   }), { iconName: 'refresh' });
   return h('div', { class: 'stack' },
     h('div', { class: 'row' },
@@ -113,6 +113,6 @@ export function updateSettings(switchEl, save) {
       u.state === 'available' ? btn('Voir la mise à jour', () => openUpdate(), { kind: 'primary', iconName: 'download' }) : check),
     h('div', { class: 'rule-row' },
       h('div', { class: 'grow' }, h('b', null, 'Vérifier automatiquement'),
-        h('small', null, 'Au démarrage puis toutes les 6 heures, SLT regarde s’il existe une nouvelle version sur GitHub. Rien n’est installé sans votre accord.')),
+        h('small', null, 'Au démarrage puis toutes les 6 heures, Cable Club regarde s’il existe une nouvelle version sur GitHub. Rien n’est installé sans votre accord.')),
       switchEl(cfg.updateCheck !== false, (v) => save({ updateCheck: v }))));
 }

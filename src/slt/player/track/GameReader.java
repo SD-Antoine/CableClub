@@ -73,6 +73,20 @@ public interface GameReader {
     }
 
     /** Where {@link #deposit} puts the dead Pokémon, as told to the player. */
+    /**
+     * Everything a battle simulator needs about a Pokémon of the party (in-room battles): national species,
+     * level, moves (ids), ivs / evs (generations 1-2: DVs x 2 and the square root of the stat experience, as
+     * Showdown counts them), nature (0-24), ability (id, or slot 0/1 in generation 3), held item (generations
+     * 4-5: same ids as Showdown), gender, happiness, shiny; null when unknown.
+     */
+    default java.util.Map<String, Object> battleSet(Mem m, Mon mon) {
+        return null;
+    }
+
+    /** Game Boy: whether writes to the cartridge RAM reach the game (false after a save state was loaded). */
+    default void cartridgeRamLive(boolean live) {
+    }
+
     default String deadBox() {
         return "la boîte MORTS du PC";
     }

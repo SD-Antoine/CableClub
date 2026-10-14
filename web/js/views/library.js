@@ -47,10 +47,15 @@ export function renderLibrary(container) {
     for (const r of roms) (byGen[r.gen] ||= []).push(r);
     mount(page,
       h('div', { class: 'page-head' },
-        h('div', null, h('h1', null, 'Mes ROMs'), h('p', null, 'Les copies de vos jeux. SLT ne les modifie jamais : chaque salle génère sa propre ROM à partir d’elles.')),
+        h('div', null, h('h1', null, 'Mes ROMs'), h('p', null, 'Les copies de vos jeux. Cable Club ne les modifie jamais : chaque salle génère sa propre ROM à partir d’elles.')),
         h('div', { class: 'row' }, btn('Ajouter un fichier', (e) => addFile(e.currentTarget), { iconName: 'file' }),
           btn('Ajouter un dossier', (e) => addFolder(e.currentTarget), { kind: 'primary', iconName: 'folder' }))),
       busy ? h('div', { class: 'card mb' }, h('div', { class: 'row' }, h('span', { class: 'spinner' }), h('span', null, busy))) : null,
+      // files moved (another disk, another folder): adding the new folder finds them again by their checksum
+      roms.some((r) => !r.present) ? h('div', { class: 'banner warn' }, icon('alert'), h('div', { class: 'grow' },
+        h('b', null, `${roms.filter((r) => !r.present).length} ROM(s) introuvable(s). `),
+        'Si vous les avez déplacées, ajoutez le dossier où elles sont maintenant : elles seront reconnues et mises à jour, sans rien perdre.'),
+      btn('Ajouter le nouveau dossier', (e) => addFolder(e.currentTarget), { kind: 'small' })) : null,
       roms.length ? Object.keys(byGen).sort().map((g) => h('div', null,
         h('div', { class: 'section-title' }, h('h2', null, GEN_LABEL[g])),
         h('div', { class: 'card', style: { padding: '4px 16px' } }, h('div', { class: 'list' }, byGen[g].map((r) => h('div', { class: 'list-item' },
@@ -60,7 +65,7 @@ export function renderLibrary(container) {
           h('span', { class: 'tiny faint mono' }, r.crc),
           btn('', async (e) => {
             const b = e.currentTarget;
-            if (await confirmDialog('Retirer cette ROM', 'Le fichier n’est pas supprimé, il quitte seulement la bibliothèque de SLT.', { okLabel: 'Retirer' })) {
+            if (await confirmDialog('Retirer cette ROM', 'Le fichier n’est pas supprimé, il quitte seulement la bibliothèque de Cable Club.', { okLabel: 'Retirer' })) {
               act(b, async () => { await local.post(`/api/library/${r.id}/remove`); await load(); });
             }
           }, { kind: 'ghost small icon-only', iconName: 'trash', title: 'Retirer' })))))))

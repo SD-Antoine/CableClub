@@ -87,6 +87,14 @@ const ICONS = {
   gamepad: 'M6 12h4M8 10v4M15 11h.01M18 13h.01M17.3 5H6.7a4 4 0 0 0-4 3.6L2 15a3 3 0 0 0 5.4 2L9 15h6l1.6 2A3 3 0 0 0 22 15l-.7-6.4A4 4 0 0 0 17.3 5z',
   save: 'M5 3h11l5 5v13H5zM8 3v5h8M8 21v-7h8v7',
   eye: 'M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
+  'screens-v': 'M7 2h10v9H7zM7 13h10v9H7z',
+  'screens-h': 'M1 7h10v10H1zM13 7h10v10H13z',
+  chat: 'M21 12a8 8 0 0 1-11.6 7.1L3 21l1.9-6.4A8 8 0 1 1 21 12z',
+  send: 'M22 2L11 13M22 2l-7 20-4-9-9-4z',
+  globe: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20',
+  block: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM4.9 4.9l14.2 14.2',
+  image: 'M3 3h18v18H3zM8.5 10a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zM21 15l-5-5L5 21',
+  swords: 'M14.5 17.5L3 6V3h3l11.5 11.5M13 19l6-6M16 16l4 4M19 21l2-2M9.5 6.5L13 3h3v3l-3.5 3.5M5 14l-2 2 3 3 2-2',
 };
 
 export function icon(name, cls = '') {
@@ -134,10 +142,21 @@ export function colorFor(slot) {
   return PLAYER_COLORS[(Math.max(1, Number(slot) || 1) - 1) % PLAYER_COLORS.length];
 }
 
-export function avatar(name, slot, { size = '', online = null } = {}) {
+// opens a player's profile card (set by the application: views are not imported here)
+let profileOpener = null;
+export function setProfileOpener(fn) { profileOpener = fn; }
+
+/**
+ * A player's round picture: their profile picture when they have one ({@code id} + {@code pic}, its version),
+ * else the first letter of their name on their colour. With an id, a click shows their profile.
+ */
+export function avatar(name, slot, { size = '', online = null, id = null, pic = 0 } = {}) {
   const letter = (name || '?').trim().charAt(0).toUpperCase() || '?';
-  return h('span', { class: `avatar ${size}`.trim(), style: { background: colorFor(slot) }, title: name },
-    letter, online === null ? null : h('span', { class: ['presence', online && 'on'] }));
+  const open = id && profileOpener ? (e) => { e.preventDefault(); e.stopPropagation(); profileOpener(id); } : null;
+  return h('span', { class: ['avatar', size, open && 'click'], style: { background: colorFor(slot) }, title: name, onclick: open },
+    pic && id ? h('img', { src: `/api/avatar/${encodeURIComponent(id)}?v=${pic}`, alt: '', loading: 'lazy', onerror: (e) => e.target.remove() }) : null,
+    pic && id ? null : letter,
+    online === null ? null : h('span', { class: ['presence', online && 'on'] }));
 }
 
 // ------------------------------------------------------------------ modals

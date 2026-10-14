@@ -19,6 +19,16 @@ public final class Hub {
 
     private final Map<String, List<Sse.Sink>> streams = new ConcurrentHashMap<>();
     private volatile BiConsumer<String, Boolean> presenceListener = (u, b) -> { };
+    /** Version of each user's profile picture (0 = none), shown next to their name everywhere. */
+    private volatile java.util.function.ToLongFunction<String> avatars = u -> 0;
+
+    void avatars(java.util.function.ToLongFunction<String> f) {
+        avatars = f;
+    }
+
+    public long avatar(String userId) {
+        return avatars.applyAsLong(userId);
+    }
 
     void onPresence(BiConsumer<String, Boolean> listener) {
         presenceListener = listener;

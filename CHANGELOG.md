@@ -1,4 +1,28 @@
-# Nouveautés de SLT
+# Nouveautés de Cable Club (anciennement SLT)
+
+## 0.6.0 — 2026-10-14
+
+SLT devient **Cable Club** : un seul endroit pour jouer à Pokémon à plusieurs, avec un onglet par mode de jeu (le Soul Link pour commencer).
+
+- **Nouveau nom, nouveau logo** : un câble link en forme de C. Le Soul Link garde son logo dans son onglet. Le programme s'appelle maintenant `CableClub.exe` (`SLT.exe` reste là pour cette version, le temps que les mises à jour passent).
+- **Onglets des modes de jeu** : à gauche, « Soul Link » regroupe vos salles, les salles publiques et votre historique. Amis, chat, ROMs et réglages restent communs à tous les modes.
+- **Salles publiques** : en créant une salle (ou depuis la salle, tant que l'aventure n'est pas lancée), le chef peut la rendre publique. Elle apparaît alors dans « Salles publiques », où n'importe quel joueur du serveur peut la trouver et la rejoindre. Recherche par nom (ou par jeu, ou par chef de salle) et filtre par taille de salle (1 à 4 joueurs).
+- **Chat** : un chat général pour tout le serveur, une discussion par salle (aussi dans le panneau de droite en jeu, onglet « Chat ») et des messages privés entre amis. Messages non lus signalés, anti-spam, blocage d'un joueur, suppression de ses propres messages ; les modérateurs du serveur peuvent supprimer un message ou rendre un joueur muet dans le chat général.
+- **Profil** : photo de profil (n'importe quelle image, recadrée et réduite), nom affiché, bio, jeu et Pokémon favoris. Cliquer sur le nom ou la photo d'un joueur, partout dans l'application, ouvre sa fiche (ajouter en ami, message privé, bloquer, Soul Link joués et réussis).
+- **Combats dans les salles** : défiez un partenaire de votre salle (onglet « Combats ») avec vos équipes actuelles, lues dans vos jeux, aux niveaux des jeux, au niveau 50 ou au niveau 100. Le combat se joue dans l'application avec le moteur de Pokémon Showdown, selon les règles de la génération de la salle : attaques, statistiques, natures, talents et objets de vos vrais Pokémon. Rien ne change dans vos parties et personne ne meurt ; les Pokémon morts du Soul Link ne combattent pas. Les autres joueurs de la salle peuvent regarder, et le résultat s'inscrit dans le journal.
+- **Partenaires visibles en jeu en 4e génération** (Diamant, Perle, Platine, Or HeartGold, Argent SoulSilver) : comme en 5e génération, chaque partenaire apparaît à sa place sur la carte en 3D, avec son vrai sprite (marche et course) lu dans la ROM, dehors comme à l'intérieur des bâtiments. Vérifié sur Platine, Diamant et Or HeartGold. Toutes les générations ont maintenant les partenaires dans le jeu.
+- **Morts rangés dans le PC en 2e génération** (Or, Argent, Cristal) : un Pokémon mort quitte l'équipe pour la boîte actuelle du PC, comme en 1re génération (vérifié sur Cristal, sauvegarde comprise). Après le chargement d'une sauvegarde d'état, le rangement attend le prochain lancement du jeu.
+- **Taux de chromatiques** : dans la randomisation de la salle, choisissez la chance de croiser un Pokémon chromatique (du taux du jeu, 1 sur 8192, jusqu'à 1 sur 256). En 2e et 3e génération, chaque Pokémon sauvage a cette chance d'apparaître chromatique (vérifié sur Cristal et Émeraude) ; en 4e et 5e génération, le taux est écrit dans la ROM de la salle.
+- **Écrans de la DS côte à côte** : un bouton de la barre du jeu place l'écran tactile à droite de l'écran du haut (retenu pour les parties suivantes).
+- **Directs des partenaires** : avec plusieurs partenaires, une liste dans le panneau de droite permet de ne regarder qu'un seul jeu (les autres restent en résumé, sans image).
+- **Fermer la fenêtre ferme tout** : quitter Cable Club ferme aussi le jeu et le serveur hébergé, même quand la fenêtre était réduite (avant, l'application pouvait rester ouverte en arrière-plan).
+- **Héberger un serveur sur son PC** devient une option avancée, désactivée par défaut (le serveur Cable Club suffit à presque tout le monde).
+- **Échanges retirés pour le moment** (le temps de leur trouver leur place dans les modes de jeu).
+- « Mes ROMs » signale les ROMs introuvables (déplacées) : ajouter le dossier où elles sont maintenant les retrouve, sans rien perdre.
+- **Serveur Cable Club officiel** : au premier lancement, un seul clic sur « Serveur Cable Club (recommandé) » (play.cableclub.app, certificat reconnu) : un seul compte, vos amis et vos salles où que vous soyez. Un serveur protégé par un vrai certificat (Let's Encrypt…) n'est plus « mémorisé » par empreinte : les renouvellements ne cassent plus la connexion. Si vous étiez déjà connecté à play.cableclub.app avant son certificat Let's Encrypt, Cable Club s'y reconnecte tout seul.
+- **Fin automatique en 5e génération** (Noire, Blanche, Noire 2, Blanche 2) : battre le Maître de la Ligue (arrivée dans la Salle de la Gloire avec 8 badges) termine le Soul Link, comme dans les autres générations.
+- Partenaires en 5e génération : un partenaire qui passe derrière vous (une case plus haut sur la carte) passe maintenant derrière votre personnage au lieu de lui marcher sur la tête.
+- Partenaires en 5e génération : ils restent affichés pendant les dialogues classiques (derrière la boîte de texte), mais toujours pas pendant un combat, un fondu ou un flash blanc.
 
 ## 0.5.0 — 2026-10-11
 

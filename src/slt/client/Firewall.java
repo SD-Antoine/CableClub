@@ -165,7 +165,7 @@ final class Firewall {
                 + "  Get-NetFirewallApplicationFilter -Program $exe -ErrorAction SilentlyContinue"
                 + " | Get-NetFirewallRule -ErrorAction SilentlyContinue | Where-Object { \"$($_.Direction)\" -eq 'Inbound' }"
                 + " | Remove-NetFirewallRule -ErrorAction Stop\n"
-                + "  New-NetFirewallRule -DisplayName " + quote(RULE) + " -Description " + quote("Laisse vos amis rejoindre le serveur SLT hébergé sur ce PC.")
+                + "  New-NetFirewallRule -DisplayName " + quote(RULE) + " -Description " + quote("Laisse vos amis rejoindre le serveur Cable Club hébergé sur ce PC.")
                 + " -Direction Inbound -Program $exe -Action Allow -Profile Any -ErrorAction Stop | Out-Null\n"
                 + "  exit 0\n"
                 + "} catch { exit 2 }\n";
@@ -213,11 +213,11 @@ final class Firewall {
         String state = Json.str(fw, "state");
         String net = Json.str(fw, "network");
         if ("blocked".equals(state)) {
-            return "Le pare-feu Windows bloque SLT sur ce réseau" + (net != null ? " (réseau " + net + ")" : "")
+            return "Le pare-feu Windows bloque Cable Club sur ce réseau" + (net != null ? " (réseau " + net + ")" : "")
                     + " : vos amis ne peuvent pas vous rejoindre.";
         }
         if ("missing".equals(state)) {
-            return "Windows n'a pas encore autorisé SLT à recevoir des connexions" + (net != null ? " sur ce réseau (réseau " + net + ")" : "")
+            return "Windows n'a pas encore autorisé Cable Club à recevoir des connexions" + (net != null ? " sur ce réseau (réseau " + net + ")" : "")
                     + " : vos amis risquent d'être bloqués.";
         }
         return null;

@@ -18,7 +18,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * The player's real sprites in generation 5, read from the game's own ROM (the DS
+ * The player's real sprites in generations 4 and 5, read from the game's own ROM (the DS
  * emulator gives no access to the video memory). The field characters are NSBTX
  * textures, one 32x32 image per animation frame, gathered in a NARC archive of the
  * cartridge's file system:
@@ -27,6 +27,8 @@ import java.util.Map;
  * Black 2 / White 2: a/0/4/8, Nate 209 (walk + run: 24 images), Rosa 218
  * Black / White:     a/0/4/9, Hilbert 6 (32 images), Hilda 9
  * Images of a walking set: up, down, left, right, 3 each (standing, step, other step), then running.
+ * Generation 4 (see Gen4Presence): textures named "name.1" to "name.N", stored in the order of their
+ * names ("1", "10", "11"… "2"): put back in the order of their numbers ({@code byNumber}).
  * </pre>
  *
  * Only the archive is read from the ROM file (a few megabytes), when first needed.
@@ -47,21 +49,27 @@ final class Gen5Sprites {
 
     private final Path rom;
     private final String narc;
+    private final boolean byNumber;
     private List<byte[]> members;
     private boolean failed;
     private final Map<String, String> cache = new HashMap<>();
     private final Map<Integer, Integer> counts = new HashMap<>();
 
     Gen5Sprites(Path rom, String narc) {
+        this(rom, narc, false);
+    }
+
+    Gen5Sprites(Path rom, String narc, boolean byNumber) {
         this.rom = rom;
         this.narc = narc;
+        this.byNumber = byNumber;
     }
 
     /** Number of images of texture file {@code file}, 0 if unknown. */
     int frames(int file) {
         return counts.computeIfAbsent(file, f -> {
             byte[] btx = member(f);
-            return btx == null ? 0 : textures(btx).size();
+            return btx == null ? 0 : textures(btx, byNumber).size();
         });
     }
 
@@ -74,7 +82,7 @@ final class Gen5Sprites {
         String png = null;
         byte[] btx = member(file);
         if (btx != null) {
-            List<Texture> t = textures(btx);
+            List<Texture> t = textures(btx, byNumber);
             if (frame >= 0 && frame < t.size()) {
                 png = encode(t.get(frame).image);
             }
@@ -143,7 +151,10 @@ final class Gen5Sprites {
         return ByteBuffer.wrap(b).order(ByteOrder.LITTLE_ENDIAN);
     }
 
-    /** File id of a path in the file name table (directories walked from {@code dir}), -1 if absent. */
+    /**
+     * File id of a path in the file name table (directories walked from {@code dir}), -1 if absent. A path
+     * of only digits ("a/0/8/1") also matches those numbered names.
+     */
     private static int find(ByteBuffer fnt, int dir, String[] path, int depth) {
         int entry = (dir & 0xFFF) * 8;
         int p = fnt.getInt(entry);
@@ -175,11 +186,11 @@ final class Gen5Sprites {
 
     // ------------------------------------------------------------- NSBTX textures
 
-    private record Texture(BufferedImage image) {
+    private record Texture(BufferedImage image, String name) {
     }
 
-    /** Every texture of an NSBTX file, drawn with its first palette. */
-    private static List<Texture> textures(byte[] btx) {
+    /** Every texture of an NSBTX file, drawn with its first palette (in the order of their numbers if asked). */
+    private static List<Texture> textures(byte[] btx, boolean byNumber) {
         ByteBuffer b = ByteBuffer.wrap(btx).order(ByteOrder.LITTLE_ENDIAN);
         List<Texture> out = new ArrayList<>();
         if (b.getInt(0) != 0x30585442) { // "BTX0"
@@ -196,15 +207,49 @@ final class Gen5Sprites {
             return out;
         }
         int palette = palData + ((ByteBuffer.wrap(pals.get(0)).order(ByteOrder.LITTLE_ENDIAN).getShort(0) & 0xFFFF) << 3);
-        for (byte[] e : dictionary(d, texInfo)) {
-            ByteBuffer eb = ByteBuffer.wrap(e).order(ByteOrder.LITTLE_ENDIAN);
+        List<byte[]> entries = dictionary(d, texInfo);
+        List<String> names = names(d, texInfo);
+        for (int i = 0; i < entries.size(); i++) {
+            ByteBuffer eb = ByteBuffer.wrap(entries.get(i)).order(ByteOrder.LITTLE_ENDIAN);
             int offset = texData + ((eb.getShort(0) & 0xFFFF) << 3);
             int params = eb.getShort(2) & 0xFFFF;
             int w = 8 << ((params >> 4) & 7);
             int h = 8 << ((params >> 7) & 7);
             int format = (params >> 10) & 7;
             boolean color0 = ((params >> 13) & 1) != 0;
-            out.add(new Texture(draw(d, offset, w, h, format, color0, palette)));
+            out.add(new Texture(draw(d, offset, w, h, format, color0, palette), i < names.size() ? names.get(i) : ""));
+        }
+        if (byNumber && out.stream().allMatch(t -> number(t.name()) >= 0)) {
+            out.sort(java.util.Comparator.comparingInt(t -> number(t.name())));
+        }
+        return out;
+    }
+
+    /** The number after the last dot of a texture name ("hero.12" = 12), -1 if none. */
+    private static int number(String name) {
+        int dot = name.lastIndexOf('.');
+        try {
+            return dot < 0 ? -1 : Integer.parseInt(name.substring(dot + 1));
+        } catch (NumberFormatException e) {
+            return -1;
+        }
+    }
+
+    /** Names of the entries of an NNS dictionary (16 bytes each, after the entries). */
+    private static List<String> names(ByteBuffer d, int p) {
+        int count = d.get(p + 1) & 0xFF;
+        int q = p + 12 + 4 * count;
+        int size = d.getShort(q) & 0xFFFF;
+        q += 4 + size * count;
+        List<String> out = new ArrayList<>(count);
+        for (int i = 0; i < count; i++) {
+            byte[] n = new byte[16];
+            d.get(q + 16 * i, n);
+            int len = 0;
+            while (len < 16 && n[len] != 0) {
+                len++;
+            }
+            out.add(new String(n, 0, len, StandardCharsets.ISO_8859_1));
         }
         return out;
     }

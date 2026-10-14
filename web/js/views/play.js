@@ -8,6 +8,7 @@ import { GameScreen } from '../game/screen.js';
 import { GhostLayer } from '../game/ghosts.js';
 import { keymap } from '../game/keys.js';
 import { tradeBox } from './trades.js';
+import { chatPanel } from './chat.js';
 
 export async function renderPlay(container, roomId) {
   let room = store.rooms.get(roomId) || await loadRoom(roomId);
@@ -17,7 +18,10 @@ export async function renderPlay(container, roomId) {
   const ui = {
     info: null, side: cfg.sidePanel !== false, sideTab: 'partners', closed: false, connecting: true,
     big: null, autoPaused: false, userPaused: false,
+    // whose game the side panel shows: '' = every partner
+    stream: (() => { try { return sessionStorage.getItem(`slt.stream.${roomId}`) || ''; } catch { return ''; } })(),
   };
+  const ds = room.game?.platform === 'nds';
 
   const canvas = h('canvas', { width: 240, height: 160, class: cfg.smooth ? 'smooth' : '' });
   const osd = h('div', { class: 'osd' });
@@ -49,8 +53,19 @@ export async function renderPlay(container, roomId) {
     onClosed: (onPurpose) => { ui.closed = true; ui.connecting = false; ui.onPurpose = onPurpose; drawVeil(); drawBar(); },
     onResize: () => fit(),
     onFrame: (me) => ghosts.setMe(me),
+    onSelf: (m) => ghosts.setSelf(m),
     onAction: (a) => { if (a === 'pause') togglePause(); if (a === 'fullscreen') fullscreen(); },
   });
+  screen.setLayout(cfg.dsLayout);
+
+  /** DS: the two screens one above the other, or side by side. */
+  function toggleLayout() {
+    const next = screen.layout === 'h' ? 'v' : 'h';
+    screen.setLayout(next);
+    local.post('/api/config', { dsLayout: next }).catch(() => {});
+    drawBar();
+    stage.focus();
+  }
 
   function fit() {
     const w = canvas.width;
@@ -63,10 +78,11 @@ export async function renderPlay(container, roomId) {
     canvas.style.height = `${Math.max(1, Math.floor(hgt * scale))}px`;
     ghostLayer.style.width = `${w}px`;
     ghostLayer.style.height = `${hgt}px`;
+    ghosts.setSize(w, hgt);
     ghostLayer.style.transform = `scale(${Math.floor(w * scale) / w}, ${Math.floor(hgt * scale) / hgt})`;
   }
 
-  // the other players inside the game (generations 1 to 3 and 5): drawn where they stand on this player's map
+  // the other players inside the game (every generation): drawn where they stand on this player's map
   const ghosts = new GhostLayer(ghostLayer, (userId) => {
     const m = room.members.find((x) => x.userId === userId);
     const trading = (room.trades || []).some((t) => ['extract', 'swap'].includes(t.state) && (t.from === userId || t.to === userId));
@@ -162,8 +178,10 @@ export async function renderPlay(container, roomId) {
       volume,
       i.states ? btn('', () => screen.cmd('save-state', { slot: 1 }), { kind: 'ghost icon-only', iconName: 'save', title: 'Sauvegarde d’état' }) : null,
       i.states ? btn('', () => screen.cmd('load-state', { slot: 1 }), { kind: 'ghost icon-only', iconName: 'refresh', title: 'Charger l’état' }) : null,
+      ds ? btn('', toggleLayout, { kind: ['ghost icon-only', screen.layout === 'h' && 'on'].filter(Boolean).join(' '),
+        iconName: screen.layout === 'h' ? 'screens-h' : 'screens-v', title: screen.layout === 'h' ? 'Écrans l’un au-dessus de l’autre' : 'Écrans côte à côte' }) : null,
       btn('', fullscreen, { kind: 'ghost icon-only', iconName: 'full', title: 'Plein écran (F11)' }),
-      btn('', () => { ui.side = !ui.side; side.classList.toggle('hidden', !ui.side); local.post('/api/config', { sidePanel: ui.side }).catch(() => {}); setTimeout(fit, 0); },
+      btn('', () => { ui.side = !ui.side; side.classList.toggle('hidden', !ui.side); chat?.setVisible(ui.side && ui.sideTab === 'chat'); local.post('/api/config', { sidePanel: ui.side }).catch(() => {}); setTimeout(fit, 0); },
         { kind: ['ghost icon-only', ui.side && 'on'].filter(Boolean).join(' '), iconName: 'panel', title: 'Joueurs et journal' }),
       btn('Quitter le jeu', quitGame, { kind: 'ghost small' }));
   }
@@ -197,12 +215,24 @@ export async function renderPlay(container, roomId) {
 
   // ------------------------------------------------------------ side panel
   const images = new Map(); // userId -> { seq, url, timer }
+  // the room's chat, kept while the game is shown (what is being typed survives the redraws)
+  let chat = null;
   function drawSide() {
     const partners = [...room.members].filter((m) => m.userId !== user?.id).sort((a, b) => a.slot - b.slot);
+    const unread = (store.chat.channels || []).find((c) => c.ch === `room-${roomId}`)?.unread || 0;
     const tabs = h('div', { class: 'tabs' },
       h('button', { class: ui.sideTab === 'partners' ? 'active' : '', onclick: () => { ui.sideTab = 'partners'; drawSide(); } }, partners.length ? 'Partenaires' : 'Équipe'),
+      h('button', { class: ui.sideTab === 'chat' ? 'active' : '', onclick: () => { ui.sideTab = 'chat'; drawSide(); setTimeout(() => chat?.focus(), 0); } },
+        'Chat', unread && ui.sideTab !== 'chat' ? h('span', { class: 'tab-count' }, unread) : null),
       h('button', { class: ui.sideTab === 'journal' ? 'active' : '', onclick: () => { ui.sideTab = 'journal'; drawSide(); } }, 'Journal'));
     let body;
+    if (ui.sideTab === 'chat') {
+      if (!chat) chat = chatPanel(`room-${roomId}`, { compact: true, placeholder: 'Écrire à la salle (Entrée)…' });
+      chat.setVisible(ui.side);
+      mount(side, tabs, h('div', { class: 'side-body chat-side-body' }, chat.el));
+      return;
+    }
+    chat?.setVisible(false);
     if (ui.sideTab === 'journal') {
       const logs = store.logs.get(roomId);
       if (!logs) loadLogs(roomId).then(drawSide).catch(() => {});
@@ -211,19 +241,37 @@ export async function renderPlay(container, roomId) {
         h('time', null, clock(l.at)), h('span', { class: 'who-dot', style: { background: l.user ? colorFor(slotOf(l.user)) : 'var(--faint)' } }), h('span', null, l.text))));
     } else {
       const list = partners.length ? partners : room.members.filter((m) => m.userId === user?.id);
-      body = h('div', null, tradeBox(room, user?.id, { compact: true }), list.map((m) => partnerBlock(m, partners.length > 0)));
+      if (ui.stream && !partners.some((m) => m.userId === ui.stream)) ui.stream = '';
+      // with several partners: a list to watch one game, or all of them
+      const picker = partners.length > 1 ? h('select', { class: 'input stream-pick', title: 'Direct affiché',
+        onchange: (e) => {
+          ui.stream = e.target.value;
+          try { sessionStorage.setItem(`slt.stream.${roomId}`, ui.stream); } catch { /* storage unavailable */ }
+          e.target.blur();
+          drawSide();
+        } },
+      h('option', { value: '', selected: !ui.stream }, 'Tous les directs'),
+      partners.map((m) => h('option', { value: m.userId, selected: ui.stream === m.userId }, `Direct de ${m.name}`))) : null;
+      // the chosen game first, the others without their screen
+      const ordered = ui.stream ? [...list.filter((m) => m.userId === ui.stream), ...list.filter((m) => m.userId !== ui.stream)] : list;
+      body = h('div', null, picker, tradeBox(room, user?.id, { compact: true }),
+        ordered.map((m) => partnerBlock(m, partners.length > 0 && showsScreen(m.userId))));
     }
     mount(side, tabs, h('div', { class: 'side-body' }, body));
+  }
+
+  /** The side panel shows this partner's game (every partner, or only the one picked in the list). */
+  function showsScreen(userId) {
+    return !ui.stream || ui.stream === userId;
   }
 
   function partnerBlock(m, withScreen) {
     const live = m.live || {};
     const img = images.get(m.userId);
-    const ds = room.game?.platform === 'nds';
     const screenEl = withScreen ? h('div', { class: ['screen', ds && 'ds'], title: 'Agrandir', onclick: () => { ui.big = m.userId; drawBig(); } },
       img?.url ? h('img', { src: img.url, alt: '' }) : h('span', null, m.online ? 'En attente de l’image…' : 'Hors ligne')) : null;
     return h('div', { class: 'partner', dataset: { partner: m.userId } }, screenEl,
-      h('div', { class: 'info' }, avatar(m.name, m.slot, { size: 's', online: m.online }),
+      h('div', { class: 'info' }, avatar(m.name, m.slot, { size: 's', online: m.online, id: m.userId, pic: m.avatar }),
         h('div', { class: 'grow' }, h('b', null, m.name), h('div', { class: 'zone' },
           m.status === 'champion' ? '🏆 Maître vaincu' : live.zone ? `${live.zone}${live.battle ? ' · en combat' : ''}` : '—'))),
       live.team?.length ? h('div', { class: 'team-mini' }, live.team.map((p) => h('span', { class: p.dead || p.hp === 0 ? 'dead' : '', title: `${p.speciesName || ''} ${p.hp}/${p.maxHp} PV` },
@@ -243,7 +291,7 @@ export async function renderPlay(container, roomId) {
   async function pollPartner(m) {
     while (polling) {
       const st = images.get(m.userId) || { seq: 0, url: null };
-      const visible = ui.side && ui.sideTab === 'partners' || ui.big === m.userId;
+      const visible = ui.side && ui.sideTab === 'partners' && showsScreen(m.userId) || ui.big === m.userId;
       if (visible && m.online !== false) {
         try {
           const res = await fetch(`/api/live/${roomId}/${m.userId}?since=${st.seq}`, { headers: { 'X-SLT': '1' } });
@@ -282,6 +330,7 @@ export async function renderPlay(container, roomId) {
     on('ghost', (g) => { if (g.roomId === roomId) ghosts.update(g); }),
     on('presence', (d) => { if (d.roomId === roomId) drawSide(); }),
     on('log', (l) => { if (l.roomId === roomId && ui.sideTab === 'journal') drawSide(); }),
+    on('chat-list', () => { if (ui.sideTab !== 'chat') drawSide(); }),
     on('notice', (n) => {
       if (n.roomId && n.roomId !== roomId) return;
       if (n.local) return; // already shown by the game itself
@@ -301,6 +350,7 @@ export async function renderPlay(container, roomId) {
 
   return () => {
     polling = false;
+    chat?.destroy();
     ghosts.clear();
     offs.forEach((f) => f());
     document.removeEventListener('visibilitychange', onVisibility);

@@ -80,7 +80,7 @@ final class Hosting {
                 name = serverName;
                 refreshFirewall();
             } catch (java.net.BindException e) {
-                throw new Http.Fail(409, "Le port " + port + " est déjà utilisé sur ce PC (un autre serveur SLT ?).");
+                throw new Http.Fail(409, "Le port " + port + " est déjà utilisé sur ce PC (un autre serveur Cable Club ?).");
             } catch (Exception e) {
                 Log.error("Hébergement impossible", e);
                 throw new Http.Fail(500, "Impossible de démarrer le serveur : " + e.getMessage());
@@ -169,12 +169,12 @@ final class Hosting {
             }
             gateway = g;
             try {
-                upnp.addMapping(g, port, permanentLease ? 0 : LEASE, "SLT - Soul Link Together");
+                upnp.addMapping(g, port, permanentLease ? 0 : LEASE, "Cable Club");
             } catch (Upnp.Refused e) {
                 if (e.code == 725 && !permanentLease) {
                     // the box only accepts mappings without a time limit: removed when hosting stops
                     permanentLease = true;
-                    upnp.addMapping(g, port, 0, "SLT - Soul Link Together");
+                    upnp.addMapping(g, port, 0, "Cable Club");
                 } else {
                     throw e;
                 }

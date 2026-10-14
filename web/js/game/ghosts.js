@@ -49,6 +49,11 @@ const WARP_PX = 48;
 const WARP_3D = 768;
 // two readings further apart than this: the player stood still in between (older SLT, at rest)
 const GLIDE_MS = 200;
+// 3D games: height of the message box over the top or the bottom of the screen, where the others stay hidden
+const BOX_H = 46;
+// a player walking this close behind (in pixels) is partly hidden by this player's sprite
+const BEHIND_X = 20;
+const BEHIND_Y = 34;
 
 export class GhostLayer {
   /**
@@ -60,6 +65,10 @@ export class GhostLayer {
     this.info = info;
     this.me = null;
     this.ghosts = new Map();
+    this.selves = new Map(); // number -> { img, w, h }: this player's own sprites (3D games)
+    this.selfShown = null;
+    this.width = 0;
+    this.height = 0;
     this.raf = 0;
     this.tick = () => { this.raf = requestAnimationFrame(this.tick); this.draw(); };
   }
@@ -71,6 +80,34 @@ export class GhostLayer {
   stop() {
     if (this.raf) cancelAnimationFrame(this.raf);
     this.raf = 0;
+  }
+
+  /**
+   * One of this player's own sprites (3D games), as the game draws it: redrawn over the others who walk behind
+   * them, since the others are laid over the image of the game, where this player is already drawn.
+   */
+  setSelf(m) {
+    if (!m || !m.png || this.selves.has(m.n)) return;
+    const img = document.createElement('img');
+    img.alt = '';
+    img.className = 'pg-self';
+    img.src = `data:image/png;base64,${m.png}`;
+    img.style.width = `${Number(m.w) || 32}px`;
+    img.style.height = `${Number(m.h) || 32}px`;
+    img.style.display = 'none';
+    img.decode?.().catch(() => {});
+    this.layer.appendChild(img);
+    this.selves.set(m.n, { img, w: Number(m.w) || 32, h: Number(m.h) || 32 });
+    if (this.selves.size > 128) {
+      const [oldest, o] = this.selves.entries().next().value;
+      if (oldest !== this.selfShown) { o.img.remove(); this.selves.delete(oldest); }
+    }
+  }
+
+  /** Size of the image of the game, in its pixels (the layer covers it). */
+  setSize(w, h) {
+    this.width = w;
+    this.height = h;
   }
 
   /** Where this player stands on the image just drawn: the others are placed on that same image. */
@@ -240,12 +277,24 @@ export class GhostLayer {
   draw() {
     const me = this.me;
     const now = Date.now();
+    // 3D games (DS): the others stay on the top screen (256 x 192, top left of the image, the touch screen being
+    // under it or on its right), and behind a message box drawn over its top or its bottom
+    let clip = '';
+    if (me?.mtx) {
+      const right = Math.max(0, this.width - 256);
+      const bottom = Math.max(0, this.height - 192) + (me.boxBottom ? BOX_H : 0);
+      clip = `inset(${me.boxTop ? BOX_H : 0}px ${right}px ${bottom}px 0)`;
+    }
+    if (this.layer.style.clipPath !== clip) this.layer.style.clipPath = clip;
+    // the others walking behind this player (their feet higher on the image) pass under their sprite
+    const mine = me?.feet ? this.selves.get(me.self) ?? null : null;
+    let covered = false;
     for (const [userId, s] of this.ghosts) {
       const who = this.info(userId);
       const p = s.pts.length ? GhostLayer.at(s.pts, GhostLayer.playhead(s, now)) : null;
       const sid = p && s.sprites.has(p.sid ?? '') ? (p.sid ?? '') : s.shown;
       const sprite = sid !== null ? s.sprites.get(sid) : null;
-      // only while this player has the controls: never over a battle, a dialogue, a menu or a transition
+      // only while the field is shown: never over a battle, a menu or a transition (3D games: a message box stays over them)
       const visible = me && (me.free ?? me.ow) && p && p.map === me.map && sprite && who;
       if (!visible) { s.el.style.display = 'none'; continue; }
       const box = GhostLayer.place(me, p, sprite);
@@ -262,6 +311,14 @@ export class GhostLayer {
       const w = Math.round(sprite.w * box.scale);
       const h = Math.round(sprite.h * box.scale);
       if (sprite.img.style.width !== `${w}px`) { sprite.img.style.width = `${w}px`; sprite.img.style.height = `${h}px`; }
+      if (me.feet) {
+        // in front of this player: over them; behind: under them (their sprite is redrawn over, or the other hidden)
+        const feetY = top + h;
+        const behind = me.feet.y - feetY > 0.5 && me.feet.y - feetY < BEHIND_Y && Math.abs(left + w / 2 - (me.feet.x + 1)) < BEHIND_X;
+        if (behind && !mine) { s.el.style.display = 'none'; continue; }
+        covered ||= behind;
+        s.el.style.zIndex = String(Math.round(feetY * 2) + 1);
+      }
       s.el.style.display = '';
       s.el.style.transform = `translate(${left}px, ${top}px)`;
       s.el.style.width = `${w}px`;
@@ -275,6 +332,17 @@ export class GhostLayer {
         s.icon.innerHTML = key ? ICONS[key] : '';
         s.icon.style.display = key ? '' : 'none';
       }
+    }
+    const shown = covered ? mine : null;
+    if (shown !== this.selfShown) {
+      if (this.selfShown) this.selfShown.img.style.display = 'none';
+      this.selfShown = shown;
+    }
+    if (shown) {
+      const st = shown.img.style;
+      st.display = 'block';
+      st.transform = `translate(${Math.round(me.feet.x + 1 - shown.w / 2)}px, ${Math.round(me.feet.y - shown.h)}px)`;
+      st.zIndex = String(Math.round(me.feet.y * 2));
     }
   }
 

@@ -10,7 +10,8 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot
-$exe = Join-Path (Resolve-Path $Image) 'SLT.exe'
+$exe = Join-Path (Resolve-Path $Image) 'CableClub.exe'
+if (-not (Test-Path $exe)) { $exe = Join-Path (Resolve-Path $Image) 'SLT.exe' }
 $data = Join-Path ([IO.Path]::GetTempPath()) ('slt-smoke-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
 $base = "http://127.0.0.1:$Port"
 $p = Start-Process -FilePath $exe -ArgumentList '--no-window', "--port=$Port", "--data=$data" -PassThru
@@ -31,7 +32,7 @@ try {
     if ($missing.Count -gt 0) { throw ('Fichiers de l''interface absents de SLT : ' + ($missing -join ', ')) }
     Write-Host "SLT $($state.version) demarre et sert les $($files.Count) fichiers de l'interface."
 } finally {
-    Get-Process SLT -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $exe } | Stop-Process -Force
+    Get-Process ([IO.Path]::GetFileNameWithoutExtension($exe)) -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $exe } | Stop-Process -Force
     Start-Sleep -Seconds 1
     Remove-Item -Recurse -Force $data -ErrorAction SilentlyContinue
 }

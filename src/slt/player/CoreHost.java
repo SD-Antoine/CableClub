@@ -97,6 +97,7 @@ final class CoreHost implements AutoCloseable {
     private final List<Region> regions = new ArrayList<>();
     private Path romPath;
     private Path sramFile;
+    private volatile boolean stateLoaded;
     private long lastSramCrc = -1;
     private boolean loaded;
 
@@ -307,8 +308,19 @@ final class CoreHost implements AutoCloseable {
             MemorySegment.copy(state, 0, buf, JAVA_BYTE, 0, state.length);
             boolean[] ok = {false};
             invoke(() -> ok[0] = (boolean) retro.unserialize.invokeExact(buf, (long) state.length));
+            if (ok[0]) {
+                stateLoaded = true;
+            }
             return ok[0];
         }
+    }
+
+    /**
+     * Whether the cartridge RAM shown (saveRam) is the one the game uses: mGBA maps it from the
+     * save buffer, but a loaded save state puts the game on a copy of it (savedataRestore masks it).
+     */
+    boolean cartridgeRamLive() {
+        return !stateLoaded;
     }
 
     // --------------------------------------------------------------- memory

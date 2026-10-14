@@ -29,11 +29,11 @@ export const LANG = { fr: 'Français', en: 'Anglais', de: 'Allemand', es: 'Espag
 
 export const gameName = (id) => (GAMES[id] ? `Pokémon ${GAMES[id].name}` : 'Jeu inconnu');
 
-/** What SLT applies inside each generation's games (shown to the players). */
+/** What Cable Club applies inside each generation's games (shown to the players). */
 export const SUPPORT = {
-  1: 'Partenaires visibles dans le jeu, suivi, morts liées, surnoms, morts rangés dans la boîte actuelle du PC, échanges, fin automatique',
-  2: 'Partenaires visibles dans le jeu, suivi, morts liées (restent K.O. dans l’équipe), surnoms, échanges, fin automatique',
-  3: 'Tout : partenaires visibles dans le jeu, suivi, morts liées, surnoms, combats, objets, objets rendus, boîte MORTS, échanges, fin automatique',
-  4: 'Suivi, morts liées, surnoms, boîte MORTS (au changement de lieu), échanges, fin automatique ; partenaires sur le côté',
-  5: 'Suivi, morts liées, surnoms, boîte MORTS (au changement de lieu), échanges ; fin déclarée par le chef ; partenaires sur le côté',
+  1: 'Partenaires visibles dans le jeu, suivi, morts liées, surnoms, morts rangés dans la boîte actuelle du PC, fin automatique',
+  2: 'Partenaires visibles dans le jeu, suivi, morts liées, surnoms, morts rangés dans la boîte actuelle du PC, fin automatique',
+  3: 'Tout : partenaires visibles dans le jeu, suivi, morts liées, surnoms, combats, objets, objets rendus, boîte MORTS, fin automatique',
+  4: 'Partenaires visibles dans le jeu (3D), suivi, morts liées, surnoms, boîte MORTS (au changement de lieu), fin automatique',
+  5: 'Partenaires visibles dans le jeu (3D), suivi, morts liées, surnoms, boîte MORTS (au changement de lieu), fin automatique',
 };

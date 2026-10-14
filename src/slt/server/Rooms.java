@@ -42,6 +42,8 @@ public final class Rooms {
     private final Hub hub;
     private final Map<String, Room> rooms = new ConcurrentHashMap<>();
     private final Map<String, Screen> screens = new ConcurrentHashMap<>();
+    /** A room was deleted (its chat goes with it). */
+    volatile java.util.function.Consumer<String> onDeleted = id -> { };
 
     Rooms(Path base, Accounts accounts, Hub hub) throws IOException {
         this.dir = base.resolve("salles");
@@ -63,6 +65,124 @@ public final class Rooms {
             throw new Http.Fail(404, "Salle introuvable.");
         }
         return r;
+    }
+
+    /** The room, or null. */
+    Room find(String id) {
+        return id == null ? null : rooms.get(id);
+    }
+
+    /** Rooms this user plays in that are not over (lobby or running). */
+    List<Room> activeOf(String userId) {
+        List<Room> out = new ArrayList<>();
+        for (Room r : rooms.values()) {
+            synchronized (r) {
+                if (r.member(userId) != null && ("lobby".equals(r.state) || "running".equals(r.state))) {
+                    out.add(r);
+                }
+            }
+        }
+        out.sort((a, b) -> Long.compare(b.createdAt, a.createdAt));
+        return out;
+    }
+
+    /**
+     * Public rooms still in their lobby, newest first: optionally a game mode,
+     * words of the name (or of the game, or of the leader), and the number of
+     * players of the room (its size).
+     */
+    List<Object> publicRooms(Accounts.User user, String mode, String query, int size, boolean withFull) {
+        String q = query == null ? "" : query.trim().toLowerCase(java.util.Locale.ROOT);
+        List<Room> found = new ArrayList<>();
+        for (Room r : rooms.values()) {
+            synchronized (r) {
+                if (!"public".equals(r.visibility) || !"lobby".equals(r.state)) {
+                    continue;
+                }
+                if (mode != null && !mode.isBlank() && !mode.equals(r.mode)) {
+                    continue;
+                }
+                if (size > 0 && r.maxPlayers != size) {
+                    continue;
+                }
+                if (!withFull && r.members.size() >= r.maxPlayers && r.member(user.id) == null) {
+                    continue;
+                }
+                if (!q.isEmpty()) {
+                    Accounts.User leader = accounts.get(r.leaderId);
+                    String hay = (r.name + " " + r.gameName() + " " + (leader == null ? "" : leader.display))
+                            .toLowerCase(java.util.Locale.ROOT);
+                    boolean all = true;
+                    for (String w : q.split("\\s+")) {
+                        if (!hay.contains(w)) {
+                            all = false;
+                            break;
+                        }
+                    }
+                    if (!all) {
+                        continue;
+                    }
+                }
+                found.add(r);
+            }
+        }
+        found.sort((a, b) -> Long.compare(b.createdAt, a.createdAt));
+        List<Object> out = new ArrayList<>();
+        for (Room r : found.subList(0, Math.min(found.size(), 100))) {
+            synchronized (r) {
+                Map<String, Object> v = r.view(hub, false);
+                Accounts.User leader = accounts.get(r.leaderId);
+                v.put("leaderName", leader == null ? "?" : leader.display);
+                v.put("member", r.member(user.id) != null);
+                v.put("rando", r.rando);
+                v.put("rules", r.rules);
+                out.add(v);
+            }
+        }
+        return out;
+    }
+
+    /** Soul Links a user took part in, and how they ended (profile card). */
+    Map<String, Object> stats(String userId) {
+        long played = 0;
+        long won = 0;
+        long running = 0;
+        for (Room r : rooms.values()) {
+            synchronized (r) {
+                if (!r.history.contains(userId) || "lobby".equals(r.state)) {
+                    continue;
+                }
+                played++;
+                if ("running".equals(r.state)) {
+                    running++;
+                } else if (r.ended != null && "victory".equals(Json.str(r.ended, "outcome"))) {
+                    won++;
+                }
+            }
+        }
+        return Json.map("played", played, "won", won, "running", running);
+    }
+
+    /** A line in the journal of a room (results of the battles between its players). */
+    void journal(Room r, String type, String text) {
+        synchronized (r) {
+            Room.Out out = new Room.Out();
+            out.log(null, type, text, null);
+            commit(r, out);
+        }
+    }
+
+    /** A player changed their name: their place in the rooms that are not over shows it. */
+    void renamed(Accounts.User user) {
+        for (Room r : activeOf(user.id)) {
+            synchronized (r) {
+                Room.Member m = r.member(user.id);
+                if (m != null && !user.display.equals(m.name)) {
+                    m.name = user.display;
+                    commit(r, new Room.Out());
+                }
+            }
+        }
     }
 
     Room byCode(String code) {
@@ -132,10 +252,19 @@ public final class Rooms {
         Room r = get(id);
         synchronized (r) {
             boolean member = r.member(user.id) != null;
-            if (!member && !r.invites.contains(user.id) && !r.history.contains(user.id)) {
+            boolean open = "public".equals(r.visibility) && "lobby".equals(r.state);
+            if (!member && !r.invites.contains(user.id) && !r.history.contains(user.id) && !open) {
                 throw new Http.Fail(403, "Vous ne faites pas partie de cette salle.");
             }
             Map<String, Object> v = r.view(hub, member || r.history.contains(user.id));
+            if (!member && open) {
+                // a public room seen from outside: what is needed to decide to join it
+                Accounts.User leader = accounts.get(r.leaderId);
+                v.put("leaderName", leader == null ? "?" : leader.display);
+                v.put("rando", r.rando);
+                v.put("rules", r.rules);
+                v.put("visitor", true);
+            }
             if (member) {
                 v.put("directives", r.directives(r.member(user.id)));
             }
@@ -161,6 +290,9 @@ public final class Rooms {
                 "platform", Json.str(game, "platform"), "romCode", Json.str(game, "romCode"), "lang", Json.str(game, "lang"),
                 "crc", Json.str(game, "crc"));
         r.maxPlayers = (int) Math.max(1, Math.min(4, Json.num(body, "maxPlayers", 4)));
+        r.visibility = "public".equals(Json.str(body, "visibility")) ? "public" : "private";
+        String mode = Json.str(body, "mode");
+        r.mode = mode != null && mode.matches("[a-z]{2,16}") ? mode : "soullink";
         Map<String, Object> rules = Json.obj(body.get("rules"));
         if (rules != null) {
             r.rules.putAll(rules);
@@ -224,6 +356,9 @@ public final class Rooms {
                     out.log(r.member(user.id), "rules", user.display + " modifie les règles : " + String.join(", ", changed), null);
                 }
             }
+            if (body.containsKey("visibility")) {
+                r.visibility = "public".equals(Json.str(body, "visibility")) ? "public" : "private";
+            }
             if (body.containsKey("maxPlayers") && "lobby".equals(r.state)) {
                 r.maxPlayers = (int) Math.max(Math.max(1, r.members.size()), Math.min(4, Json.num(body, "maxPlayers", r.maxPlayers)));
             }
@@ -276,7 +411,7 @@ public final class Rooms {
             if (r.member(user.id) != null) {
                 return r.view(hub, true);
             }
-            if (!byCode && !r.invites.contains(user.id)) {
+            if (!byCode && !r.invites.contains(user.id) && !"public".equals(r.visibility)) {
                 throw new Http.Fail(403, "Vous n'êtes pas invité dans cette salle.");
             }
             if (!"lobby".equals(r.state)) {
@@ -345,6 +480,7 @@ public final class Rooms {
             rooms.remove(r.id);
             deleteFiles(r);
             hub.send(before, "room-deleted", Json.map("roomId", r.id));
+            onDeleted.accept(r.id);
             return;
         }
         if (r.isLeader(userId)) {
@@ -365,6 +501,7 @@ public final class Rooms {
             rooms.remove(r.id);
             deleteFiles(r);
             hub.send(before, "room-deleted", Json.map("roomId", r.id));
+            onDeleted.accept(r.id);
         }
     }
 

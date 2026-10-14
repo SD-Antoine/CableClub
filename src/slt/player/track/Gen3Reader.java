@@ -70,6 +70,7 @@ public final class Gen3Reader implements GameReader {
     private volatile long party = -1;
     private volatile long sb1 = -1;
     private volatile long sb2 = -1;
+    private volatile long trainerId = -1;
     private volatile long storage = -1;
     private long pointerSlot = -1;
 
@@ -116,6 +117,22 @@ public final class Gen3Reader implements GameReader {
                 tms = new Pocket(0x464, 58); berries = new Pocket(0x54C, 43);
             }
         }
+    }
+
+    /** First Pokémon of the enemy party (a wild one during a wild battle), -1 while the party is unknown. */
+    public long wildAddress() {
+        long p = party;
+        return p < 0 ? -1 : kind == Kind.FRLG ? p - 6 * MON : p + 6 * MON;
+    }
+
+    /** The player's trainer ID and secret ID (32 bits, as in a Pokémon's data), -1 while unknown. */
+    public long playerTrainerId() {
+        return sb2 < 0 ? -1 : trainerId;
+    }
+
+    /** 1 in battle, 0 not, -1 unknown (gMain not found yet). */
+    public int inBattleFlag() {
+        return inBattle;
     }
 
     public static Gen3Reader forGame(String game, GameInfo info) {
@@ -197,6 +214,45 @@ public final class Gen3Reader implements GameReader {
         return new Mon(pid, species, level, hp, maxHp, nick, (int) (ot & 0xFFFF), met, egg, shiny, base + o);
     }
 
+    /**
+     * Battle set from the decrypted data: Growth (species, held item, happiness), Attacks (4 moves), EVs (HP,
+     * Attack, Defense, Speed, Special Attack, Special Defense), Misc (IVs 5 bits each in the same order, egg,
+     * ability slot in bit 31). Nature and gender come from the personality. The held item keeps the game's
+     * id ({@code item3}): generation 3 numbers differ from Showdown's.
+     */
+    @Override
+    public Map<String, Object> battleSet(Mem m, Mon mon) {
+        byte[] d = m.read(mon.address(), MON);
+        long[] w = d == null || mon.egg() ? null : substructs(d, 0);
+        if (w == null) {
+            return null;
+        }
+        long pid = u32(d, 0);
+        String order = ORDERS[(int) (pid % 24)];
+        int g = order.indexOf('G') * 3;
+        int a = order.indexOf('A') * 3;
+        int e = order.indexOf('E') * 3;
+        int mi = order.indexOf('M') * 3;
+        List<Object> moves = new ArrayList<>();
+        List<Object> ppUps = new ArrayList<>();
+        long[] ids = {w[a] & 0xFFFF, w[a] >>> 16, w[a + 1] & 0xFFFF, w[a + 1] >>> 16};
+        for (int i = 0; i < 4; i++) {
+            if (ids[i] != 0) {
+                moves.add(ids[i]);
+                ppUps.add((w[g + 2] >>> (2 * i)) & 3);
+            }
+        }
+        long iv = w[mi + 1];
+        Map<String, Object> ivs = slt.Json.map("hp", iv & 31, "atk", (iv >>> 5) & 31, "def", (iv >>> 10) & 31,
+                "spe", (iv >>> 15) & 31, "spa", (iv >>> 20) & 31, "spd", (iv >>> 25) & 31);
+        Map<String, Object> evs = slt.Json.map("hp", w[e] & 0xFF, "atk", (w[e] >>> 8) & 0xFF, "def", (w[e] >>> 16) & 0xFF,
+                "spe", (w[e] >>> 24) & 0xFF, "spa", w[e + 1] & 0xFF, "spd", (w[e + 1] >>> 8) & 0xFF);
+        return slt.Json.map("gen", 3L, "species", (long) mon.species(), "level", (long) mon.level(),
+                "nickname", mon.nickname(), "moves", moves, "ppUps", ppUps, "ivs", ivs, "evs", evs, "nature", pid % 25,
+                "abilitySlot", (iv >>> 31) & 1, "genderValue", pid & 0xFF, "happiness", (w[g + 2] >>> 8) & 0xFF,
+                "item3", w[g] >>> 16, "shiny", mon.shiny());
+    }
+
     /** Valid Pokémon structures following each other from {@code o} (a party array). */
     private List<Mon> run(byte[] d, int o, long base) {
         List<Mon> out = new ArrayList<>();
@@ -235,7 +291,8 @@ public final class Gen3Reader implements GameReader {
         long money = -1;
         Map<Integer, Integer> bag = null;
         if (sb2 >= 0) {
-            ot = (int) (u32(ew.data, (int) (sb2 - EWRAM) + 0xA) & 0xFFFF);
+            trainerId = u32(ew.data, (int) (sb2 - EWRAM) + 0xA);
+            ot = (int) (trainerId & 0xFFFF);
         }
         if (sb1 >= 0) {
             int s1 = (int) (sb1 - EWRAM);

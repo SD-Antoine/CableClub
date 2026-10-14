@@ -10,7 +10,7 @@ async function request(method, url, body) {
   try {
     res = await fetch(url, init);
   } catch (e) {
-    throw new Error("SLT ne répond plus. L'application est-elle toujours ouverte ?");
+    throw new Error("Cable Club ne répond plus. L'application est-elle toujours ouverte ?");
   }
   const text = await res.text();
   let data = null;

@@ -158,7 +158,7 @@ foreach ($m in 'jdk.charsets', 'jdk.crypto.ec', 'jdk.localedata', 'jdk.httpserve
 }
 Write-Host "    modules : $modules"
 
-Step 'Creation de SLT.exe (jpackage)'
+Step 'Creation de CableClub.exe et SLT.exe (jpackage)'
 $image = Join-Path $Dist 'SLT'
 # keep the user's data (rooms, saves, library, hosted server) across rebuilds
 $dataBackup = Join-Path $Build 'data-backup'
@@ -173,12 +173,17 @@ if (Test-Path $pkgInput) { Remove-Item -Recurse -Force $pkgInput }
 New-Item -ItemType Directory -Force $pkgInput | Out-Null
 Copy-Item $AppJar, $UprJar $pkgInput
 Copy-Item -Recurse $Cores (Join-Path $pkgInput 'cores')
+# CableClub.exe: the name of the application; SLT.exe stays for now because the updater of
+# SLT 0.4.1 to 0.5.x expects it in the archive (and starts it again after the update)
+$launcher = Join-Path $Build 'CableClub.properties'
+"description=Cable Club`r`nicon=$($Ico -replace '\\', '/')`r`n" | Set-Content -Encoding ascii $launcher
 Exec $jpackage @(
     '--type', 'app-image',
     '--name', 'SLT',
+    '--add-launcher', "CableClub=$launcher",
     '--app-version', $Version,
-    '--vendor', 'SLT',
-    '--description', 'SLT - Soul Link Together',
+    '--vendor', 'Cable Club',
+    '--description', 'Cable Club',
     '--input', $pkgInput,
     '--main-jar', 'slt.jar',
     '--main-class', 'slt.Main',
@@ -205,5 +210,5 @@ if (Test-Path $dataBackup) {
     Move-Item $dataBackup (Join-Path $image 'data')
     Write-Host '    donnees conservees : dist\SLT\data'
 }
-Step "Termine : $image\SLT.exe"
+Step "Termine : $image\CableClub.exe"
 Step "Archive : $zip"

@@ -3,10 +3,12 @@ package slt;
 import javax.imageio.ImageIO;
 import java.awt.BasicStroke;
 import java.awt.Color;
+import java.awt.GradientPaint;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.geom.Arc2D;
-import java.awt.geom.Ellipse2D;
+import java.awt.geom.Path2D;
+import java.awt.geom.Rectangle2D;
 import java.awt.geom.RoundRectangle2D;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
@@ -19,14 +21,18 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Draws the SLT logo (two linked rings on an onyx tile) and can write it as
- * .ico/.png for packaging: {@code java slt.Icon out.ico out.png}.
+ * Draws the Cable Club logo (a link cable shaped like a C, its two plugs
+ * facing each other, on an onyx tile; same drawing as web/img/logo.svg) and
+ * can write it as .ico/.png for packaging: {@code java slt.Icon out.ico out.png}.
  */
 public final class Icon {
 
     private static final Color ONYX = new Color(0x1A, 0x1A, 0x1C);
-    private static final Color LIGHT = new Color(0xEC, 0xEC, 0xEA);
-    private static final Color ACCENT = new Color(0x7C, 0x9C, 0xFF);
+    private static final Color LIGHT = new Color(0xEC, 0xEC, 0xE9);
+    private static final Color METAL = new Color(0xA6, 0xAB, 0xB5);
+    private static final Color BLUE = new Color(0x8A, 0xA4, 0xFF);
+    private static final Color VIOLET = new Color(0xB3, 0x8C, 0xFF);
+    private static final Color SPARK = new Color(0xFF, 0xD3, 0x6B);
 
     private Icon() {
     }
@@ -36,26 +42,42 @@ public final class Icon {
         Graphics2D g = img.createGraphics();
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE);
-        double pad = size * 0.03;
-        double d = size - 2 * pad;
+        // drawn in the 64 x 64 units of the SVG
+        g.scale(size / 64.0, size / 64.0);
         g.setColor(ONYX);
-        g.fill(new RoundRectangle2D.Double(pad, pad, d, d, d * 0.42, d * 0.42));
+        g.fill(new RoundRectangle2D.Double(2, 2, 60, 60, 26, 26));
 
-        double r = d * 0.235;
-        double cy = size / 2.0;
-        double left = size / 2.0 - r * 0.62;
-        double right = size / 2.0 + r * 0.62;
-        float stroke = (float) Math.max(1.6, d * 0.085);
-        g.setStroke(new BasicStroke(stroke, BasicStroke.CAP_BUTT, BasicStroke.JOIN_ROUND));
-        Ellipse2D a = new Ellipse2D.Double(left - r, cy - r, 2 * r, 2 * r);
-        Ellipse2D b = new Ellipse2D.Double(right - r, cy - r, 2 * r, 2 * r);
-        // interlocked: left ring, right ring, then the left ring's upper arc drawn again on top
+        // the cable: from the upper plug, round the left, to the lower plug
+        Path2D cable = new Path2D.Double();
+        cable.moveTo(43.5, 18);
+        cable.curveTo(43.5, 13, 38.5, 11.8, 31, 11.8);
+        cable.append(new Arc2D.Double(31 - 20.2, 32 - 20.2, 40.4, 40.4, 90, 180, Arc2D.OPEN), true);
+        cable.curveTo(38.5, 52.2, 43.5, 51, 43.5, 46);
+        g.setPaint(new GradientPaint(10.8f, 11.8f, BLUE, 43.5f, 52.2f, VIOLET));
+        g.setStroke(new BasicStroke(6.4f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+        g.draw(cable);
+
+        // the plugs: body rounded on the cable side, metal tip towards the other plug
         g.setColor(LIGHT);
-        g.draw(a);
-        g.setColor(ACCENT);
-        g.draw(b);
-        g.setColor(LIGHT);
-        g.draw(new Arc2D.Double(left - r, cy - r, 2 * r, 2 * r, -10, 70, Arc2D.OPEN));
+        g.fill(new RoundRectangle2D.Double(36.7, 18.6, 13.6, 7.4, 3.6, 3.6));
+        g.fill(new Rectangle2D.Double(36.7, 22, 13.6, 4));
+        g.fill(new RoundRectangle2D.Double(36.7, 38, 13.6, 7.4, 3.6, 3.6));
+        g.fill(new Rectangle2D.Double(36.7, 38, 13.6, 4));
+        g.setColor(METAL);
+        g.fill(new RoundRectangle2D.Double(40.2, 26, 6.6, 3.4, 1.4, 1.4));
+        g.fill(new RoundRectangle2D.Double(40.2, 34.6, 6.6, 3.4, 1.4, 1.4));
+
+        // the spark of the link (too thin to be seen in the smallest icons)
+        if (size >= 24) {
+            Path2D spark = new Path2D.Double();
+            spark.moveTo(44.6, 29.8);
+            spark.lineTo(42.4, 32.4);
+            spark.lineTo(44.6, 32.4);
+            spark.lineTo(42.4, 35);
+            g.setColor(SPARK);
+            g.setStroke(new BasicStroke(1.3f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+            g.draw(spark);
+        }
         g.dispose();
         return img;
     }

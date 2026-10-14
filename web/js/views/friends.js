@@ -20,7 +20,7 @@ export function renderFriends(container) {
         const r = await srv.get(`/users/search?q=${encodeURIComponent(q)}`);
         const known = new Set([...store.friends.friends, ...store.friends.outgoing].map((f) => f.id));
         mount(suggestions, r.users.filter((u) => !known.has(u.id)).map((u) => h('div', { class: 'list-item' },
-          avatar(u.name, 2, { size: 's' }), h('div', { class: 'grow' }, h('b', null, u.name), h('div', { class: 'tiny muted' }, `@${u.username}`)),
+          avatar(u.name, 2, { size: 's', id: u.id, pic: u.avatar }), h('div', { class: 'grow' }, h('b', null, u.name), h('div', { class: 'tiny muted' }, `@${u.username}`)),
           btn('Ajouter', (e) => send(e.currentTarget, u.username), { kind: 'small' }))));
       } catch { mount(suggestions); }
     }, 250);
@@ -60,20 +60,21 @@ export function renderFriends(container) {
         suggestions),
       f.incoming.length ? [h('div', { class: 'section-title' }, h('h2', null, 'Demandes reçues')),
         h('div', { class: 'card', style: { padding: '4px 16px' } }, h('div', { class: 'list' }, f.incoming.map((u) => h('div', { class: 'list-item' },
-          avatar(u.name, 2, { size: 's' }), h('div', { class: 'grow' }, h('b', null, u.name), h('div', { class: 'tiny muted' }, `@${u.username}`)),
+          avatar(u.name, 2, { size: 's', id: u.id, pic: u.avatar }), h('div', { class: 'grow' }, h('b', null, u.name), h('div', { class: 'tiny muted' }, `@${u.username}`)),
           btn('Refuser', (e) => act(e.currentTarget, async () => { await srv.post(`/friends/${u.id}/remove`); await refreshFriends(); }), { kind: 'small ghost' }),
           btn('Accepter', (e) => act(e.currentTarget, async () => { await srv.post(`/friends/${u.id}/accept`); await refreshFriends(); }), { kind: 'small primary' })))))] : null,
       h('div', { class: 'section-title' }, h('h2', null, `Mes amis (${f.friends.length})`)),
       f.friends.length ? h('div', { class: 'card', style: { padding: '4px 16px' } }, h('div', { class: 'list' }, f.friends.map((u) => h('div', { class: 'list-item' },
-        avatar(u.name, 2, { size: 's', online: u.online }),
+        avatar(u.name, 2, { size: 's', online: u.online, id: u.id, pic: u.avatar }),
         h('div', { class: 'grow' }, h('b', null, u.name), h('div', { class: 'tiny muted' }, u.online ? 'En ligne' : 'Hors ligne')),
+        btn('', () => { location.hash = `#/chat/dm-${u.id}`; }, { kind: 'small ghost icon-only', iconName: 'chat', title: 'Message privé' }),
         btn('Inviter', () => inviteTo(u), { kind: 'small' }),
         btn('', (e) => act(e.currentTarget, async () => { await srv.post(`/friends/${u.id}/remove`); await refreshFriends(); }),
           { kind: 'small ghost icon-only', iconName: 'x', title: 'Retirer de mes amis' })))))
         : h('div', { class: 'empty' }, h('b', null, 'Pas encore d’amis'), 'Demandez l’identifiant de vos amis et ajoutez-les ci-dessus.'),
       f.outgoing.length ? [h('div', { class: 'section-title' }, h('h2', null, 'Demandes envoyées')),
         h('div', { class: 'card', style: { padding: '4px 16px' } }, h('div', { class: 'list' }, f.outgoing.map((u) => h('div', { class: 'list-item' },
-          avatar(u.name, 2, { size: 's' }), h('div', { class: 'grow' }, h('b', null, u.name), h('div', { class: 'tiny muted' }, 'En attente')),
+          avatar(u.name, 2, { size: 's', id: u.id, pic: u.avatar }), h('div', { class: 'grow' }, h('b', null, u.name), h('div', { class: 'tiny muted' }, 'En attente')),
           btn('Annuler', (e) => act(e.currentTarget, async () => { await srv.post(`/friends/${u.id}/remove`); await refreshFriends(); }), { kind: 'small ghost' })))))] : null);
   }
 

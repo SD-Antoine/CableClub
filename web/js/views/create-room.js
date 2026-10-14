@@ -1,6 +1,6 @@
 // New room: game, players and name → rules → randomization.
 
-import { h, mount, keepScroll, modal, btn, field, seg, icon, errorToast } from '../ui.js';
+import { h, mount, keepScroll, modal, btn, field, seg, icon, errorToast, switchEl } from '../ui.js';
 import { local, srv } from '../api.js';
 import { store } from '../store.js';
 import { LANG, GEN_LABEL, SUPPORT, gameName } from '../data/games.js';
@@ -20,6 +20,7 @@ export async function openCreateRoom() {
     romId: library[0]?.id || null,
     name: '',
     maxPlayers: 2,
+    visibility: 'private',
     rules: { ...RULE_DEFAULTS },
     rando: null,
   };
@@ -73,7 +74,10 @@ export async function openCreateRoom() {
       rom() ? h('p', { class: 'tiny faint' }, icon('info'), ' ', SUPPORT[gen()]) : null,
       h('div', { class: 'grid2' },
         field('Nom de la salle', name),
-        field('Joueurs', seg([[1, '1'], [2, '2'], [3, '3'], [4, '4']], st.maxPlayers, (v) => { st.maxPlayers = v; draw(); }))));
+        field('Joueurs', seg([[1, '1'], [2, '2'], [3, '3'], [4, '4']], st.maxPlayers, (v) => { st.maxPlayers = v; draw(); }))),
+      h('div', { class: 'rule-row' }, h('div', { class: 'grow' }, h('b', null, 'Salle publique'),
+        h('small', null, 'Elle apparaît dans « Salles publiques » : n’importe quel joueur du serveur peut la trouver et la rejoindre tant que l’aventure n’est pas lancée. Sinon, seuls vos invités (ou ceux qui ont le code) entrent.')),
+      switchEl(st.visibility === 'public', (v) => { st.visibility = v ? 'public' : 'private'; })));
   }
 
   async function create(button) {
@@ -84,6 +88,8 @@ export async function openCreateRoom() {
         name: st.name.trim() || `${user?.name || 'Ma'} salle`,
         game: { gameId: r.gameId, name: gameName(r.gameId), gen: Number(r.gen), platform: r.platform, romCode: r.romCode, lang: r.lang, crc: r.crc },
         maxPlayers: st.maxPlayers,
+        visibility: st.visibility,
+        mode: 'soullink',
         rules: st.rules,
         rando: { ...st.rando, seed: st.rando.seed || undefined },
       });

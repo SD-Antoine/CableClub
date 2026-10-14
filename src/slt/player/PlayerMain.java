@@ -67,7 +67,7 @@ public final class PlayerMain {
 
         String secret = System.getenv("SLT_PLAYER_SECRET");
         if (secret == null || !a.containsKey("--api")) {
-            throw new IllegalStateException("Le lecteur se lance depuis l'application SLT.");
+            throw new IllegalStateException("Le lecteur se lance depuis l'application Cable Club.");
         }
         String wsToken = Ids.token();
         Bridge bridge = new Bridge(a.get("--api"), secret, wsToken);
@@ -89,7 +89,7 @@ public final class PlayerMain {
             tracker.setAck(bridge::ack);
             tracker.setTradeSink(bridge::trade);
             session.setTracker(tracker);
-            // the players see each other in their games (generations 1 to 3 and 5)
+            // the players see each other in their games (generations 1 to 5)
             presence[0] = Presence.forReader(tracker.engine().reader(), saves, rom);
             if (presence[0] != null) {
                 session.setPresence(presence[0]);

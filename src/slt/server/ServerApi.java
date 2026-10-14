@@ -17,6 +17,9 @@ final class ServerApi {
     private final Accounts accounts;
     private final Rooms rooms;
     private final Hub hub;
+    private final Chat chat;
+    private final Avatars avatars;
+    private final Battles battles;
     private final Http.Router router = new Http.Router();
 
     ServerApi(SltServer server) {
@@ -24,6 +27,9 @@ final class ServerApi {
         this.accounts = server.accounts;
         this.rooms = server.rooms;
         this.hub = server.hub;
+        this.chat = server.chat;
+        this.avatars = server.avatars;
+        this.battles = server.battles;
         routes();
     }
 
@@ -32,7 +38,7 @@ final class ServerApi {
         try {
             if (!path.startsWith("/api/")) {
                 Http.json(ex, 200, Json.map("app", "SLT", "role", "server", "version", SltServer.VERSION,
-                        "message", "Serveur SLT — Soul Link Together. Connectez-vous depuis l'application SLT."));
+                        "message", "Serveur Cable Club. Connectez-vous depuis l'application Cable Club."));
                 return;
             }
             if (!router.dispatch(ex, path)) {
@@ -55,7 +61,9 @@ final class ServerApi {
     }
 
     private Map<String, Object> me(Accounts.User u) {
-        return Json.map("id", u.id, "username", u.username, "name", u.display, "createdAt", u.createdAt);
+        Map<String, Object> m = u.profile();
+        m.put("admin", chat.admin(u));
+        return m;
     }
 
     private void routes() {
@@ -83,7 +91,83 @@ final class ServerApi {
         r.on("POST", "/api/me", (ex, p) -> {
             Accounts.User u = user(ex);
             accounts.rename(u, Json.str(Http.readJson(ex), "name"));
+            rooms.renamed(u);
             Http.json(ex, 200, me(u));
+        });
+        // profile: name, bio, favourite game and Pokémon (only the fields given change)
+        r.on("POST", "/api/me/profile", (ex, p) -> {
+            Accounts.User u = user(ex);
+            accounts.updateProfile(u, Http.readJson(ex));
+            rooms.renamed(u);
+            Http.json(ex, 200, me(u));
+        });
+        // profile picture: any image (base64), stored as a 128 x 128 PNG
+        r.on("POST", "/api/me/avatar", (ex, p) -> {
+            Accounts.User u = user(ex);
+            String data = Json.str(Http.readJson(ex), "data");
+            byte[] img;
+            try {
+                String b64 = data == null ? "" : data.replaceFirst("^data:[^,]*,", "");
+                img = java.util.Base64.getDecoder().decode(b64.trim());
+            } catch (IllegalArgumentException e) {
+                throw new Http.Fail(400, "Image illisible.");
+            }
+            avatars.put(u.id, img);
+            accounts.avatarChanged(u, true);
+            Http.json(ex, 200, me(u));
+        });
+        r.on("POST", "/api/me/avatar/remove", (ex, p) -> {
+            Accounts.User u = user(ex);
+            avatars.delete(u.id);
+            accounts.avatarChanged(u, false);
+            Http.json(ex, 200, me(u));
+        });
+        r.on("GET", "/api/users/{id}", (ex, p) -> {
+            Accounts.User u = user(ex);
+            Accounts.User o = other(p.get("id"));
+            Map<String, Object> m = o.profile();
+            m.put("online", hub.online(o.id));
+            m.put("friend", u.friends.contains(o.id) ? "friends" : u.outgoing.contains(o.id) ? "sent"
+                    : u.incoming.contains(o.id) ? "received" : o.id.equals(u.id) ? "me" : "none");
+            m.put("blocked", u.blocked.contains(o.id));
+            m.put("soullink", rooms.stats(o.id));
+            Http.json(ex, 200, m);
+        });
+        r.on("GET", "/api/users/{id}/avatar", (ex, p) -> {
+            user(ex);
+            byte[] img = avatars.get(p.get("id"));
+            if (img == null) {
+                throw new Http.Fail(404, "Pas de photo.");
+            }
+            ex.getResponseHeaders().set("Cache-Control", "private, max-age=86400");
+            Http.bytes(ex, 200, "image/png", img);
+        });
+        r.on("POST", "/api/users/{id}/block", (ex, p) -> {
+            Accounts.User u = user(ex);
+            accounts.block(u, other(p.get("id")), Json.bool(Http.readJson(ex), "on", true));
+            Http.ok(ex);
+        });
+
+        // ------------------------------------------------------------ chat
+        r.on("GET", "/api/chat", (ex, p) -> Http.json(ex, 200, chat.list(user(ex))));
+        r.on("POST", "/api/chat/mute", (ex, p) -> {
+            Map<String, Object> b = Http.readJson(ex);
+            chat.mute(user(ex), Json.str(b, "userId"), Json.num(b, "minutes", 60));
+            Http.ok(ex);
+        });
+        r.on("GET", "/api/chat/{ch}", (ex, p) -> {
+            Map<String, String> q = Http.query(ex);
+            Http.json(ex, 200, chat.history(user(ex), p.get("ch"), parse(q.get("before"), 0), (int) parse(q.get("limit"), 60)));
+        });
+        r.on("POST", "/api/chat/{ch}", (ex, p) -> Http.json(ex, 200,
+                chat.post(user(ex), p.get("ch"), Json.str(Http.readJson(ex), "text"))));
+        r.on("POST", "/api/chat/{ch}/read", (ex, p) -> {
+            chat.read(user(ex), p.get("ch"), Json.num(Http.readJson(ex), "id", 0));
+            Http.ok(ex);
+        });
+        r.on("POST", "/api/chat/{ch}/{msg}/delete", (ex, p) -> {
+            chat.delete(user(ex), p.get("ch"), parse(p.get("msg"), -1));
+            Http.ok(ex);
         });
         r.on("POST", "/api/me/password", (ex, p) -> {
             Accounts.User u = user(ex);
@@ -134,6 +218,12 @@ final class ServerApi {
 
         // ----------------------------------------------------------- rooms
         r.on("GET", "/api/rooms", (ex, p) -> Http.json(ex, 200, Json.map("rooms", rooms.mine(user(ex)))));
+        // public rooms: ?mode=soullink&q=words&size=1..4&full=1
+        r.on("GET", "/api/rooms/public", (ex, p) -> {
+            Map<String, String> q = Http.query(ex);
+            Http.json(ex, 200, Json.map("rooms", rooms.publicRooms(user(ex), q.get("mode"), q.get("q"),
+                    (int) parse(q.get("size"), 0), "1".equals(q.get("full")))));
+        });
         r.on("GET", "/api/history", (ex, p) -> Http.json(ex, 200, Json.map("rooms", rooms.history(user(ex)))));
         r.on("POST", "/api/rooms", (ex, p) -> Http.json(ex, 200, rooms.create(user(ex), Http.readJson(ex))));
         r.on("POST", "/api/rooms/join", (ex, p) -> {
@@ -233,6 +323,13 @@ final class ServerApi {
             rooms.ghost(p.get("id"), user(ex), Http.readJson(ex));
             Http.ok(ex);
         });
+        // battles between the players of a room (simulated by their interfaces; see Battles)
+        r.on("GET", "/api/rooms/{id}/battles", (ex, p) -> Http.json(ex, 200,
+                Json.map("battles", battles.list(p.get("id"), user(ex)))));
+        r.on("GET", "/api/rooms/{id}/battles/{battle}", (ex, p) -> Http.json(ex, 200,
+                battles.one(p.get("id"), p.get("battle"), user(ex))));
+        r.on("POST", "/api/rooms/{id}/battles", (ex, p) -> Http.json(ex, 200,
+                battles.act(p.get("id"), user(ex), Http.readJson(ex))));
         r.on("GET", "/api/rooms/{id}/ghosts", (ex, p) -> Http.json(ex, 200, Json.map("ghosts", rooms.ghosts(p.get("id"), user(ex)))));
         r.on("POST", "/api/rooms/{id}/save", (ex, p) -> {
             Accounts.User u = user(ex);

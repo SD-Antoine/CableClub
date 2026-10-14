@@ -185,7 +185,7 @@ public final class TrackerEngine {
             }
             emit(Json.map("type", "party", "uids", list));
         }
-        team(mons);
+        team(mons, m);
         // a whiteout needs a Pokémon that fell in the game itself: a party only K.O. because of
         // Soul Link deaths can still be swapped with the PC
         Set<Long> dead = doomed;
@@ -357,16 +357,26 @@ public final class TrackerEngine {
         }
     }
 
-    /** Short view of the team for the other players (species, level, HP), at most every 1.5 s. */
-    private void team(List<Mon> mons) {
+    /**
+     * Short view of the team for the other players (species, level, HP), at most every 1.5 s, with what a
+     * battle between players of the room needs (moves, stats…: the reader's battle set).
+     */
+    private void team(List<Mon> mons, Mem m) {
         StringBuilder sig = new StringBuilder();
         List<Object> list = new ArrayList<>();
         for (Mon x : mons) {
+            Map<String, Object> set = null;
+            try {
+                set = reader.battleSet(m, x);
+            } catch (RuntimeException e) {
+                // the team stays shown without what battles need
+            }
             sig.append(x.uid()).append(':').append(x.species()).append(':').append(x.level()).append(':')
-                    .append(x.hp()).append(':').append(x.nickname()).append(';');
+                    .append(x.hp()).append(':').append(x.nickname()).append(':')
+                    .append(set == null ? "" : String.valueOf(set.get("moves"))).append(';');
             list.add(Json.map("uid", uidText(x.uid()), "species", (long) x.species(), "speciesName", info.speciesName(x.species()),
                     "nickname", x.nickname(), "level", (long) x.level(), "hp", (long) x.hp(), "maxHp", (long) x.maxHp(),
-                    "shiny", x.shiny(), "dead", doomed.contains(x.uid())));
+                    "shiny", x.shiny(), "dead", doomed.contains(x.uid()), "set", set));
         }
         long now = System.currentTimeMillis();
         if (sig.toString().equals(lastTeam) || now - lastTeamAt < TEAM_INTERVAL_MS) {

@@ -44,7 +44,8 @@ final class LocalApi {
                 if (!app.players.checkSecret(ex.getRequestHeaders().getFirst("X-SLT-Player"))) {
                     throw new Http.Fail(403, "Lecteur inconnu");
                 }
-            } else if (!"1".equals(ex.getRequestHeaders().getFirst("X-SLT")) && !openGet(ex, path)) {
+            } else if (!"1".equals(ex.getRequestHeaders().getFirst("X-SLT")) && !openGet(ex, path)
+                    && !("POST".equals(ex.getRequestMethod()) && path.equals("/api/ui/bye"))) {
                 // a custom header cannot be sent cross-site without a preflight we never accept
                 throw new Http.Fail(403, "Requête refusée");
             }
@@ -62,7 +63,7 @@ final class LocalApi {
     private Map<String, Object> state() {
         return Json.map("app", "SLT", "version", Version.VERSION, "config", app.config.publicView(),
                 "link", app.link.status(), "host", app.hosting.status(), "player", app.players.state(),
-                "dataDir", app.dataDir.toString(), "update", app.updates.status());
+                "dataDir", app.dataDir.toString(), "update", app.updates.status(), "uiToken", app.uiToken);
     }
 
     private void routes() {
@@ -81,13 +82,26 @@ final class LocalApi {
         r.on("GET", "/api/update", (ex, p) -> Http.json(ex, 200, app.updates.status()));
         r.on("POST", "/api/update/check", (ex, p) -> Http.json(ex, 200, app.updates.check()));
         r.on("POST", "/api/update/install", (ex, p) ->
-                Http.json(ex, 200, Json.map("job", app.jobs.start("Mise à jour de SLT", app.updates::install))));
+                Http.json(ex, 200, Json.map("job", app.jobs.start("Mise à jour de Cable Club", app.updates::install))));
         r.on("POST", "/api/update/page", (ex, p) -> {
             Map<String, Object> u = app.updates.status();
             Desktop.browse(u.get("page") instanceof String page && page.startsWith("https://github.com/") ? page : Updates.PAGE);
             Http.ok(ex);
         });
-        r.on("GET", "/api/stream", (ex, p) -> Sse.serve(ex, Json.stringify(state()), app.hub::add, app.hub::remove));
+        r.on("GET", "/api/stream", (ex, p) -> {
+            String page = Http.query(ex).getOrDefault("page", "").replaceAll("[^A-Za-z0-9]", "");
+            String id = page.length() > 40 ? page.substring(0, 40) : page;
+            Sse.serve(ex, Json.stringify(state()), s -> app.hub.add(s, id), app.hub::remove);
+        });
+        // the window is closing (sent with sendBeacon: no custom header, so the token proves where it comes from)
+        r.on("POST", "/api/ui/bye", (ex, p) -> {
+            Map<String, Object> b = Json.parseObject(new String(Http.readBody(ex, 4096), java.nio.charset.StandardCharsets.UTF_8));
+            if (app.uiToken.equals(Json.str(b, "t"))) {
+                app.hub.closePage(Json.str(b, "page"));
+                app.uiClosed();
+            }
+            Http.ok(ex);
+        });
 
         // ----------------------------------------------------- server & session
         r.on("POST", "/api/server/use", (ex, p) -> {
@@ -135,6 +149,24 @@ final class LocalApi {
             Object me = app.link.call("POST", "/api/me", Http.readJson(ex));
             app.config.set("user", me);
             Http.json(ex, 200, me);
+        });
+        // profile changes: the answer is the new "me", kept here for the rail and the next launches
+        for (String path : List.of("/api/me/profile", "/api/me/avatar", "/api/me/avatar/remove")) {
+            r.on("POST", path, (ex, p) -> {
+                Object me = app.link.call("POST", path, Http.readJson(ex));
+                app.config.set("user", me);
+                app.hub.send("link", app.link.status());
+                Http.json(ex, 200, me);
+            });
+        }
+        // profile pictures (<img> cannot send headers: an open GET, the version in the address keeps it fresh)
+        r.on("GET", "/api/avatar/{id}", (ex, p) -> {
+            var res = app.link.getResponse("/api/users/" + p.get("id").replaceAll("[^A-Za-z0-9]", "") + "/avatar");
+            if (res == null) {
+                throw new Http.Fail(404, "Pas de photo");
+            }
+            ex.getResponseHeaders().set("Cache-Control", "private, max-age=604800");
+            Http.bytes(ex, 200, "image/png", res.body());
         });
         r.on("POST", "/api/me/password", (ex, p) -> {
             Map<String, Object> res = Json.obj(app.link.call("POST", "/api/me/password", Http.readJson(ex)));
@@ -230,9 +262,20 @@ final class LocalApi {
             }
             Path f = Path.of(Json.str(rom, "path"));
             String ext = f.getFileName().toString().replaceAll(".*\\.", "");
-            String name = "SLT-" + Json.str(rom, "gameId") + "-" + p.get("id") + "." + ext;
+            String name = "CableClub-" + Json.str(rom, "gameId") + "-" + p.get("id") + "." + ext;
             ex.getResponseHeaders().set("Content-Disposition", "attachment; filename=\"" + name + "\"");
             Http.bytes(ex, 200, "application/octet-stream", Files.readAllBytes(f));
+        });
+        // names of the room's game in its language (species, moves, abilities, items), read from its ROM
+        r.on("GET", "/api/rooms/{id}/names", (ex, p) -> {
+            Map<String, Object> rom = app.roms.status(p.get("id"));
+            if (rom == null || !Json.bool(rom, "present", false)) {
+                throw new Http.Fail(404, "ROM non générée sur ce PC.");
+            }
+            Path info = Rando.trackerInfo(Json.str(rom, "path"), app.dataDir.resolve("cache"));
+            Map<String, Object> o = Json.parseObject(Files.readString(info));
+            Http.json(ex, 200, Json.map("gen", o.get("gen"), "species", o.get("species"), "moves", o.get("moves"),
+                    "abilities", o.get("abilities"), "items", o.get("items")));
         });
         r.on("POST", "/api/rooms/{id}/rom/reveal", (ex, p) -> {
             Map<String, Object> rom = app.roms.status(p.get("id"));
@@ -297,7 +340,8 @@ final class LocalApi {
     /** Reads the interface needs without custom headers: the event stream and the ROM download link. */
     private static boolean openGet(HttpExchange ex, String path) {
         return "GET".equals(ex.getRequestMethod())
-                && (path.equals("/api/stream") || path.matches("/api/rooms/[a-z0-9]+/rom/file"));
+                && (path.equals("/api/stream") || path.matches("/api/rooms/[a-z0-9]+/rom/file")
+                || path.matches("/api/avatar/[A-Za-z0-9]+"));
     }
 
     private static String require(String v) {

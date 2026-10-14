@@ -2,7 +2,7 @@
 
 export const RULES = [
   { key: 'autoEnd', type: 'bool', label: 'Fin automatique contre le Maître', highlight: true,
-    desc: 'SLT détecte dans le jeu la victoire contre le Maître de la Ligue et termine le Soul Link (selon « Fin du Soul Link »). Désactivé : le chef de salle termine l’aventure à la main.' },
+    desc: 'Cable Club détecte dans le jeu la victoire contre le Maître de la Ligue et termine le Soul Link (selon « Fin du Soul Link »). Désactivé : le chef de salle termine l’aventure à la main.' },
   { key: 'startWithBalls', type: 'bool', label: 'Départ aux premières Poké Balls',
     desc: 'Le Soul Link ne commence vraiment que quand chaque joueur a au moins une Poké Ball : avant, un Pokémon K.O. (le starter par exemple) ne meurt pas et les rencontres ne comptent pas.' },
   { key: 'shinyClause', type: 'bool', label: 'Clause chromatique',
@@ -19,7 +19,7 @@ export const RULES = [
   { key: 'pauseForNaming', type: 'bool', label: 'Pause pendant le nommage',
     desc: 'Les jeux attendent que le chef ait choisi le nom du lien.' },
   { key: 'deathBox', type: 'bool', label: 'Boîte des morts',
-    desc: 'Les Pokémon morts quittent l’équipe pour la dernière boîte du PC, renommée « MORTS » (générations 3 à 5) ou pour la boîte actuelle du PC (génération 1, qui n’a pas de noms de boîtes). En génération 2, ils restent K.O. dans l’équipe. En génération 4 et 5, le dépôt se fait au prochain changement de lieu.' },
+    desc: 'Les Pokémon morts quittent l’équipe pour la dernière boîte du PC, renommée « MORTS » (générations 3 à 5) ou pour la boîte actuelle du PC (générations 1 et 2, qui n’ont pas de noms de boîtes). En génération 4 et 5, le dépôt se fait au prochain changement de lieu. En génération 2, après le chargement d’une sauvegarde d’état, il attend le prochain lancement du jeu.' },
   { key: 'refundCancelled', type: 'bool', label: 'Rendre les objets d’une zone annulée',
     desc: 'Si un joueur met K.O. le premier Pokémon d’une zone, ceux qui l’avaient capturé récupèrent les objets utilisés.' },
   { key: 'wipeEndsRun', type: 'bool', label: 'Équipe entière K.O. = défaite',

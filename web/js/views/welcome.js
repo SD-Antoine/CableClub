@@ -5,8 +5,11 @@ import { local } from '../api.js';
 import { store, refreshState, on } from '../store.js';
 import { hostAddresses } from './parts.js';
 
+// the official Cable Club server: a real (Let's Encrypt) certificate, nothing to remember or paste
+const OFFICIAL = 'https://play.cableclub.app';
+
 export function renderWelcome(container, onDone) {
-  const ui = { step: store.state?.link?.server ? 'account' : 'server', mode: 'join', tab: 'login', hosted: false, error: null };
+  const ui = { step: store.state?.link?.server ? 'account' : 'server', mode: 'official', tab: 'login', hosted: false, error: null };
   // the hosted server's banner follows the box live, without touching what is being typed
   let fillBanner = null;
   const off = on('host', () => { if (fillBanner) fillBanner(); });
@@ -14,7 +17,7 @@ export function renderWelcome(container, onDone) {
   function draw() {
     mount(container, h('div', { class: 'welcome' }, h('div', { class: 'welcome-box' },
       h('div', { class: 'logo' }, h('img', { src: 'img/logo.svg', alt: '' }),
-        h('div', null, h('b', null, 'SLT'), h('small', null, 'Soul Link Together — génération 1 à 5'))),
+        h('div', null, h('b', null, 'Cable Club'), h('small', null, 'Pokémon à plusieurs — générations 1 à 5'))),
       ui.step === 'server' ? serverStep() : accountStep())));
   }
 
@@ -31,9 +34,9 @@ export function renderWelcome(container, onDone) {
           store.state = s;
           ui.hosted = true;
         } else {
-          ui.code = address.value;
+          ui.code = ui.mode === 'official' ? '' : address.value;
           try {
-            const r = await local.post('/api/server/use', { address: address.value });
+            const r = await local.post('/api/server/use', { address: ui.mode === 'official' ? OFFICIAL : address.value });
             store.state = r.state;
           } catch (err) {
             // the diagnosis is long: shown under the field rather than in a passing notification
@@ -47,16 +50,21 @@ export function renderWelcome(container, onDone) {
       });
     } },
       h('div', null, h('h1', null, 'Bienvenue'), h('p', { class: 'muted mt-s' },
-        'Les comptes, les amis et les salles vivent sur un serveur SLT. Rejoignez celui de votre groupe, ou hébergez-le sur ce PC.')),
+        'Les comptes, les amis et les salles vivent sur un serveur. Le serveur Cable Club convient à presque tout le monde : un seul compte pour retrouver tous vos amis.')),
       h('div', { class: 'stack' },
+        h('button', { type: 'button', class: ['choice', ui.mode === 'official' && 'selected'], onclick: () => { ui.mode = 'official'; draw(); } },
+          icon('server'), h('div', null, h('b', null, 'Serveur Cable Club (recommandé)'), h('small', null, 'Le serveur officiel : un seul compte, vos amis et vos salles où que vous soyez.'))),
         h('button', { type: 'button', class: ['choice', ui.mode === 'join' && 'selected'], onclick: () => { ui.mode = 'join'; draw(); } },
-          icon('server'), h('div', null, h('b', null, 'Rejoindre un serveur'), h('small', null, 'Un ami héberge déjà SLT : collez le code d’invitation qu’il vous a envoyé.'))),
-        h('button', { type: 'button', class: ['choice', ui.mode === 'host' && 'selected'], onclick: () => { ui.mode = 'host'; draw(); } },
-          icon('home'), h('div', null, h('b', null, 'Héberger sur ce PC'), h('small', null, 'Ce PC devient le serveur du groupe (laissez SLT ouvert pendant les parties).')))),
+          icon('server'), h('div', null, h('b', null, 'Rejoindre un autre serveur'), h('small', null, 'Un ami héberge son propre serveur : collez le code d’invitation qu’il vous a envoyé.'))),
+        // hosting a server on this PC: an advanced choice, hidden until asked for
+        ui.advanced || ui.mode === 'host'
+          ? h('button', { type: 'button', class: ['choice', ui.mode === 'host' && 'selected'], onclick: () => { ui.mode = 'host'; draw(); } },
+            icon('home'), h('div', null, h('b', null, 'Héberger un serveur sur ce PC'), h('small', null, 'Avancé : ce PC devient le serveur de votre groupe. Il doit rester allumé, Cable Club ouvert, pendant les parties.')))
+          : h('a', { href: '#', class: 'small muted', onclick: (e) => { e.preventDefault(); ui.advanced = true; draw(); } }, 'Options avancées')),
       ui.mode === 'join' ? field('Code d’invitation ou adresse du serveur', address, 'L’hôte trouve son code dans Réglages > Serveur.') : null,
-      ui.mode === 'join' && ui.error ? h('div', { class: 'banner warn' }, icon('alert'), h('div', { class: 'small' }, ui.error)) : null,
+      (ui.mode === 'join' || ui.mode === 'official') && ui.error ? h('div', { class: 'banner warn' }, icon('alert'), h('div', { class: 'small' }, ui.error)) : null,
       ui.mode === 'host' ? h('label', { class: 'switch' }, internet, h('span', { class: 'track' }),
-        h('span', { class: 'small' }, 'Accessible depuis Internet — pour des amis qui jouent de chez eux (SLT ouvre le port de votre box)')) : null,
+        h('span', { class: 'small' }, 'Accessible depuis Internet — pour des amis qui jouent de chez eux (Cable Club ouvre le port de votre box)')) : null,
       go);
     return form;
   }
@@ -73,7 +81,7 @@ export function renderWelcome(container, onDone) {
       fillBanner = () => {
         const host = store.state?.host || {};
         mount(hosted, host.running ? h('div', { class: 'banner' }, icon('info'), h('div', null, h('b', null, 'Serveur démarré. '),
-          'Créez votre compte ici. Vos amis, eux, colleront ce code d’invitation dans SLT :', hostAddresses(host, {
+          'Créez votre compte ici. Vos amis, eux, colleront ce code d’invitation dans Cable Club :', hostAddresses(host, {
             onFirewall: async () => { store.state = await local.post('/api/host/firewall', {}); fillBanner(); },
           }))) : null);
       };

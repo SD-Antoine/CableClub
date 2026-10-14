@@ -28,7 +28,24 @@ export function randoLines(rando, gen) {
     if (rando?.perPlayer) lines.push('Une ROM différente par joueur');
     if (rando?.shops === 'secondary') lines.push('Vendeurs secondaires aléatoires (sans Master Ball ni objet de revente)');
   }
+  if (Number(rando?.shinyRate) > 0 && gen >= 2) lines.push(`Chromatiques : 1 sur ${rando.shinyRate}`);
   return lines;
+}
+
+// shiny rates a room may choose (1 in N); the games' own is 1 in 8192
+export const SHINY_RATES = [[0, 'Celui du jeu (1 sur 8192)'], [4096, '1 sur 4096'], [2048, '1 sur 2048'], [1024, '1 sur 1024'],
+  [512, '1 sur 512'], [256, '1 sur 256']];
+
+/** The shiny rate of a room (part of the randomization: the DS games get it in their ROM). */
+function shinyCard(rando, gen, changed) {
+  if (gen < 2) return null;
+  const how = gen >= 4
+    ? 'Écrit dans la ROM de la salle : vaut pour tous les Pokémon du jeu, sauvages comme ceux des dresseurs.'
+    : 'Appliqué pendant la partie : chaque Pokémon sauvage a cette chance d’apparaître chromatique (étincelles, couleurs, et chromatique une fois capturé).';
+  return h('div', { class: 'card tight' }, h('div', { class: 'rule-row' },
+    h('div', { class: 'grow' }, h('b', null, 'Pokémon chromatiques'), h('small', null, how)),
+    h('select', { class: 'input', style: { width: '210px' }, onchange: (e) => { rando.shinyRate = Number(e.target.value); changed(); } },
+      SHINY_RATES.map(([v, label]) => h('option', { value: v, selected: Number(rando.shinyRate || 0) === v }, label)))));
 }
 
 /**
@@ -71,7 +88,7 @@ export function randoEditor(rando, gen, onChange) {
         icon(ui.advanced ? 'back' : 'settings'), ui.advanced ? 'Masquer les options avancées' : 'Options avancées…'),
       ui.advanced ? advanced() : null) : null;
     const restore = keepScroll(root);
-    mount(root, presets, slt, adv);
+    mount(root, presets, shinyCard(rando, gen, changed), slt, adv);
     restore();
     requestAnimationFrame(restore);
   }
@@ -154,23 +171,23 @@ export function hostAddresses(host, { onInternet = null, onFirewall = null } = {
   }[net.state || 'off'];
   // while the box answers, the code would miss the Internet address: friends would get a code that cannot work
   const waiting = net.state === 'opening';
-  const fwButton = onFirewall ? h('button', { type: 'button', class: 'btn small primary' }, 'Autoriser SLT dans le pare-feu') : null;
+  const fwButton = onFirewall ? h('button', { type: 'button', class: 'btn small primary' }, 'Autoriser Cable Club dans le pare-feu') : null;
   if (fwButton) fwButton.onclick = () => act(fwButton, onFirewall);
   return h('div', { class: 'stack s', style: { marginTop: '6px' } },
     onInternet ? h('label', { class: 'row', style: { gap: '10px' } }, switchEl(!!net.on, onInternet),
-      h('span', { class: 'small' }, 'Accessible depuis Internet (SLT ouvre le port de votre box tout seul)')) : null,
+      h('span', { class: 'small' }, 'Accessible depuis Internet (Cable Club ouvre le port de votre box tout seul)')) : null,
     h('small', { class: state[0] }, waiting ? '⏳ ' : '', state[1]),
     fw.message ? h('div', { class: 'banner warn', style: { marginTop: '4px' } }, icon('alert'), h('div', { class: 'stack s' },
       h('small', null, fw.message),
       fwButton ? h('div', null, fwButton) : h('small', { class: 'faint' }, 'Réglages > Serveur propose de l’autoriser.'),
-      h('small', { class: 'faint' }, 'Windows vous demandera la permission (Oui). Un antivirus avec son propre pare-feu doit aussi laisser passer SLT.'))) : null,
+      h('small', { class: 'faint' }, 'Windows vous demandera la permission (Oui). Un antivirus avec son propre pare-feu doit aussi laisser passer Cable Club.'))) : null,
     waiting ? h('small', { class: 'faint' }, 'Le code d’invitation apparaît dès que la box a répondu.') : null,
     code && !waiting ? h('div', { class: 'row', style: { gap: '8px', marginTop: '4px' } },
       h('input', { class: 'input mono', readOnly: true, value: code, style: { height: '32px', fontSize: '12px' }, onfocus: (e) => e.target.select() }),
       h('button', { type: 'button', class: 'btn small primary', onclick: (e) => copy(e.currentTarget) }, 'Copier')) : null,
     code && !waiting ? h('small', { class: 'faint' }, net.state === 'open'
-      ? 'Envoyez ce code d’invitation à vos amis : ils le collent dans SLT à la place d’une adresse. '
-        + 'La connexion est chiffrée et SLT vérifie que c’est bien votre serveur.'
+      ? 'Envoyez ce code d’invitation à vos amis : ils le collent dans Cable Club à la place d’une adresse. '
+        + 'La connexion est chiffrée et Cable Club vérifie que c’est bien votre serveur.'
       : 'Tant que la box n’a pas ouvert le port, ce code ne fonctionne que sur votre réseau (même box), ou en IPv6 si les deux connexions le permettent.') : null,
     nets.length ? h('details', null, h('summary', { class: 'tiny faint', style: { cursor: 'pointer' } }, 'Adresses du serveur'),
       nets.map((n) => h('div', { class: 'tiny faint' }, `${labels[n.kind] || labels.local} : `, h('span', { class: 'mono' }, n.address)))) : null);

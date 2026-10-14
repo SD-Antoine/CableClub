@@ -121,7 +121,7 @@ public final class Desktop {
         }
         try {
             PopupMenu menu = new PopupMenu();
-            MenuItem open = new MenuItem("Ouvrir SLT");
+            MenuItem open = new MenuItem("Ouvrir Cable Club");
             open.addActionListener(e -> onOpen.run());
             MenuItem data = new MenuItem("Dossier des données");
             data.addActionListener(e -> onData.run());
@@ -131,7 +131,7 @@ public final class Desktop {
             menu.add(data);
             menu.addSeparator();
             menu.add(quit);
-            trayIcon = new TrayIcon(Icon.render(64), "SLT — Soul Link Together", menu);
+            trayIcon = new TrayIcon(Icon.render(64), "Cable Club", menu);
             trayIcon.setImageAutoSize(true);
             trayIcon.addActionListener(e -> onOpen.run());
             SystemTray.getSystemTray().add(trayIcon);

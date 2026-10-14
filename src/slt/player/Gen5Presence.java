@@ -57,6 +57,7 @@ final class Gen5Presence implements Presence {
     private String spriteId;
     private String spritePng;
     private volatile long tradeUntil;
+    private boolean exact;
 
     Gen5Presence(NdsReader reader, Gen5Sprites sprites, Gen5Sprites.Set set) {
         this.reader = reader;
@@ -77,6 +78,11 @@ final class Gen5Presence implements Presence {
     @Override
     public int spriteH() {
         return 32;
+    }
+
+    @Override
+    public boolean spriteExact() {
+        return exact;
     }
 
     @Override
@@ -128,8 +134,13 @@ final class Gen5Presence implements Presence {
         boolean field = view != null && (aimed || offField <= 2);
         boolean battle = !field && next != null && !Float.isNaN(fieldProjection) && Math.abs(next[0] - fieldProjection) > 0.05f;
         boolean dark = darkScreen(core);
-        boolean dialogue = field && !dark && dialogueBox(core);
-        boolean free = field && !dark && !dialogue;
+        // a message box over the field leaves the others where they are (behind the box); a screen white all over
+        // (flash of a battle starting, fade to white) is not one and hides them as a black one does
+        int box = field && !dark ? messageBox(core) : 0;
+        boolean flash = box < 0;
+        box = Math.max(box, 0);
+        boolean dialogue = field && !dark && box > 0;
+        boolean free = field && !dark && !flash;
         if (field && !dark) {
             readSprite(image);
             fieldMap = map;
@@ -144,7 +155,7 @@ final class Gen5Presence implements Presence {
             status = "trade";
         } else if (dialogue) {
             status = "dialogue";
-        } else if (!free) {
+        } else if (!free || flash) {
             status = "busy";
         } else {
             status = "free";
@@ -152,7 +163,7 @@ final class Gen5Presence implements Presence {
         if (fieldMap < 0) {
             return null;
         }
-        return new Sample(fieldMap, fieldX, fieldY, field && !dark, free, status, spriteId, 0, 0, fieldZ, shown);
+        return new Sample(fieldMap, fieldX, fieldY, field && !dark, free, status, spriteId, 0, 0, fieldZ, shown, box);
     }
 
     /** The last position on the field, while the structures are not found (loading, battle…). */
@@ -246,7 +257,7 @@ final class Gen5Presence implements Presence {
 
     /**
      * Camera x projection (row vectors, 16 values), then the depth of the player's feet (drawn one texel
-     * per pixel), from the fixed-point matrices of the 3D library; null when they
+     * per pixel) and their position on the image, from the fixed-point matrices of the 3D library; null when they
      * are not the field camera's: a perspective, and a camera matrix placing the eye where the camera
      * position (+0x240) says (another drawing pass sometimes leaves its own camera, measured on White 2).
      */
@@ -272,7 +283,7 @@ final class Gen5Presence implements Presence {
                 return null;
             }
         }
-        float[] m = new float[17];
+        float[] m = new float[19];
         for (int r = 0; r < 4; r++) {
             for (int k = 0; k < 4; k++) {
                 double s = 0;
@@ -287,7 +298,11 @@ final class Gen5Presence implements Presence {
         double x = i32(billboard) / (double) FX;
         double y = i32(billboard + 4) / (double) FX;
         double z = i32(billboard + 8) / (double) FX;
-        m[16] = (float) (x * m[3] + y * m[7] + z * m[11] + m[15]);
+        double w = x * m[3] + y * m[7] + z * m[11] + m[15];
+        m[16] = (float) w;
+        // where the player's feet are on the image: the window redraws the player over the others behind them
+        m[17] = (float) (((x * m[0] + y * m[4] + z * m[8] + m[12]) / w + 1) * 128);
+        m[18] = (float) ((1 - (x * m[1] + y * m[5] + z * m[9] + m[13]) / w) * 96);
         return m;
     }
 
@@ -317,8 +332,10 @@ final class Gen5Presence implements Presence {
             walkCode = code;
         }
         int frame = image;
+        exact = true;
         if (code != walkCode || image >= count) {
             frame = (u16(player + 0x18) & 3) * 3;
+            exact = false;
         }
         String id = "g5-" + file + "-" + frame;
         if (!id.equals(spriteId)) {
@@ -332,14 +349,22 @@ final class Gen5Presence implements Presence {
 
     // ------------------------------------------------------------- screen
 
-    /** A message box over the top or the bottom of the top screen. */
-    private static boolean dialogueBox(CoreHost core) {
+    /**
+     * A message box over the top (1) or the bottom (2) of the top screen, 0 for none, -1 when the screen is
+     * white all over (both bands and the middle): a flash, not a message.
+     */
+    static int messageBox(CoreHost core) {
         int w = core.frameWidth();
         int[] px = core.pixels();
         if (w != 256 || core.frameHeight() < 192 || px.length < w * 192) {
-            return false;
+            return 0;
         }
-        return whiteBand(px, w, 6, 44) || whiteBand(px, w, 148, 186);
+        boolean top = whiteBand(px, w, 6, 44);
+        boolean bottom = whiteBand(px, w, 148, 186);
+        if (top && bottom) {
+            return whiteBand(px, w, 64, 128) ? -1 : 0;
+        }
+        return top ? 1 : bottom ? 2 : 0;
     }
 
     private static boolean whiteBand(int[] px, int w, int from, int to) {
@@ -358,7 +383,7 @@ final class Gen5Presence implements Presence {
     }
 
     /** The top screen faded to black (map change, start of a battle). */
-    private static boolean darkScreen(CoreHost core) {
+    static boolean darkScreen(CoreHost core) {
         int w = core.frameWidth();
         int[] px = core.pixels();
         if (w != 256 || core.frameHeight() < 192 || px.length < w * 192) {

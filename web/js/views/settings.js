@@ -73,22 +73,24 @@ export function renderSettings(container, { applyTheme }) {
             location.hash = '#/';
             location.reload();
           })))),
+        // advanced: off unless the player turns it on (the Cable Club server needs nothing on this PC)
+        h('details', { class: 'advanced', open: !!host.running }, h('summary', { class: 'small muted' }, 'Avancé'),
         h('div', { class: 'rule-row' },
-          h('div', { class: 'grow' }, h('b', null, 'Héberger le serveur sur ce PC'),
+          h('div', { class: 'grow' }, h('b', null, 'Héberger un serveur sur ce PC'),
             host.running ? hostAddresses(host, { onInternet: async (v) => {
               try { store.state = await local.post('/api/host/internet', { on: v }); draw(); } catch (err) { toast(err.message, 'danger'); }
             }, onFirewall: async () => {
               store.state = await local.post('/api/host/firewall', {});
-              toast('SLT est autorisé dans le pare-feu Windows.', 'ok');
+              toast('Cable Club est autorisé dans le pare-feu Windows.', 'ok');
               draw();
             } })
-              : h('small', null, 'Ce PC devient le serveur de votre groupe (comptes, salles, journaux). Il doit rester allumé pendant les parties.')),
+              : h('small', null, 'Désactivé par défaut. Ce PC devient le serveur de votre groupe (comptes, salles, journaux) : il doit rester allumé, Cable Club ouvert, pendant les parties.')),
           switchEl(!!host.running, async (v) => {
             try {
               store.state = await local.post(v ? '/api/host/start' : '/api/host/stop', v ? { port: 47330, use: false } : {});
               draw();
             } catch (err) { toast(err.message, 'danger'); draw(); }
-          })))),
+          }))))),
 
       section('Contrôles', h('div', { class: 'stack' },
         h('p', { class: 'muted small' }, 'Cliquez sur une touche puis appuyez sur la nouvelle. Les manettes Xbox (et compatibles) sont reconnues automatiquement.'),
@@ -111,14 +113,14 @@ export function renderSettings(container, { applyTheme }) {
         h('div', { class: 'rule-row' }, h('div', { class: 'grow' }, h('b', null, 'Image lissée'), h('small', null, 'Désactivé : pixels nets (recommandé).')),
           switchEl(!!cfg.smooth, async (v) => { await save({ smooth: v }); draw(); })),
         h('div', { class: 'rule-row' }, h('div', { class: 'grow' }, h('b', null, 'Pause quand la fenêtre est réduite'),
-          h('small', null, 'Le jeu s’arrête tant que SLT est réduit ou caché.')),
+          h('small', null, 'Le jeu s’arrête tant que Cable Club est réduit ou caché.')),
           switchEl(cfg.pauseHidden !== false, async (v) => { await save({ pauseHidden: v }); draw(); })))),
 
       section('Mises à jour', updateSettings(switchEl, async (patch) => { await save(patch); draw(); })),
 
       section('Données', h('div', { class: 'row' }, h('span', { class: 'muted small grow mono ellipsis' }, store.state?.dataDir || ''),
         btn('Ouvrir le dossier', () => local.post('/api/data/reveal').catch((e) => toast(e.message, 'danger')), { kind: 'small', iconName: 'folder' }))),
-      h('p', { class: 'tiny faint center mt-l' }, `SLT ${store.state?.version || ''} · Projet de fans non officiel · Pokémon © Nintendo, Creatures, GAME FREAK`));
+      h('p', { class: 'tiny faint center mt-l' }, `Cable Club ${store.state?.version || ''} · Projet de fans non officiel · Pokémon © Nintendo, Creatures, GAME FREAK`));
   }
 
   function section(title, body) {

@@ -14,6 +14,16 @@ package slt.player.track;
  */
 public final class NdsPkm {
 
+    /**
+     * A Pokémon is shiny when its shiny value is under this: 8 in the games, the room's threshold when its ROM
+     * got another shiny rate (SltPatches), given by the room's directives.
+     */
+    static volatile int shinyThreshold = 8;
+
+    public static void shinyRate(int rate) {
+        shinyThreshold = rate <= 0 || rate >= 8192 ? 8 : Math.max(8, Math.min(255, Math.round(65536f / rate)));
+    }
+
     public static final int GEN4_PARTY_SIZE = 236;
     public static final int GEN5_PARTY_SIZE = 220;
     public static final int BOX_SIZE = 136;
@@ -143,7 +153,7 @@ public final class NdsPkm {
         }
         int otId = data[a + 2];
         int sid = data[a + 3];
-        boolean shiny = (otId ^ sid ^ (int) (pid >>> 16) ^ (int) (pid & 0xFFFF)) < 8;
+        boolean shiny = (otId ^ sid ^ (int) (pid >>> 16) ^ (int) (pid & 0xFFFF)) < shinyThreshold;
         boolean egg = (data[b + 9] & 0x4000) != 0;
         int met = data[d + 12];
         if (partySize == GEN4_PARTY_SIZE && data[b + 15] != 0) {
@@ -172,6 +182,44 @@ public final class NdsPkm {
         }
         return new Mon(pid, species, level, hp, maxHp, nick.length() > 0 ? nick.toString() : null, otId, met, egg, shiny,
                 base + off);
+    }
+
+    /**
+     * Battle set of the Pokémon at {@code off} (see {@link slt.player.track.GameReader#battleSet}). Block A:
+     * species, held item, happiness (+0x14), ability (+0x15), EVs (+0x18: HP, Attack, Defense, Speed, Special
+     * Attack, Special Defense); block B: moves, IVs (+0x10, 5 bits each in the same order), +0x18 female (bit 1),
+     * genderless (bit 2), form (bits 3-7), generation 5 nature (+0x19); generation 4 nature = personality % 25.
+     */
+    public static java.util.Map<String, Object> battleSet(byte[] m, int off, int partySize, Mon mon) {
+        if (off < 0 || off + partySize > m.length || mon.egg()) {
+            return null;
+        }
+        long pid = u32(m, off);
+        int[] data = decrypt(m, off + 8, 64, u16(m, off + 6));
+        int order = (int) (((pid & 0x3E000L) >>> 13) % 24);
+        int a = ORDER[order][0] * 16;
+        int b = ORDER[order][1] * 16;
+        java.util.List<Object> moves = new java.util.ArrayList<>();
+        java.util.List<Object> ppUps = new java.util.ArrayList<>();
+        for (int i = 0; i < 4; i++) {
+            if (data[b + i] != 0) {
+                moves.add((long) data[b + i]);
+                ppUps.add((long) Math.min(3, (data[b + 6 + i / 2] >>> (8 * (i & 1))) & 0xFF));
+            }
+        }
+        long iv = (data[b + 8] & 0xFFFFL) | ((data[b + 9] & 0xFFFFL) << 16);
+        boolean gen5 = partySize == GEN5_PARTY_SIZE;
+        int flags = data[b + 12] & 0xFF;
+        long nature = gen5 ? (data[b + 12] >>> 8) & 0xFF : pid % 25;
+        return slt.Json.map("gen", gen5 ? 5L : 4L, "species", (long) mon.species(), "level", (long) mon.level(),
+                "nickname", mon.nickname(), "moves", moves, "ppUps", ppUps, "shiny", mon.shiny(),
+                "ivs", slt.Json.map("hp", iv & 31, "atk", (iv >>> 5) & 31, "def", (iv >>> 10) & 31, "spe", (iv >>> 15) & 31,
+                        "spa", (iv >>> 20) & 31, "spd", (iv >>> 25) & 31),
+                "evs", slt.Json.map("hp", (long) (data[a + 8] & 0xFF), "atk", (long) (data[a + 8] >>> 8), "def", (long) (data[a + 9] & 0xFF),
+                        "spe", (long) (data[a + 9] >>> 8), "spa", (long) (data[a + 10] & 0xFF), "spd", (long) (data[a + 10] >>> 8)),
+                "nature", nature, "ability", (long) (data[a + 6] >>> 8), "item", (long) data[a + 1],
+                "happiness", (long) (data[a + 6] & 0xFF), "form", (long) (flags >> 3),
+                "gender", (flags & 4) != 0 ? "N" : (flags & 2) != 0 ? "F" : "M");
     }
 
     /** Bytes (offset, value) that set the current HP of the party Pokémon at {@code off} to zero. */

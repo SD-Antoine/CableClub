@@ -9,7 +9,9 @@ import { store, on, loadRoom, loadLogs, refreshFriends, me } from '../store.js';
 import { gameName, LANG } from '../data/games.js';
 import { rulesEditor, randoEditor, randoLines } from './parts.js';
 import { stateChip } from './home.js';
-import { tradeBox } from './trades.js';
+import { tradeBox, TRADES } from './trades.js';
+import { chatPanel } from './chat.js';
+import { battlesPanel } from './battle.js';
 
 const ZONE_STATUS = {
   open: ['Ouverte', ''], waiting: ['En attente', 'accent'], naming: ['Nommage', 'accent'], linked: ['Liée', 'ok'],
@@ -23,6 +25,18 @@ export async function renderRoom(container, roomId, { history = false } = {}) {
   let building = null; // progress message while this PC prepares the ROM
   let autoPrepared = false;
   const ui = { tab: room.state === 'lobby' ? null : 'links', logFilter: 'all' };
+  // the room's chat and battles: one panel each, kept across redraws (messages, what is being typed)
+  let chat = null;
+  let duels = null;
+  const duelsBox = () => {
+    if (!duels) duels = battlesPanel(room);
+    return duels.el;
+  };
+  const chatBox = () => {
+    if (!chat) chat = chatPanel(`room-${roomId}`, { compact: true, placeholder: 'Écrire aux joueurs de la salle…' });
+    chat.setVisible(true);
+    return chat.el;
+  };
   const page = h('div', { class: 'page' });
   container.appendChild(page);
 
@@ -93,7 +107,7 @@ export async function renderRoom(container, roomId, { history = false } = {}) {
         await srv.post(`/rooms/${roomId}/invite`, { userId: f.id });
         e.currentTarget.textContent = 'Invité';
       }), { kind: 'small', disabled: invited });
-      return h('div', { class: 'list-item' }, avatar(f.name, 2, { size: 's', online: f.online }),
+      return h('div', { class: 'list-item' }, avatar(f.name, 2, { size: 's', online: f.online, id: f.id, pic: f.avatar }),
         h('div', { class: 'grow' }, h('b', null, f.name), h('div', { class: 'tiny muted' }, f.online ? 'En ligne' : 'Hors ligne')), b);
     }) : h('p', { class: 'muted' }, 'Aucun ami à inviter. Ajoutez des amis depuis la page « Amis ».'));
     modal({
@@ -131,13 +145,17 @@ export async function renderRoom(container, roomId, { history = false } = {}) {
     const m = mine();
     return h('div', { class: 'room-head' },
       h('div', null,
-        h('h1', null, room.name, stateChip(room)),
+        h('h1', null, room.name, stateChip(room), room.visibility === 'public' ? chip('Publique', 'accent') : null),
         h('div', { class: 'meta' },
           h('span', null, gameName(room.game?.gameId)),
           h('span', null, '·'), h('span', null, `${room.members.length}/${room.maxPlayers} joueur(s)`),
           room.code && room.state === 'lobby' ? [h('span', null, '·'),
             h('button', { class: 'chip', title: 'Copier le code', onclick: () => copy(room.code) }, icon('copy'), h('span', { class: 'mono' }, room.code))] : null)),
       h('div', { class: 'row' },
+        room.state === 'lobby' && isLeader() ? btn(room.visibility === 'public' ? 'Rendre privée' : 'Rendre publique', (e) => act(e.currentTarget,
+          () => srv.post(`/rooms/${roomId}/settings`, { visibility: room.visibility === 'public' ? 'private' : 'public' })),
+        { kind: 'ghost', iconName: room.visibility === 'public' ? 'lock' : 'globe',
+          title: room.visibility === 'public' ? 'Seuls vos invités (ou le code) pourront entrer' : 'La salle apparaît dans « Salles publiques » : n’importe qui peut la rejoindre tant qu’elle n’est pas lancée' }) : null,
         room.state === 'lobby' && isLeader() ? btn('Inviter', invite, { iconName: 'plus' }) : null,
         room.state === 'running' && isLeader() ? btn(room.adventureOpen ? 'Fermer l’aventure' : 'Ouvrir l’aventure', (e) => act(e.currentTarget,
           () => srv.post(`/rooms/${roomId}/adventure`, { open: !room.adventureOpen })), { iconName: room.adventureOpen ? 'lock' : 'unlock' }) : null,
@@ -165,7 +183,7 @@ export async function renderRoom(container, roomId, { history = false } = {}) {
     const cells = [];
     for (const m of [...room.members].sort((a, b) => a.slot - b.slot)) {
       cells.push(h('div', { class: ['slot', m.userId === user?.id && 'me'] },
-        h('div', { class: 'who' }, avatar(m.name, m.slot, { online: m.online }),
+        h('div', { class: 'who' }, avatar(m.name, m.slot, { online: m.online, id: m.userId, pic: m.avatar }),
           h('div', { class: 'grow' }, h('b', null, m.name, m.userId === user?.id ? ' (vous)' : ''),
             h('div', { class: 'tiny muted' }, m.leader ? 'Chef de salle' : 'Joueur')),
           m.leader ? icon('crown') : null,
@@ -223,6 +241,7 @@ export async function renderRoom(container, roomId, { history = false } = {}) {
           h('p', { class: 'tiny faint mt-s' }, 'Seed ', h('span', { class: 'mono' }, room.rando?.seed || '—')))),
         h('div', { class: 'card' }, h('h3', null, 'Règles'), h('p', { class: 'tiny faint mt-s' }, isLeader() ? 'Modifiables à tout moment, même en cours de partie.' : 'Fixées par le chef de salle.'),
           rulesEditor(room.rules, { editable: isLeader(), onChange: setRules }))),
+      m ? h('div', { class: 'card mt chat-card' }, h('h3', { class: 'mb' }, 'Discussion de la salle'), chatBox()) : null,
       m ? h('div', { class: 'action-bar' },
         h('div', { class: 'grow' },
           h('b', null, m.ready ? 'Vous êtes prêt.' : 'Quand votre ROM est prête, indiquez que vous êtes prêt.'),
@@ -231,6 +250,22 @@ export async function renderRoom(container, roomId, { history = false } = {}) {
           () => srv.post(`/rooms/${roomId}/ready`, { ready: !m.ready })), { kind: m.ready ? '' : 'primary', disabled: !m.ready && m.rom?.status !== 'ready' }),
         isLeader() ? btn('Lancer l’aventure', (e) => act(e.currentTarget, () => srv.post(`/rooms/${roomId}/launch`)),
           { kind: 'primary', iconName: 'play', disabled: !canLaunch, title: canLaunch ? null : 'Tous les joueurs doivent être prêts' }) : null) : null);
+  }
+
+  /** A public room seen by someone who is not in it: what it is, and a button to join. */
+  function visitorView() {
+    const full = room.members.length >= room.maxPlayers;
+    return h('div', null,
+      h('div', { class: 'banner' }, icon('globe'), h('div', { class: 'grow' },
+        h('b', null, 'Salle publique. '), `Chef de salle : ${room.leaderName || '?'}. `, full ? 'Elle est complète pour l’instant.' : 'Rejoignez-la pour préparer votre ROM avec les autres.'),
+      btn('Rejoindre la salle', (e) => act(e.currentTarget, async () => {
+        room = await srv.post(`/rooms/${roomId}/join`); store.rooms.set(roomId, room); draw(); maybeAutoPrepare();
+      }), { kind: 'primary', disabled: full })),
+      slots(),
+      h('div', { class: 'grid2 mt-l' },
+        h('div', { class: 'card' }, h('h3', null, 'Randomisation'),
+          h('ul', { class: 'muted small', style: { margin: '10px 0 0', paddingLeft: '18px' } }, randoLines(room.rando || {}, gen()).map((l) => h('li', null, l)))),
+        h('div', { class: 'card' }, h('h3', null, 'Règles'), rulesEditor(room.rules || {}, { editable: false, onChange: () => {} }))));
   }
 
   function invitedView() {
@@ -249,7 +284,7 @@ export async function renderRoom(container, roomId, { history = false } = {}) {
         ? `Tous les joueurs ont capturé leur Pokémon de ${naming.zoneName} : choisissez le nom du lien.`
         : `Le chef de salle choisit le nom du lien de ${naming.zoneName}. Les jeux reprennent ensuite.`)) : null,
       !room.adventureOpen ? h('div', { class: 'banner warn' }, icon('lock'), h('div', null, 'L’aventure est fermée par le chef de salle : les jeux sont en pause.')) : null,
-      (room.trades || []).some((t) => t.state === 'offered' && t.to === user?.id)
+      TRADES && (room.trades || []).some((t) => t.state === 'offered' && t.to === user?.id)
         ? h('div', { class: 'banner' }, icon('info'), h('div', { class: 'grow' }, 'Un partenaire vous propose un échange.'),
           btn('Voir', () => { ui.tab = 'players'; draw(); }, { kind: 'small' })) : null,
       !room.linkStarted ? h('div', { class: 'banner' }, icon('info'), h('div', null,
@@ -300,7 +335,7 @@ export async function renderRoom(container, roomId, { history = false } = {}) {
       const team = live.team || [];
       const s = m.stats || {};
       return h('div', { class: 'card' },
-        h('div', { class: 'row' }, avatar(m.name, m.slot, { online: m.online }),
+        h('div', { class: 'row' }, avatar(m.name, m.slot, { online: m.online, id: m.userId, pic: m.avatar }),
           h('div', { class: 'grow' }, h('b', null, m.name), h('div', { class: 'tiny muted' },
             m.status === 'champion' ? '🏆 Maître vaincu' : live.zone ? `À ${live.zone}${live.battle ? ' · en combat' : ''}` : m.online ? 'En ligne' : 'Hors ligne'))),
         h('div', { class: 'stat-nums' },
@@ -358,7 +393,7 @@ export async function renderRoom(container, roomId, { history = false } = {}) {
           return entries.length ? h('div', { class: 'item-list' }, entries.map(([k, v]) => chip(`${v}× ${k}`))) : h('span', { class: 'tiny faint' }, 'Aucun');
         };
         return h('div', { class: 'card' },
-          h('div', { class: 'row' }, avatar(s.name, m?.slot), h('div', { class: 'grow' }, h('b', null, s.name),
+          h('div', { class: 'row' }, avatar(s.name, m?.slot, { id: s.userId, pic: m?.avatar }), h('div', { class: 'grow' }, h('b', null, s.name),
             h('div', { class: 'tiny muted' }, s.status === 'champion' ? '🏆 Maître vaincu' : s.status === 'wiped' ? 'Équipe tombée' : `${s.alive || 0} Pokémon encore en vie`))),
           h('div', { class: 'stat-nums' },
             h('div', null, h('b', null, s.captures || 0), h('small', null, 'capturés')),
@@ -374,12 +409,15 @@ export async function renderRoom(container, roomId, { history = false } = {}) {
 
   function tabs(list) {
     if (!ui.tab || !list.some(([id]) => id === ui.tab)) ui.tab = list[0][0];
+    if (ui.tab !== 'chat') chat?.setVisible(false);
     let content;
     switch (ui.tab) {
       case 'players': content = playersTab(); break;
       case 'journal': drawLogs(); content = logBox; break;
       case 'rules': content = h('div', { class: 'card' }, rulesEditor(room.rules, { editable: isLeader() && room.state === 'running', onChange: setRules })); break;
       case 'rom': content = (drawRomOnly(), romBox); break;
+      case 'chat': content = h('div', { class: 'card chat-card' }, chatBox()); break;
+      case 'battles': content = duelsBox(); break;
       default: content = zonesTab(); break;
     }
     return h('div', { class: 'mt-l' },
@@ -391,11 +429,11 @@ export async function renderRoom(container, roomId, { history = false } = {}) {
     const m = mine();
     let body;
     if (room.state === 'lobby') {
-      body = m ? lobby() : invitedView();
+      body = m ? lobby() : room.visitor ? visitorView() : invitedView();
     } else if (room.state === 'running') {
-      body = h('div', null, playCard(), tabs([['links', 'Liens'], ['players', 'Joueurs'], ['journal', 'Journal'], ['rules', 'Règles'], ['rom', 'Ma ROM']]));
+      body = h('div', null, playCard(), tabs([['links', 'Liens'], ['players', 'Joueurs'], ['battles', 'Combats'], ['chat', 'Discussion'], ['journal', 'Journal'], ['rules', 'Règles'], ['rom', 'Ma ROM']]));
     } else {
-      body = h('div', null, summary(), tabs([['links', 'Liens'], ['journal', 'Journal'], ['rules', 'Règles']]));
+      body = h('div', null, summary(), tabs([['links', 'Liens'], ['chat', 'Discussion'], ['journal', 'Journal'], ['rules', 'Règles']]));
     }
     mount(page, history ? h('a', { href: '#/historique', class: 'small muted' }, '← Historique') : null, header(), body);
   }
@@ -412,6 +450,6 @@ export async function renderRoom(container, roomId, { history = false } = {}) {
     on('player', () => { if (room.state === 'running') draw(); }),
     on('rom', (r) => { if (r.roomId === roomId && r.state === 'building' && r.message && !building) { building = r.message; drawRomOnly(); } }),
   ];
-  return () => offs.forEach((f) => f());
+  return () => { offs.forEach((f) => f()); chat?.destroy(); duels?.destroy(); };
 }
 

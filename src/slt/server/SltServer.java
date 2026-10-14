@@ -29,7 +29,16 @@ public final class SltServer {
     final Accounts accounts;
     final Hub hub = new Hub();
     final Rooms rooms;
+    final Avatars avatars;
+    final Chat chat;
+    final Battles battles;
     final String name;
+    private final java.util.concurrent.ScheduledExecutorService timer =
+            Executors.newSingleThreadScheduledExecutor(r -> {
+                Thread t = new Thread(r, "slt-server-timer");
+                t.setDaemon(true);
+                return t;
+            });
     private HttpServer http;
     private int port;
 
@@ -37,7 +46,26 @@ public final class SltServer {
         Files.createDirectories(dataDir);
         this.accounts = new Accounts(dataDir);
         this.rooms = new Rooms(dataDir, accounts, hub);
-        this.name = name == null || name.isBlank() ? "Serveur SLT" : name;
+        this.avatars = new Avatars(dataDir);
+        this.chat = new Chat(dataDir, accounts, rooms, hub);
+        this.battles = new Battles(rooms, hub);
+        this.name = name == null || name.isBlank() ? "Serveur Cable Club" : name;
+        hub.avatars(userId -> {
+            Accounts.User u = accounts.get(userId);
+            return u == null ? 0 : u.avatarAt;
+        });
+        rooms.onDeleted = id -> {
+            chat.roomDeleted(id);
+            battles.roomDeleted(id);
+        };
+        // what each player read in the chat is written every few seconds, not at each message
+        timer.scheduleWithFixedDelay(() -> {
+            try {
+                chat.flush();
+            } catch (RuntimeException e) {
+                Log.warn("Serveur : " + e.getMessage());
+            }
+        }, 5, 5, java.util.concurrent.TimeUnit.SECONDS);
         hub.onPresence((userId, online) -> {
             Accounts.User u = accounts.get(userId);
             if (u != null) {
@@ -87,6 +115,7 @@ public final class SltServer {
     }
 
     public void stop() {
+        chat.flush();
         if (http != null) {
             http.stop(1);
             http = null;

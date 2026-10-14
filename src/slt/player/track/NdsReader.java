@@ -59,7 +59,8 @@ public final class NdsReader implements GameReader {
     /**
      * Maps only reached after beating the Champion (map headers of the decompilations: Platinum and
      * Diamond / Pearl: hallway to the Hall of Fame 186, Hall of Fame 187; HeartGold / SoulSilver: Hall
-     * of Fame 306). Black / White and Black 2 / White 2: unknown.
+     * of Fame 306; Black / White and Black 2 / White 2: Hall of Fame 145, the map after the four Elite Four
+     * rooms and the Champion's in the headers (a/0/1/2: same music 0x3E9, same index in the four ROMs).
      */
     private static int[] hallOfFame(Layout layout) {
         if (layout == HGSS) {
@@ -68,7 +69,7 @@ public final class NdsReader implements GameReader {
         if (layout == DP || layout == PT) {
             return new int[]{186, 187};
         }
-        return new int[0];
+        return layout == GEN5 ? new int[]{145} : new int[0];
     }
 
     private final Layout layout;
@@ -111,12 +112,15 @@ public final class NdsReader implements GameReader {
     }
 
     /**
-     * Console address of the player's gender (u8: 0 boy, 1 girl) in the live save buffer, generation 5
-     * only (trainer card: trainer ID at +0x14, gender at +0x21; verified on White 2), -1 until the save
-     * is found.
+     * Console address of the player's gender (u8: 0 boy, 1 girl) in the live save buffer, -1 until the save
+     * is found: generation 5, trainer card (trainer ID at +0x14, gender at +0x21; verified on White 2);
+     * generation 4, 8 bytes after the trainer ID (after the money; verified on Platinum).
      */
     public long genderAddress() {
-        return base < 0 || layout != GEN5 ? -1 : base + layout.trainerId + trainerShift + 0x0D;
+        if (base < 0) {
+            return -1;
+        }
+        return base + layout.trainerId + trainerShift + (layout == GEN5 ? 0x0D : 8);
     }
 
     @Override
@@ -385,6 +389,12 @@ public final class NdsReader implements GameReader {
             }
         }
         return false;
+    }
+
+    @Override
+    public java.util.Map<String, Object> battleSet(Mem m, Mon mon) {
+        byte[] d = m.read(mon.address(), layout.partySize);
+        return d == null ? null : NdsPkm.battleSet(d, 0, layout.partySize, mon);
     }
 
     @Override

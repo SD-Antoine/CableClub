@@ -49,6 +49,16 @@ public final class Accounts {
         public final Set<String> friends = new LinkedHashSet<>();
         public final Set<String> incoming = new LinkedHashSet<>();
         public final Set<String> outgoing = new LinkedHashSet<>();
+        /** Users whose messages this user does not want to see (chat). */
+        public final Set<String> blocked = new LinkedHashSet<>();
+        // profile
+        public String bio = "";
+        public String favGame = "";
+        public String favPokemon = "";
+        /** When the profile picture was last changed (0 = none): its version in the addresses. */
+        public long avatarAt;
+        /** No message in the general chat until then (moderation). */
+        public long mutedUntil;
 
         User(String id, String username, String display, long createdAt) {
             this.id = id;
@@ -59,14 +69,26 @@ public final class Accounts {
 
         /** What other users may see. */
         public Map<String, Object> pub() {
-            return Json.map("id", id, "username", username, "name", display);
+            return Json.map("id", id, "username", username, "name", display, "avatar", avatarAt);
+        }
+
+        /** The profile card: what other users may see, and more. */
+        public Map<String, Object> profile() {
+            Map<String, Object> m = pub();
+            m.put("bio", bio);
+            m.put("favGame", favGame);
+            m.put("favPokemon", favPokemon);
+            m.put("createdAt", createdAt);
+            return m;
         }
 
         Map<String, Object> toJson() {
             return Json.map("id", id, "username", username, "display", display, "hash", hash, "salt", salt,
                     "iterations", (long) iterations, "createdAt", createdAt,
                     "friends", new ArrayList<Object>(friends), "incoming", new ArrayList<Object>(incoming),
-                    "outgoing", new ArrayList<Object>(outgoing));
+                    "outgoing", new ArrayList<Object>(outgoing), "blocked", new ArrayList<Object>(blocked),
+                    "bio", bio, "favGame", favGame, "favPokemon", favPokemon, "avatarAt", avatarAt,
+                    "mutedUntil", mutedUntil);
         }
 
         static User fromJson(Map<String, Object> m) {
@@ -78,6 +100,12 @@ public final class Accounts {
             strings(m.get("friends"), u.friends);
             strings(m.get("incoming"), u.incoming);
             strings(m.get("outgoing"), u.outgoing);
+            strings(m.get("blocked"), u.blocked);
+            u.bio = Json.str(m, "bio") == null ? "" : Json.str(m, "bio");
+            u.favGame = Json.str(m, "favGame") == null ? "" : Json.str(m, "favGame");
+            u.favPokemon = Json.str(m, "favPokemon") == null ? "" : Json.str(m, "favPokemon");
+            u.avatarAt = Json.num(m, "avatarAt", 0);
+            u.mutedUntil = Json.num(m, "mutedUntil", 0);
             return u;
         }
     }
@@ -154,6 +182,50 @@ public final class Accounts {
     public synchronized void rename(User user, String display) {
         user.display = cleanDisplay(display);
         save();
+    }
+
+    /** Changes the fields of the profile that are given (name, bio, favourite game and Pokémon). */
+    public synchronized void updateProfile(User user, Map<String, Object> b) {
+        String name = b.containsKey("name") ? cleanDisplay(Json.str(b, "name")) : user.display;
+        String bio = b.containsKey("bio") ? cleanText(Json.str(b, "bio"), 160, "Bio") : user.bio;
+        String game = b.containsKey("favGame") ? cleanText(Json.str(b, "favGame"), 40, "Jeu favori") : user.favGame;
+        String mon = b.containsKey("favPokemon") ? cleanText(Json.str(b, "favPokemon"), 24, "Pokémon favori") : user.favPokemon;
+        user.display = name;
+        user.bio = bio;
+        user.favGame = game;
+        user.favPokemon = mon;
+        save();
+    }
+
+    public synchronized void avatarChanged(User user, boolean present) {
+        user.avatarAt = present ? Math.max(System.currentTimeMillis(), user.avatarAt + 1) : 0;
+        save();
+    }
+
+    public synchronized void block(User user, User other, boolean on) {
+        if (user.id.equals(other.id)) {
+            throw new Http.Fail(400, "Vous ne pouvez pas vous bloquer vous-même.");
+        }
+        if (on) {
+            user.blocked.add(other.id);
+        } else {
+            user.blocked.remove(other.id);
+        }
+        save();
+    }
+
+    public synchronized void mute(User user, long until) {
+        user.mutedUntil = until;
+        save();
+    }
+
+    /** One line of free text (no control characters, no angle brackets), at most {@code max} characters. */
+    static String cleanText(String text, int max, String label) {
+        String t = text == null ? "" : text.replaceAll("[\\p{Cntrl}<>]", " ").replaceAll("\\s+", " ").trim();
+        if (t.codePointCount(0, t.length()) > max) {
+            throw new Http.Fail(400, label + " : " + max + " caractères au plus.");
+        }
+        return t;
     }
 
     public synchronized int count() {

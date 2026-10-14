@@ -33,6 +33,16 @@ final class PinnedTls {
      * @param acceptAny without a pin: accept any certificate (first contact, the fingerprint is then kept)
      */
     static SSLContext context(Supplier<String> pin, AtomicReference<String> seen, boolean acceptAny) {
+        return context(pin, seen, acceptAny, null);
+    }
+
+    /**
+     * @param replaced when the fingerprint no longer matches but the server now
+     *                 has a real certificate for its name (it moved from its own
+     *                 certificate to Let's Encrypt…): connection accepted, then this
+     *                 runs (null = refused, the right thing for invitation codes)
+     */
+    static SSLContext context(Supplier<String> pin, AtomicReference<String> seen, boolean acceptAny, Runnable replaced) {
         try {
             TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
             tmf.init((KeyStore) null);
@@ -43,7 +53,7 @@ final class PinnedTls {
                 }
             }
             SSLContext ctx = SSLContext.getInstance("TLS");
-            ctx.init(null, new TrustManager[]{new Pinning(pin, seen, acceptAny, system)}, null);
+            ctx.init(null, new TrustManager[]{new Pinning(pin, seen, acceptAny, system, replaced)}, null);
             return ctx;
         } catch (GeneralSecurityException e) {
             throw new IllegalStateException(e);
@@ -62,12 +72,15 @@ final class PinnedTls {
         private final AtomicReference<String> seen;
         private final boolean acceptAny;
         private final X509ExtendedTrustManager system;
+        private final Runnable replaced;
 
-        Pinning(Supplier<String> pin, AtomicReference<String> seen, boolean acceptAny, X509ExtendedTrustManager system) {
+        Pinning(Supplier<String> pin, AtomicReference<String> seen, boolean acceptAny, X509ExtendedTrustManager system,
+                Runnable replaced) {
             this.pin = pin;
             this.seen = seen;
             this.acceptAny = acceptAny;
             this.system = system;
+            this.replaced = replaced;
         }
 
         /** @return true when the pin (or "accept any") decides, false to fall back on the system checks */
@@ -89,17 +102,34 @@ final class PinnedTls {
             return acceptAny;
         }
 
+        // the engine and socket checks also verify the server's name (unlike the third one)
         @Override
         public void checkServerTrusted(X509Certificate[] chain, String authType, SSLEngine engine) throws CertificateException {
-            if (!pinned(chain)) {
+            try {
+                if (!pinned(chain)) {
+                    system.checkServerTrusted(chain, authType, engine);
+                }
+            } catch (Mismatch m) {
+                if (replaced == null) {
+                    throw m;
+                }
                 system.checkServerTrusted(chain, authType, engine);
+                replaced.run();
             }
         }
 
         @Override
         public void checkServerTrusted(X509Certificate[] chain, String authType, Socket socket) throws CertificateException {
-            if (!pinned(chain)) {
+            try {
+                if (!pinned(chain)) {
+                    system.checkServerTrusted(chain, authType, socket);
+                }
+            } catch (Mismatch m) {
+                if (replaced == null) {
+                    throw m;
+                }
                 system.checkServerTrusted(chain, authType, socket);
+                replaced.run();
             }
         }
 

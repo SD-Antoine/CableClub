@@ -16,36 +16,37 @@ export function stateChip(room) {
   return chip('Abandonnée');
 }
 
-export function renderHome(container) {
-  const page = h('div', { class: 'page' });
+/** My rooms of a game mode (lobby or running) and my invitations; inside the tab of the mode. */
+export function renderHome(container, { mode = 'soullink' } = {}) {
+  const page = h('div');
   container.appendChild(page);
 
   function draw() {
-    const rooms = [...store.rooms.values()].filter((r) => r.state === 'lobby' || r.state === 'running');
+    const rooms = [...store.rooms.values()].filter((r) => (r.mode || 'soullink') === mode && (r.state === 'lobby' || r.state === 'running'));
     const invites = rooms.filter((r) => r.invited);
     const mine = rooms.filter((r) => !r.invited);
     mount(page,
-      h('div', { class: 'page-head' },
-        h('div', null, h('h1', null, 'Salles'), h('p', null, 'Créez une salle de 1 à 4 joueurs ou rejoignez celle d’un ami.')),
+      h('div', { class: 'row between mb' },
+        h('p', { class: 'muted' }, 'Créez une salle de 1 à 4 joueurs, rejoignez celle d’un ami ou une salle publique.'),
         h('div', { class: 'row' },
           btn('Rejoindre avec un code', joinWithCode, { iconName: 'door' }),
           btn('Nouvelle salle', () => openCreateRoom(), { kind: 'primary', iconName: 'plus' }))),
       invites.length ? h('div', null,
         h('div', { class: 'section-title' }, h('h2', null, 'Invitations')),
         h('div', { class: 'stack' }, invites.map(inviteCard))) : null,
-      h('div', { class: 'section-title' }, h('h2', null, 'Mes salles')),
+      invites.length ? h('div', { class: 'section-title' }, h('h2', null, 'Mes salles')) : null,
       mine.length ? h('div', { class: 'stack' }, mine.map(roomCard))
         : h('div', { class: 'empty' }, h('b', null, 'Aucune salle pour l’instant'),
-          'Créez-en une pour lancer un Soul Link, puis invitez vos amis.'));
+          'Créez-en une pour lancer un Soul Link, puis invitez vos amis… ou rejoignez une salle publique.'));
   }
 
   function roomCard(room) {
     const members = room.members || [];
     return h('a', { class: 'card click room-card', href: `#/salle/${room.id}`, style: { color: 'inherit', textDecoration: 'none' } },
       h('div', { class: 'grow' },
-        h('div', { class: 'row' }, h('h3', null, room.name), stateChip(room)),
+        h('div', { class: 'row' }, h('h3', null, room.name), stateChip(room), room.visibility === 'public' ? chip('Publique', 'accent') : null),
         h('p', { class: 'muted small mt-s' }, `${gameName(room.game?.gameId)} · ${members.length}/${room.maxPlayers} joueur(s) · créée ${timeAgo(room.createdAt)}`)),
-      h('div', { class: 'avatars' }, members.map((m) => avatar(m.name, m.slot, { size: 's', online: m.online }))),
+      h('div', { class: 'avatars' }, members.map((m) => avatar(m.name, m.slot, { size: 's', online: m.online, id: m.userId, pic: m.avatar }))),
       icon('back', 'flip'));
   }
 

@@ -58,10 +58,27 @@ final class TrackerHost implements Session.Tracker {
     private volatile Set<Long> release = Set.of();
     private long lastWrites;
     private final Set<Long> depositFailures = new HashSet<>();
+    /** The room's shiny rate, applied in the game (generations 2 and 3), or null. */
+    private final ShinyBoost shiny;
+    private final ShinyBoost.Live live;
+    private CoreHost liveCore;
 
-    private TrackerHost(TrackerEngine engine, GameReader reader, String platform, boolean sync, Path saves) {
+    private TrackerHost(TrackerEngine engine, GameReader reader, String platform, boolean sync, Path saves, ShinyBoost shiny) {
         this.engine = engine;
         this.reader = reader;
+        this.shiny = shiny;
+        this.live = new ShinyBoost.Live() {
+            @Override
+            public byte[] read(long address, int length) {
+                MemorySegment seg = segment(liveCore, address, length);
+                return seg == null ? null : seg.toArray(JAVA_BYTE);
+            }
+
+            @Override
+            public boolean write(long address, byte[] bytes) {
+                return TrackerHost.this.write(liveCore, List.of(new GameReader.Write(address, bytes)));
+            }
+        };
         this.platform = platform;
         this.sync = sync;
         this.areas = reader.areas();
@@ -111,7 +128,12 @@ final class TrackerHost implements Session.Tracker {
         String platform = name.endsWith(".nds") ? "nds" : name.endsWith(".gba") ? "gba" : "gb";
         TrackerEngine engine = new TrackerEngine(reader, info, saves.resolve("suivi.json"), sink);
         Log.info("Suivi automatique : " + game + " (" + reader.getClass().getSimpleName() + ")");
-        return new TrackerHost(engine, reader, platform, sync, saves);
+        ShinyBoost shiny = ShinyBoost.create(reader, rom);
+        TrackerHost host = new TrackerHost(engine, reader, platform, sync, saves, shiny);
+        if (shiny != null && a.containsKey("--shiny-rate")) {
+            shiny.setRate(Integer.parseInt(a.get("--shiny-rate"))); // tests (scripts)
+        }
+        return host;
     }
 
     TrackerEngine engine() {
@@ -154,6 +176,13 @@ final class TrackerHost implements Session.Tracker {
         List<Object> r = Json.arr(d.get("refunds"));
         refunds = r == null ? List.of() : r;
         deathBox = Json.bool(d, "deathBox", false);
+        int shinyRate = (int) Json.num(d, "shinyRate", 0);
+        if (shiny != null) {
+            shiny.setRate(shinyRate);
+        }
+        if ("nds".equals(platform)) {
+            slt.player.track.NdsPkm.shinyRate(shinyRate); // the ROM's own test was changed (SltPatches)
+        }
         Set<Long> rel = new HashSet<>();
         List<Object> relList = Json.arr(d.get("release"));
         if (relList != null) {
@@ -174,6 +203,10 @@ final class TrackerHost implements Session.Tracker {
     @Override
     public void tick(CoreHost core, long frame) {
         applyDeaths(core);
+        if (shiny != null) {
+            liveCore = core;
+            shiny.tick(live);
+        }
         if (!busy.compareAndSet(false, true)) {
             return; // previous reading still being decoded
         }
@@ -346,6 +379,7 @@ final class TrackerHost implements Session.Tracker {
         // out of battle for sure: no battle (games that know), or a map change (DS games: during a battle,
         // the game works on a copy of the party and would write it back over the change)
         boolean field = engine.battleState() == 0 || (engine.battleState() < 0 && engine.mapJustChanged());
+        reader.cartridgeRamLive(core.cartridgeRamLive());
         if (field) {
             // released (against the rules, cancelled zone): gone from the party and from the PC
             for (long uid : release) {

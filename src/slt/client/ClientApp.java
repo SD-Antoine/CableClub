@@ -48,6 +48,10 @@ public final class ClientApp {
     /** The application window when SLT owns it (dedicated Edge/Chrome process). */
     private volatile Process window;
     private volatile boolean restarting;
+    /** SLT opened a window for the player: closing it closes everything. */
+    private volatile boolean windowed;
+    /** Proves that a "window closed" message comes from the interface (it reads it from /api/state). */
+    final String uiToken = slt.Ids.token();
 
     private ClientApp(Path dataDir, Path webDir) {
         this.dataDir = dataDir;
@@ -156,6 +160,8 @@ public final class ClientApp {
         }, "slt-shutdown"));
 
         if (!noWindow) {
+            app.windowed = true;
+            app.watchInterface();
             Desktop.installTray(app::openWindow, () -> {
                 try {
                     Desktop.reveal(app.dataDir.toString());
@@ -183,7 +189,9 @@ public final class ClientApp {
                 return;
             }
             // a very short-lived process handed the window to a running browser: it cannot be tracked
+            // (the interface says when it closes, see uiClosed)
             if (System.currentTimeMillis() - started < 8000) {
+                Log.info("Fenêtre confiée à un navigateur déjà ouvert : suivie par l'interface");
                 if (this.window == window) {
                     this.window = null;
                 }
@@ -192,15 +200,78 @@ public final class ClientApp {
             if (restarting) {
                 return;
             }
-            if (hosting.running()) {
-                Desktop.notify("SLT reste ouvert",
-                        "Le serveur SLT tourne toujours pour vos amis. Clic droit sur l'icône SLT pour quitter.");
-            } else {
-                quit();
-            }
+            // closing the window closes everything (game, hosted server), even when it was minimized
+            Log.info("Fenêtre fermée");
+            quit();
         }, "slt-window-watch");
         watcher.setDaemon(true);
         watcher.start();
+    }
+
+    /**
+     * The interface says its window is going away (closed, or reloaded). The
+     * browser process cannot always be followed (handed to another one, kept
+     * running in the background): if no interface comes back within a few
+     * seconds, SLT closes.
+     */
+    void uiClosed() {
+        if (!windowed || restarting) {
+            return;
+        }
+        long before = hub.opened();
+        Thread t = new Thread(() -> {
+            // a stream of a page that closed without saying so is only noticed at its next ping (15 s)
+            for (int i = 0; i < 20; i++) {
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException e) {
+                    return;
+                }
+                if (restarting || (hub.opened() != before && hub.size() > 0)) {
+                    return; // reloaded: the page is back
+                }
+                if (hub.size() == 0) {
+                    Log.info("Fenêtre fermée (plus aucune interface ouverte)");
+                    quit();
+                    return;
+                }
+            }
+        }, "slt-window-closed");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    /**
+     * Last resort when the window could not be followed and did not say it closed (browser killed…): no
+     * interface for 30 seconds after there was one closes SLT.
+     */
+    private void watchInterface() {
+        Thread t = new Thread(() -> {
+            boolean had = false;
+            long emptySince = -1;
+            while (true) {
+                try {
+                    Thread.sleep(5000);
+                } catch (InterruptedException e) {
+                    return;
+                }
+                if (hub.size() > 0) {
+                    had = true;
+                    emptySince = -1;
+                } else if (had && !restarting) {
+                    long now = System.currentTimeMillis();
+                    if (emptySince < 0) {
+                        emptySince = now;
+                    } else if (now - emptySince >= 30_000) {
+                        Log.info("Plus aucune fenêtre ouverte depuis 30 s");
+                        quit();
+                        return;
+                    }
+                }
+            }
+        }, "slt-interface-watch");
+        t.setDaemon(true);
+        t.start();
     }
 
     /**
