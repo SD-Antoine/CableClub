@@ -15,16 +15,28 @@ import java.nio.ByteOrder;
  * <pre>
  * NNS_G3dGlb: same signature and fields as in generation 5 (see Gen5Presence): projection +0x08,
  * camera matrix +0x4C, camera position +0x240, target +0x258 (the player, on the field).
- * Map objects: an array of 0x128-byte structures, the player first: local id 0xFF at +0x08,
- * appearance +0x10, facing +0x28 (0 up, 1 down, 2 left, 3 right), tile x / y / z (int) +0x64,
- * position (VecFx32, 16 units a tile, centre of the tile) +0x70. The player's sprite is drawn
- * standing on that position.
+ * Map objects: an array of 0x128-byte structures (0x12C in HeartGold / SoulSilver), the player first:
+ * flags +0x00 (bit 0 = in use, bit 15 = a character), local id 0xFF at +0x08, graphics id +0x10, facing +0x28 (0 up, 1 down, 2 left,
+ * 3 right), tile x / y / z (int) +0x64, position (VecFx32, 16 units a tile, centre of the tile) +0x70.
+ * The player's sprite is drawn standing on that position.
  * Sprites: NSBTX textures of the field characters (data/mmodel/mmodel.narc in Diamond / Pearl
  * and Platinum, a/0/8/1 in HeartGold / SoulSilver), "name.1" to "name.32": walking up, down,
  * left, right (standing, step, standing, other step), then running the same way. The image
  * shown is worked out from the facing, the movement and the speed (the drawn texture is not
  * found in the RAM): walking or running sets only, a bike shows the standing walking image.
  * Measured on Platinum FR (Twinleaf Town).
+ *
+ * Timing (measured on Platinum and HeartGold): the game works at 30 images a second, so the picture changes
+ * every other image, and the camera and the positions read in the RAM change on the other image, or on the same
+ * one, depending on the game. Whatever the order, the picture of an image goes with what the RAM holds on the
+ * image where the picture changed: what is read between two such images is kept for the next one (a window
+ * that placed the others with the very latest camera made them shake by a step, 30 times a second).
+ * The sprite is drawn with its ground point 5 rows above the bottom of its 32 x 32 image, on the point the camera aims
+ * at (the game draws the characters with the positions of its last move, which the RAM may already have left behind).
+ * HeartGold / SoulSilver: the Pokémon of the first position of the party follows the player as the map object of
+ * local id 253; its graphics id is turned into a texture of a/0/8/1 by the game's table (see Gen4Followers, found in the RAM), and
+ * its image is worked out from its facing (two images a direction, the second standing, the two alternating at
+ * each tile when it walks, starting with the first).
  * </pre>
  */
 final class Gen4Presence implements Presence {
@@ -43,12 +55,23 @@ final class Gen4Presence implements Presence {
     private static final ValueLayout.OfShort U16 = ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
     private static final int FX = 4096;
     private static final int TILE = 16 * FX;
-    private static final int OBJECT = 0x128;
     private static final long SEARCH_MS = 250;
+    /**
+     * Rows of a 32 x 32 sprite under the ground point it stands on (the camera's target): measured on Platinum (outdoors
+     * and in a house) and HeartGold (Pokémon Center). Its middle lies on that point indoors (orthographic projection),
+     * one column right of it outdoors.
+     */
+    private static final float DROP = 5;
+    /** Images a reading is kept at most when the picture does not change. */
+    private static final int HOLD = 2;
+    private static final int FOLLOWER_ID = 253;
+    private static final int MAX_OTHERS = 32;
 
     private final NdsReader reader;
     private final Gen5Sprites sprites;
     private final Gen5Sprites.Set set;
+    private final int stride;
+    private final Gen4Followers followers;
     private MemorySegment ram;
     private int glb = -1;
     private int player = -1;
@@ -69,16 +92,57 @@ final class Gen4Presence implements Presence {
     private final int[] trailX = new int[4];
     private final int[] trailZ = new int[4];
     private int trail;
+    // what goes with the picture shown (see the timing above)
+    private Snap snap;
+    private int heldFrames;
+    private final PictureWatch picture = new PictureWatch();
+    // the Pokémon following
+    private int petX;
+    private int petZ;
+    private int petGx;
+    private int petGz;
+    private int petFace = -1;
+    private int petStep;
+    private int petStill;
+    private boolean petIdle = true;
 
-    Gen4Presence(NdsReader reader, Gen5Sprites sprites, Gen5Sprites.Set set) {
+    /** What the RAM held when the picture last changed. */
+    private static final class Snap {
+        final int map;
+        final int x;
+        final int y;
+        final int z;
+        final float[] view;
+        final String spriteId;
+        final String spritePng;
+        final boolean exact;
+        float[] others;
+        Pet pet;
+
+        Snap(int map, int x, int y, int z, float[] view, String spriteId, String spritePng, boolean exact) {
+            this.map = map;
+            this.x = x;
+            this.y = y;
+            this.z = z;
+            this.view = view;
+            this.spriteId = spriteId;
+            this.spritePng = spritePng;
+            this.exact = exact;
+        }
+    }
+
+    Gen4Presence(NdsReader reader, Gen5Sprites sprites, Gen5Sprites.Set set, String game) {
         this.reader = reader;
         this.sprites = sprites;
         this.set = set;
+        boolean hg = "heartgold".equals(game) || "soulsilver".equals(game);
+        this.stride = hg ? 0x12C : 0x128;
+        this.followers = hg ? new Gen4Followers() : null;
     }
 
     @Override
     public String spritePng() {
-        return spritePng;
+        return snap != null ? snap.spritePng : spritePng;
     }
 
     @Override
@@ -93,7 +157,7 @@ final class Gen4Presence implements Presence {
 
     @Override
     public boolean spriteExact() {
-        return exact;
+        return snap != null ? snap.exact : exact;
     }
 
     @Override
@@ -120,6 +184,7 @@ final class Gen4Presence implements Presence {
             view = null;
             return held("busy");
         }
+        boolean pictureChanged = picture.changed(core);
         int px = i32(player + 0x70);
         int py = i32(player + 0x74);
         int pz = i32(player + 0x78);
@@ -138,9 +203,6 @@ final class Gen4Presence implements Presence {
         } else {
             offField++;
         }
-        // unlike generation 5, the image shown is drawn with the camera of this very image (measured indoors on
-        // Platinum: the player stays still on the screen while the camera follows them)
-        float[] shown = view;
         boolean field = view != null && (aimed || offField <= 2);
         boolean battle = !field && next != null && !Float.isNaN(fieldProjection) && Math.abs(next[0] - fieldProjection) > 0.05f;
         boolean dark = Gen5Presence.darkScreen(core);
@@ -151,10 +213,15 @@ final class Gen4Presence implements Presence {
         boolean free = field && !dark && !flash;
         if (field && !dark) {
             readSprite(px, pz);
-            fieldMap = map;
-            fieldX = px >> 8;
-            fieldY = py >> 8;
-            fieldZ = pz >> 8;
+            if (snap == null || pictureChanged || ++heldFrames > HOLD || snap.map != map) {
+                snap = new Snap(map, px >> 8, py >> 8, pz >> 8, view, spriteId, spritePng, exact);
+                readObjects(snap);
+                heldFrames = 0;
+            }
+            fieldMap = snap.map;
+            fieldX = snap.x;
+            fieldY = snap.y;
+            fieldZ = snap.z;
         }
         String status;
         if (battle) {
@@ -171,7 +238,9 @@ final class Gen4Presence implements Presence {
         if (fieldMap < 0) {
             return null;
         }
-        return new Sample(fieldMap, fieldX, fieldY, field && !dark, free, status, spriteId, 0, 0, fieldZ, shown, box);
+        float[] shown = snap != null ? snap.view : view;
+        return new Sample(fieldMap, fieldX, fieldY, field && !dark, free, status, snap != null ? snap.spriteId : spriteId, 0, 0,
+                fieldZ, shown, box, snap != null ? snap.others : null, snap != null ? snap.pet : null);
     }
 
     private Sample held(String status) {
@@ -187,7 +256,7 @@ final class Gen4Presence implements Presence {
         if (!isPlayer(player)) {
             int was = player;
             player = -1;
-            for (int d = OBJECT; was >= 0 && d <= 64 * OBJECT && player < 0; d += OBJECT) {
+            for (int d = stride; was >= 0 && d <= 64 * stride && player < 0; d += stride) {
                 player = isPlayer(was + d) ? was + d : isPlayer(was - d) ? was - d : -1;
             }
         }
@@ -260,7 +329,9 @@ final class Gen4Presence implements Presence {
                 return null;
             }
         }
-        float[] m = new float[19];
+        // 21 numbers: the matrix, the depth and the place of the feet, the rows of a sprite under its ground point,
+        // and where the middle of the sprite lies across from that point (columns)
+        float[] m = new float[21];
         for (int r = 0; r < 4; r++) {
             for (int k = 0; k < 4; k++) {
                 double s = 0;
@@ -270,19 +341,115 @@ final class Gen4Presence implements Presence {
                 m[r * 4 + k] = (float) s;
             }
         }
-        double x = px / (double) FX;
-        double y = py / (double) FX;
-        double z = pz / (double) FX;
-        double w = x * m[3] + y * m[7] + z * m[11] + m[15];
-        m[16] = (float) w;
-        m[17] = (float) (((x * m[0] + y * m[4] + z * m[8] + m[12]) / w + 1) * 128);
-        m[18] = (float) ((1 - (x * m[1] + y * m[5] + z * m[9] + m[13]) / w) * 96);
+        // the player's sprite is drawn on the point the camera aims at (the game draws the characters with the positions
+        // of its last move, a step behind what the RAM holds on some images: only the target stays on the sprite)
+        double[] feet = project(m, i32(glb + 0x258) / (double) FX, i32(glb + 0x25C) / (double) FX, i32(glb + 0x260) / (double) FX);
+        if (feet == null) {
+            return null;
+        }
+        m[16] = (float) feet[2];
+        m[17] = (float) feet[0];
+        m[18] = (float) feet[1];
+        m[19] = DROP;
+        m[20] = orthographic ? 0 : 1;
         return m;
+    }
+
+    /** Where a point of the world lands on the top screen with a camera x projection: x, y, depth (clip w). */
+    private static double[] project(float[] m, double x, double y, double z) {
+        double w = x * m[3] + y * m[7] + z * m[11] + m[15];
+        if (w <= 0.01) {
+            return null;
+        }
+        return new double[]{((x * m[0] + y * m[4] + z * m[8] + m[12]) / w + 1) * 128,
+                (1 - (x * m[1] + y * m[5] + z * m[9] + m[13]) / w) * 96, w};
     }
 
     private int map() {
         long a = reader.mapAddress();
         return a < RAM ? -1 : u16((int) (a - RAM));
+    }
+
+    // ------------------------------------------------------------- the other characters
+
+    /**
+     * The other characters of the map (the objects after the player's) that are on the screen, with the camera of
+     * the snapshot, and the Pokémon following the player.
+     */
+    private void readObjects(Snap s) {
+        float[] m = s.view;
+        if (m == null) {
+            return;
+        }
+        float[] buffer = new float[3 * MAX_OTHERS];
+        int n = 0;
+        Pet pet = null;
+        long limit = ram.byteSize() - 0x300;
+        for (int k = 1; k < 64; k++) {
+            int o = player + k * stride;
+            if (o + stride > limit) {
+                break;
+            }
+            // in use (bit 0) and a character (bit 15: the people and the Pokémon have it, the mailboxes, rocks and signs do not)
+            int flags = i32(o);
+            if ((flags & 1) == 0 || (flags & 0x8000) == 0) {
+                continue;
+            }
+            int gx = i32(o + 0x64);
+            int gz = i32(o + 0x6C);
+            int ox = i32(o + 0x70);
+            int oy = i32(o + 0x74);
+            int oz = i32(o + 0x78);
+            if (gx <= 0 || gz <= 0 || gx >= 0x10000 || gz >= 0x10000 || Math.abs((ox >> 16) - gx) > 1 || Math.abs((oz >> 16) - gz) > 1) {
+                continue;
+            }
+            if (followers != null && pet == null && i32(o + 8) == FOLLOWER_ID) {
+                pet = readPet(o, ox, oy, oz, gx, gz);
+            }
+            double[] f = project(m, ox / (double) FX, oy / (double) FX, oz / (double) FX);
+            if (f == null || f[0] < -24 || f[0] > 280 || f[1] < -8 || f[1] > 232 || n >= MAX_OTHERS) {
+                continue;
+            }
+            buffer[3 * n] = (float) f[0];
+            buffer[3 * n + 1] = (float) f[1];
+            buffer[3 * n + 2] = (float) f[2];
+            n++;
+        }
+        s.others = java.util.Arrays.copyOf(buffer, 3 * n);
+        s.pet = pet;
+    }
+
+    /** The Pokémon following, with the image it shows (see the class comment). */
+    private Pet readPet(int o, int ox, int oy, int oz, int gx, int gz) {
+        int member = followers.member(ram, i32(o + 0x10));
+        if (member < 0 || sprites.frames(member) < 8) {
+            return null;
+        }
+        int face = i32(o + 0x28) & 3;
+        boolean moving = petFace >= 0 && (ox != petX || oz != petZ);
+        if (moving) {
+            if (petIdle || face != petFace) {
+                petStep = 0;
+            } else if (gx != petGx || gz != petGz) {
+                petStep ^= 1;
+            }
+            petIdle = false;
+            petStill = 0;
+        } else if (++petStill >= 2) {
+            petIdle = true;
+        }
+        petX = ox;
+        petZ = oz;
+        petFace = face;
+        petGx = gx;
+        petGz = gz;
+        int frame = face * 2 + (petIdle ? 1 : petStep);
+        String png = sprites.png(member, frame);
+        if (png == null) {
+            return null;
+        }
+        int[] size = sprites.size(member, frame);
+        return new Pet(ox >> 8, oy >> 8, oz >> 8, "g4p-" + member + "-" + frame, png, size[0], size[1]);
     }
 
     // ------------------------------------------------------------- sprite

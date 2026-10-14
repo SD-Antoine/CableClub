@@ -53,7 +53,7 @@ function parse() {
     case 'historique': return parts[1] ? { id: 'room', roomId: parts[1], history: true } : { id: 'mode', mode: 'soullink', tab: 'historique' };
     case 'roms': return { id: 'library' };
     case 'reglages': return { id: 'settings' };
-    default: return MODES[parts[0]] ? { id: 'mode', mode: parts[0], tab: parts[1] } : { id: 'mode', mode: 'soullink' };
+    default: return MODES[parts[0]] && !MODES[parts[0]].soon ? { id: 'mode', mode: parts[0], tab: parts[1] } : { id: 'mode', mode: 'soullink' };
   }
 }
 
@@ -61,16 +61,18 @@ function rail(active) {
   const user = me();
   const link = store.state?.link || {};
   const friendsCount = store.friends.incoming.length;
-  const invites = pendingInvites().length;
   const unread = chatUnread();
   const globalNew = (store.chat.channels || []).some((c) => c.ch === 'global' && c.unread);
   return h('nav', { class: 'rail' },
     h('div', { class: 'brand' }, h('img', { src: 'img/logo.svg', alt: '' }),
       h('div', { class: 'brand-text' }, h('b', null, 'Cable Club'), h('small', null, 'Pokémon à plusieurs'))),
     h('div', { class: 'rail-group' }, 'Modes de jeu'),
-    Object.entries(MODES).map(([id, m]) => h('a', { class: ['nav-item', 'mode-item', active === `mode:${id}` && 'active'], href: m.hash, title: m.name },
-      h('img', { src: m.logo, alt: '' }), h('span', { class: 'label' }, m.name),
-      id === 'soullink' && invites ? h('span', { class: 'count', title: 'Invitations' }, invites) : null)),
+    Object.entries(MODES).map(([id, m]) => (m.soon
+      ? h('span', { class: ['nav-item', 'mode-item', 'soon'], title: `${m.name} : bientôt` },
+        h('img', { src: m.logo, alt: '' }), h('span', { class: 'label' }, m.name), h('span', { class: 'chip' }, 'Bientôt'))
+      : h('a', { class: ['nav-item', 'mode-item', active === `mode:${id}` && 'active'], href: m.hash, title: m.name },
+        h('img', { src: m.logo, alt: '' }), h('span', { class: 'label' }, m.name),
+        pendingInvites().some((i) => (i.mode || 'soullink') === id) ? h('span', { class: 'count', title: 'Invitations' }, pendingInvites().filter((i) => (i.mode || 'soullink') === id).length) : null))),
     h('div', { class: 'rail-sep' }),
     NAV.map((n) => h('a', { class: ['nav-item', active === n.id && 'active'], href: n.hash, title: n.label },
       icon(n.icon), h('span', { class: 'label' }, n.label),
@@ -86,7 +88,7 @@ function rail(active) {
 }
 
 function activeNav(r) {
-  if (r.id === 'room' || r.id === 'play') return 'mode:soullink';
+  if (r.id === 'room' || r.id === 'play') return `mode:${store.rooms.get(r.roomId)?.mode || 'soullink'}`;
   if (r.id === 'mode') return `mode:${r.mode}`;
   return r.id;
 }

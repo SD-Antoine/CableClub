@@ -15,8 +15,10 @@ import java.nio.ByteOrder;
  * <pre>
  * NNS_G3dGlb (state of Nintendo's 3D library), found by its signature (command words 0x17101610
  * at +0, matrix mode 2 at +0x48, light vectors 0x32323232 at +0x7C): projection matrix (4x4 fx32)
- * at +0x08, camera matrix (4x3 fx32, row vectors) at +0x4C, camera target at +0x258. The image
- * shown is drawn with the matrices of the image before (the DS draws the 3D one image late).
+ * at +0x08, camera matrix (4x3 fx32, row vectors) at +0x4C, camera target at +0x258. The game works at
+ * 30 images a second: the picture changes every other image, on which the camera of the RAM changes too (measured on
+ * White 2, the positions of the models change on the image before): the readings are kept from one change of the
+ * picture to the next (see PictureWatch).
  * Player: movement model with obj id 0xFF at +0x08 (array of 0x100-byte models), appearance
  * +0x0C, facing +0x18 (0 up, 1 down, 2 left, 3 right), tile x / y / z (u16) +0x3C, position
  * (VecFx32) +0x44. Its billboard: position as drawn (VecFx32), then u32 0x200000NN, NN = image
@@ -36,6 +38,9 @@ final class Gen5Presence implements Presence {
     private static final int FX = 4096;
     /** Searches of a lost structure in the whole 4 MB (a few milliseconds) are spaced out. */
     private static final long SEARCH_MS = 250;
+    /** Images a reading is kept at most when the picture does not change. */
+    private static final int HOLD = 2;
+    private static final int MAX_OTHERS = 32;
 
     private final NdsReader reader;
     private final Gen5Sprites sprites;
@@ -58,6 +63,34 @@ final class Gen5Presence implements Presence {
     private String spritePng;
     private volatile long tradeUntil;
     private boolean exact;
+    // what goes with the picture shown (see PictureWatch)
+    private Snap snap;
+    private int heldFrames;
+    private final PictureWatch picture = new PictureWatch();
+
+    /** What the RAM held when the picture last changed. */
+    private static final class Snap {
+        final int map;
+        final int x;
+        final int y;
+        final int z;
+        final float[] view;
+        final String spriteId;
+        final String spritePng;
+        final boolean exact;
+        float[] others;
+
+        Snap(int map, int x, int y, int z, float[] view, String spriteId, String spritePng, boolean exact) {
+            this.map = map;
+            this.x = x;
+            this.y = y;
+            this.z = z;
+            this.view = view;
+            this.spriteId = spriteId;
+            this.spritePng = spritePng;
+            this.exact = exact;
+        }
+    }
 
     Gen5Presence(NdsReader reader, Gen5Sprites sprites, Gen5Sprites.Set set) {
         this.reader = reader;
@@ -67,7 +100,7 @@ final class Gen5Presence implements Presence {
 
     @Override
     public String spritePng() {
-        return spritePng;
+        return snap != null ? snap.spritePng : spritePng;
     }
 
     @Override
@@ -82,7 +115,7 @@ final class Gen5Presence implements Presence {
 
     @Override
     public boolean spriteExact() {
-        return exact;
+        return snap != null ? snap.exact : exact;
     }
 
     @Override
@@ -109,11 +142,11 @@ final class Gen5Presence implements Presence {
             view = null;
             return held("busy");
         }
+        boolean pictureChanged = picture.changed(core);
         int bx = i32(billboard);
         int by = i32(billboard + 4);
         int bz = i32(billboard + 8);
         int image = ram.get(ValueLayout.JAVA_BYTE, billboard + 12) & 0xFF;
-        float[] shown = view;
         int map = map();
         if (map < 0) {
             return null;
@@ -143,10 +176,15 @@ final class Gen5Presence implements Presence {
         boolean free = field && !dark && !flash;
         if (field && !dark) {
             readSprite(image);
-            fieldMap = map;
-            fieldX = bx >> 8;
-            fieldY = by >> 8;
-            fieldZ = bz >> 8;
+            if (snap == null || pictureChanged || ++heldFrames > HOLD || snap.map != map) {
+                snap = new Snap(map, bx >> 8, by >> 8, bz >> 8, view, spriteId, spritePng, exact);
+                readObjects(snap);
+                heldFrames = 0;
+            }
+            fieldMap = snap.map;
+            fieldX = snap.x;
+            fieldY = snap.y;
+            fieldZ = snap.z;
         }
         String status;
         if (battle) {
@@ -163,7 +201,54 @@ final class Gen5Presence implements Presence {
         if (fieldMap < 0) {
             return null;
         }
-        return new Sample(fieldMap, fieldX, fieldY, field && !dark, free, status, spriteId, 0, 0, fieldZ, shown, box);
+        return new Sample(fieldMap, fieldX, fieldY, field && !dark, free, status, snap != null ? snap.spriteId : spriteId, 0, 0, fieldZ,
+                snap != null ? snap.view : view, box, snap != null ? snap.others : null, null);
+    }
+
+    /**
+     * The other characters of the map (the movement models of the array the player's is in) that are on the screen,
+     * placed with the camera of the snapshot.
+     */
+    private void readObjects(Snap s) {
+        float[] m = s.view;
+        if (m == null) {
+            return;
+        }
+        float[] buffer = new float[3 * MAX_OTHERS];
+        int n = 0;
+        long limit = ram.byteSize() - 0x300;
+        for (int k = -63; k <= 63 && n < MAX_OTHERS; k++) {
+            int o = player + k * 0x100;
+            // in use (bit 0), and placed on the map (bit 14 of the second word: the ones of other maps keep a ground height of 1)
+            if (k == 0 || o < 0 || o + 0x100 > limit || (i32(o) & 1) == 0 || (i32(o + 4) & 0x4000) == 0) {
+                continue;
+            }
+            int gx = u16(o + 0x3C);
+            int gz = u16(o + 0x40);
+            int ox = i32(o + 0x44);
+            int oy = i32(o + 0x48);
+            int oz = i32(o + 0x4C);
+            if ((gx == 0 && gz == 0) || Math.abs((ox >> 16) - gx) > 1 || Math.abs((oz >> 16) - gz) > 1) {
+                continue;
+            }
+            double x = ox / (double) FX;
+            double y = oy / (double) FX;
+            double z = oz / (double) FX;
+            double w = x * m[3] + y * m[7] + z * m[11] + m[15];
+            if (w <= 0.01) {
+                continue;
+            }
+            double sx = ((x * m[0] + y * m[4] + z * m[8] + m[12]) / w + 1) * 128;
+            double sy = (1 - (x * m[1] + y * m[5] + z * m[9] + m[13]) / w) * 96;
+            if (sx < -24 || sx > 280 || sy < -8 || sy > 232) {
+                continue;
+            }
+            buffer[3 * n] = (float) sx;
+            buffer[3 * n + 1] = (float) sy;
+            buffer[3 * n + 2] = (float) w;
+            n++;
+        }
+        s.others = java.util.Arrays.copyOf(buffer, 3 * n);
     }
 
     /** The last position on the field, while the structures are not found (loading, battle…). */
@@ -283,7 +368,10 @@ final class Gen5Presence implements Presence {
                 return null;
             }
         }
-        float[] m = new float[19];
+        // 21 numbers: the matrix, the depth and the place of the feet, the rows of a sprite under its ground point (0 here),
+        // the columns the sprite's middle lies right of it (1: measured on White 2)
+        float[] m = new float[21];
+        m[20] = 1;
         for (int r = 0; r < 4; r++) {
             for (int k = 0; k < 4; k++) {
                 double s = 0;

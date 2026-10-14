@@ -4,11 +4,11 @@ import { h, mount, keepScroll, modal, btn, field, seg, icon, errorToast, switchE
 import { local, srv } from '../api.js';
 import { store } from '../store.js';
 import { LANG, GEN_LABEL, SUPPORT, gameName } from '../data/games.js';
-import { RULE_DEFAULTS } from '../data/rules.js';
+import { ruleDefaults, playerChoices, MODE_PLAYERS } from '../data/rules.js';
 import { defaultRando } from '../data/rando.js';
 import { rulesEditor, randoEditor } from './parts.js';
 
-export async function openCreateRoom() {
+export async function openCreateRoom(mode = 'soullink') {
   let library;
   try {
     library = (await local.get('/api/library')).roms.filter((r) => r.present);
@@ -19,14 +19,14 @@ export async function openCreateRoom() {
     step: 0,
     romId: library[0]?.id || null,
     name: '',
-    maxPlayers: 2,
+    maxPlayers: mode === 'nuzlocke' ? 1 : 2,
     visibility: 'private',
-    rules: { ...RULE_DEFAULTS },
+    rules: { ...ruleDefaults(mode) },
     rando: null,
   };
   const body = h('div');
   const foot = h('div', { class: 'row', style: { width: '100%' } });
-  const m = modal({ title: 'Nouvelle salle', body: h('div', null, body), wide: true, actions: [foot] });
+  const m = modal({ title: mode === 'nuzlocke' ? 'Nouvelle salle Nuzlocke' : 'Nouvelle salle Soul Link', body: h('div', null, body), wide: true, actions: [foot] });
 
   const rom = () => library.find((r) => r.id === st.romId);
   const gen = () => Number(rom()?.gen || 3);
@@ -41,7 +41,7 @@ export async function openCreateRoom() {
     let content;
     if (st.step === 0) content = gameStep();
     else if (st.step === 1) content = h('div', null, h('p', { class: 'muted mb' }, 'Vous pourrez les ajuster à tout moment, même en cours de partie.'),
-      rulesEditor(st.rules, { editable: true, onChange: (c) => { Object.assign(st.rules, c); draw(); } }));
+      rulesEditor(st.rules, { editable: true, mode, onChange: (c) => { Object.assign(st.rules, c); draw(); } }));
     else {
       if (!st.rando) st.rando = defaultRando(gen());
       content = randoEditor(st.rando, gen(), () => {});
@@ -74,10 +74,11 @@ export async function openCreateRoom() {
       rom() ? h('p', { class: 'tiny faint' }, icon('info'), ' ', SUPPORT[gen()]) : null,
       h('div', { class: 'grid2' },
         field('Nom de la salle', name),
-        field('Joueurs', seg([[1, '1'], [2, '2'], [3, '3'], [4, '4']], st.maxPlayers, (v) => { st.maxPlayers = v; draw(); }))),
-      h('div', { class: 'rule-row' }, h('div', { class: 'grow' }, h('b', null, 'Salle publique'),
-        h('small', null, 'Elle apparaît dans « Salles publiques » : n’importe quel joueur du serveur peut la trouver et la rejoindre tant que l’aventure n’est pas lancée. Sinon, seuls vos invités (ou ceux qui ont le code) entrent.')),
-      switchEl(st.visibility === 'public', (v) => { st.visibility = v ? 'public' : 'private'; })));
+        field('Joueurs', seg(playerChoices(mode), st.maxPlayers, (v) => { st.maxPlayers = v; if (v < 2) st.visibility = 'private'; draw(); }))),
+      h('div', { class: ['rule-row', st.maxPlayers < 2 && 'soon'] }, h('div', { class: 'grow' }, h('b', null, 'Salle publique'),
+        h('small', null, st.maxPlayers < 2 ? 'Une salle solo ne peut pas être publique : personne ne pourrait la rejoindre.'
+          : 'Elle apparaît dans « Salles publiques » : n’importe quel joueur du serveur peut la trouver et la rejoindre tant que l’aventure n’est pas lancée. Sinon, seuls vos invités (ou ceux qui ont le code) entrent.')),
+      switchEl(st.visibility === 'public' && st.maxPlayers >= 2, (v) => { st.visibility = v ? 'public' : 'private'; }, { disabled: st.maxPlayers < 2 })));
   }
 
   async function create(button) {
@@ -89,7 +90,7 @@ export async function openCreateRoom() {
         game: { gameId: r.gameId, name: gameName(r.gameId), gen: Number(r.gen), platform: r.platform, romCode: r.romCode, lang: r.lang, crc: r.crc },
         maxPlayers: st.maxPlayers,
         visibility: st.visibility,
-        mode: 'soullink',
+        mode,
         rules: st.rules,
         rando: { ...st.rando, seed: st.rando.seed || undefined },
       });

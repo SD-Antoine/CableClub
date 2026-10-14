@@ -1,23 +1,25 @@
 // Pieces shared by several screens: rules list, randomization settings.
 
 import { h, mount, switchEl, seg, icon, act, keepScroll } from '../ui.js';
-import { RULES, RULE_DEFAULTS } from '../data/rules.js';
+import { rulesOf, ruleDefaults } from '../data/rules.js';
 import {
   SECTIONS, TWEAKS, PRESETS, optionAvailable, choiceAvailable, sanitizeSettings, presetById, randomSeed, summarize,
 } from '../data/rando.js';
 
 /** The room's rules: switches (editable by the leader, read-only for the others). */
-export function rulesEditor(rules, { editable, onChange }) {
-  const r = { ...RULE_DEFAULTS, ...(rules || {}) };
-  return h('div', { class: 'list' }, RULES.map((def) => {
+export function rulesEditor(rules, { editable, onChange, mode }) {
+  const r = { ...ruleDefaults(mode), ...(rules || {}) };
+  return h('div', { class: 'list' }, rulesOf(mode).map((def) => {
+    if (def.section) return h('div', { class: 'rule-section' }, def.section);
     let control;
     if (def.type === 'bool') {
-      control = switchEl(!!r[def.key], (v) => onChange({ [def.key]: v }), { disabled: !editable });
+      control = switchEl(!!r[def.key] && !def.soon, (v) => onChange({ [def.key]: v }), { disabled: !editable || def.soon });
     } else {
       control = seg(def.options, r[def.key], (v) => onChange({ [def.key]: v }), { disabled: !editable });
     }
-    return h('div', { class: ['rule-row', def.highlight && 'rule-key'] },
-      h('div', { class: 'grow' }, h('b', null, def.highlight ? '★ ' : '', def.label), def.desc ? h('small', null, def.desc) : null), control);
+    return h('div', { class: ['rule-row', def.highlight && 'rule-key', def.soon && 'soon'] },
+      h('div', { class: 'grow' }, h('b', null, def.highlight ? '★ ' : '', def.label, def.soon ? h('span', { class: 'chip', style: { marginLeft: '8px' } }, 'Bientôt') : null),
+        def.desc ? h('small', null, def.desc) : null), control);
   }));
 }
 

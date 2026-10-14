@@ -108,8 +108,13 @@ export class GameScreen {
     const w = v.getUint16(1, true);
     const h = v.getUint16(3, true);
     // type 2: where the player stands, to draw the other players at the right place on this image;
-    // type 3 (3D games): the camera of this image, to place them in the world
-    const head = type === 2 ? 14 : type === 3 ? 86 : 5;
+    // type 3 (3D games): the camera of this image, to place them in the world, then the other characters drawn on it
+    // (number at 94, then 12 bytes each from 96)
+    let head = type === 2 ? 14 : type === 3 ? 96 : 5;
+    if (type === 3) {
+      if (buf.byteLength < 96) return;
+      head += 12 * v.getUint16(94, true);
+    }
     if (w * h * 4 + head > buf.byteLength) return;
     this.last = buf;
     // the two DS screens side by side: the touch screen (lower half of the image) goes to the right
@@ -143,10 +148,17 @@ export class GameScreen {
       for (let i = 0; i < 16; i++) mtx[i] = v.getFloat32(8 + 4 * i, true);
       // depth of this player's feet: the game draws the characters one texel per pixel there
       const depth = v.getFloat32(72, true);
-      // where the feet are on this image, the number of the sprite sent for it (0 = none) and the message box
+      // where the feet are on this image, the rows of a sprite under the ground point it stands on and the columns its
+      // middle lies right of it, the number of the sprite sent for it (0 = none), the message box and the other
+      // characters of the game drawn on the image
       const flags = v.getUint8(7);
+      const others = [];
+      for (let i = 0, n = v.getUint16(94, true); i < n; i++) {
+        others.push({ x: v.getFloat32(96 + 12 * i, true), y: v.getFloat32(100 + 12 * i, true), w: v.getFloat32(104 + 12 * i, true) });
+      }
       this.handlers.onFrame?.(map === 0xFFFF ? null : {
-        map, mtx, depth, feet: { x: v.getFloat32(76, true), y: v.getFloat32(80, true) }, self: v.getUint16(84, true),
+        map, mtx, depth, feet: { x: v.getFloat32(76, true), y: v.getFloat32(80, true) }, drop: v.getFloat32(84, true),
+        dx: v.getFloat32(88, true), self: v.getUint16(92, true), others,
         boxTop: (flags & 4) === 4, boxBottom: (flags & 8) === 8, ow: (flags & 1) === 1, free: (flags & 2) === 2,
       });
     }

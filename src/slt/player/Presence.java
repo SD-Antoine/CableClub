@@ -25,22 +25,39 @@ interface Presence {
      * @param view      3D games: camera x projection matrix of the image shown (4x4, row vectors:
      *                  screen = [x y z 1] x view), with which the window places the others, then the depth
      *                  (clip w) of the player's feet, where sprites are drawn one texel per pixel, then where
-     *                  the player's feet are on that image (x, y in pixels of the top screen); null in 2D
+     *                  the player's feet are on that image (x, y in pixels of the top screen), then how many
+     *                  rows of a sprite lie under the point of the ground it stands on; null in 2D
      * @param box       a message box covers the top (1) or the bottom (2) of the screen: the others stay
      *                  drawn behind it; 0 none
+     * @param others    3D games: the other characters drawn on this image (non-player characters, the player's
+     *                  own Pokémon), as x, y (where their feet are on the top screen) and the depth (clip w) of
+     *                  their feet, three numbers each: the window keeps the players it draws behind them
+     * @param pet       the Pokémon following the player (HeartGold / SoulSilver), null without
      */
     record Sample(int map, int x, int y, boolean overworld, boolean free, String status, String spriteId,
-                  int anchorX, int anchorY, int z, float[] view, int box) {
+                  int anchorX, int anchorY, int z, float[] view, int box, float[] others, Pet pet) {
+
+        Sample(int map, int x, int y, boolean overworld, boolean free, String status, String spriteId,
+               int anchorX, int anchorY, int z, float[] view, int box) {
+            this(map, x, y, overworld, free, status, spriteId, anchorX, anchorY, z, view, box, null, null);
+        }
 
         Sample(int map, int x, int y, boolean overworld, boolean free, String status, String spriteId,
                int anchorX, int anchorY, int z, float[] view) {
-            this(map, x, y, overworld, free, status, spriteId, anchorX, anchorY, z, view, 0);
+            this(map, x, y, overworld, free, status, spriteId, anchorX, anchorY, z, view, 0, null, null);
         }
 
         Sample(int map, int x, int y, boolean overworld, boolean free, String status, String spriteId,
                int anchorX, int anchorY) {
-            this(map, x, y, overworld, free, status, spriteId, anchorX, anchorY, 0, null, 0);
+            this(map, x, y, overworld, free, status, spriteId, anchorX, anchorY, 0, null, 0, null, null);
         }
+    }
+
+    /**
+     * The Pokémon following the player: where it stands in the 3D world (as the player: 1/16 of a unit), its
+     * sprite (id, PNG base64, size).
+     */
+    record Pet(int x, int y, int z, String spriteId, String png, int w, int h) {
     }
 
     /** Reads the live memory between two frames; null while the game is not in a playable state. */
@@ -84,7 +101,7 @@ interface Presence {
         }
         if (reader instanceof NdsReader nds) {
             Gen5Sprites.Set set = Gen4Presence.setFor(nds.game());
-            return set == null ? null : new Gen4Presence(nds, new Gen5Sprites(rom, set.narc(), true), set);
+            return set == null ? null : new Gen4Presence(nds, new Gen5Sprites(rom, set.narc(), true), set, nds.game());
         }
         return null;
     }

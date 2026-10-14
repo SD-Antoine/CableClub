@@ -17,8 +17,8 @@ public final class Ghosts {
 
     /** Points of the way kept at most (4 s of walking, one point per image). */
     public static final int MAX_POINTS = 240;
-    /** Sprites of one player kept at most (walking frames in 4 directions, bike, surf…). */
-    public static final int MAX_SPRITES = 48;
+    /** Sprites of one player kept at most (walking frames in 4 directions, bike, surf…, the Pokémon following). */
+    public static final int MAX_SPRITES = 96;
 
     private Ghosts() {
     }

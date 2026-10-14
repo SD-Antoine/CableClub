@@ -237,8 +237,10 @@ final class Session {
      * player's sprite on the screen), flags (1 = overworld, 2 = free: the other players may be drawn)],
      * then RGBA pixels. 3D games: [3, width, height, map, flags, camera x projection of this image
      * (16 LE floats, row vectors), depth of the player's feet, where sprites are drawn one texel per pixel (LE float),
-     * feet x and y on the image (LE floats), number of the player's own sprite sent as {"t":"self",…} (LE16, 0 = unknown)],
-     * then the pixels. 3D flags: 1 = overworld, 2 = free, 4 = message box on the top, 8 = on the bottom.
+     * feet x and y on the image (LE floats), rows of a sprite under the ground point it stands on (LE float),
+     * number of the player's own sprite sent as {"t":"self",…} (LE16, 0 = unknown), number n of other characters
+     * drawn on the image (LE16), then n times [feet x, feet y, depth of the feet (LE floats)]], then the pixels.
+     * 3D flags: 1 = overworld, 2 = free, 4 = message box on the top, 8 = on the bottom.
      */
     private void present() {
         if (!ws.hasClients()) {
@@ -252,7 +254,9 @@ final class Session {
         }
         Presence.Sample s = sample;
         float[] view = s == null ? null : s.view();
-        int head = view != null ? 8 + 4 * view.length + 2 : 14;
+        float[] others = view == null || s.others() == null ? new float[0] : s.others();
+        int fixed = view != null ? 8 + 4 * view.length + 2 : 14;
+        int head = view != null ? fixed + 2 + 4 * others.length : fixed;
         byte[] msg = new byte[head + w * h * 4];
         msg[0] = (byte) (view != null ? 3 : 2);
         msg[1] = (byte) w;
@@ -266,8 +270,12 @@ final class Session {
             msg[7] = (byte) ((s.overworld() ? 1 : 0) | (s.free() ? 2 : 0) | (s.box() == 1 ? 4 : 0) | (s.box() == 2 ? 8 : 0));
             java.nio.ByteBuffer.wrap(msg, 8, 4 * view.length).order(java.nio.ByteOrder.LITTLE_ENDIAN).asFloatBuffer().put(view);
             int self = selfNumber(s);
-            msg[head - 2] = (byte) self;
-            msg[head - 1] = (byte) (self >> 8);
+            msg[fixed - 2] = (byte) self;
+            msg[fixed - 1] = (byte) (self >> 8);
+            int count = others.length / 3;
+            msg[fixed] = (byte) count;
+            msg[fixed + 1] = (byte) (count >> 8);
+            java.nio.ByteBuffer.wrap(msg, fixed + 2, 4 * others.length).order(java.nio.ByteOrder.LITTLE_ENDIAN).asFloatBuffer().put(others);
         } else if (s != null) {
             msg[7] = (byte) s.x();
             msg[8] = (byte) (s.x() >> 8);
@@ -333,18 +341,25 @@ final class Session {
         }
         String sid = s.spriteId();
         if (sid != null && !sprites.containsKey(sid) && presence.spritePng() != null) {
-            if (sprites.size() >= Ghosts.MAX_SPRITES) {
-                String oldest = sprites.keySet().iterator().next();
-                sprites.remove(oldest);
-                spriteSentAt.remove(oldest);
-            }
-            sprites.put(sid, List.of(presence.spritePng(), (long) presence.spriteW(), (long) presence.spriteH()));
+            rememberSprite(sid, List.of(presence.spritePng(), (long) presence.spriteW(), (long) presence.spriteH()));
+        }
+        Presence.Pet pet = s.pet();
+        if (pet != null && pet.png() != null && !sprites.containsKey(pet.spriteId())) {
+            rememberSprite(pet.spriteId(), List.of(pet.png(), (long) pet.w(), (long) pet.h()));
         }
         boolean depth = presence.world3d();
         if (s.overworld()) {
-            List<Object> point = depth
-                    ? List.of(now, (long) s.map(), (long) s.x(), (long) s.y(), sid == null ? "" : sid, (long) s.z())
-                    : List.of(now, (long) s.map(), (long) s.x(), (long) s.y(), sid == null ? "" : sid);
+            // [time, map, x, y, sprite, (3D games: z, and the Pokémon following: x, y, z, sprite)]
+            List<Object> point = new ArrayList<>(List.of(now, (long) s.map(), (long) s.x(), (long) s.y(), sid == null ? "" : sid));
+            if (depth) {
+                point.add((long) s.z());
+                if (pet != null) {
+                    point.add((long) pet.x());
+                    point.add((long) pet.y());
+                    point.add((long) pet.z());
+                    point.add(pet.spriteId());
+                }
+            }
             if (lastPoint == null || !point.subList(1, point.size()).equals(lastPoint.subList(1, lastPoint.size()))) {
                 if (lastPoint != null && previousSample > lastPointAt + 40) {
                     // it moves again after a rest: it stood there until the previous image (no slow glide over the rest)
@@ -372,9 +387,20 @@ final class Session {
         if (depth) {
             g.put("z", (long) s.z());
         }
+        // the Pokémon following only travels inside the points of the way (the server relays only known fields): a
+        // message at rest carries one too, so that the others keep seeing it
+        if (ghostPath.isEmpty() && pet != null && lastPoint != null) {
+            List<Object> rest = new ArrayList<>(lastPoint);
+            rest.set(0, now);
+            ghostPath.add(rest);
+        }
         Map<String, Object> sprs = new LinkedHashMap<>();
         for (Object o : ghostPath) {
-            addSprite(sprs, String.valueOf(Json.arr(o).get(4)), now);
+            List<Object> p = Json.arr(o);
+            addSprite(sprs, String.valueOf(p.get(4)), now);
+            if (p.size() >= 10) {
+                addSprite(sprs, String.valueOf(p.get(9)), now);
+            }
         }
         addSprite(sprs, sid, now);
         if (!ghostPath.isEmpty()) {
@@ -393,6 +419,16 @@ final class Session {
             lastGhostSprite = sid;
         }
         bridge.ghost(g);
+    }
+
+    /** A sprite of the player (or of the Pokémon following) to send to the others, the oldest forgotten beyond the limit. */
+    private void rememberSprite(String id, List<Object> sprite) {
+        if (sprites.size() >= Ghosts.MAX_SPRITES) {
+            String oldest = sprites.keySet().iterator().next();
+            sprites.remove(oldest);
+            spriteSentAt.remove(oldest);
+        }
+        sprites.put(id, sprite);
     }
 
     /** A sprite named in a message, joined to it if it was not sent lately. */

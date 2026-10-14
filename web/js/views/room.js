@@ -8,6 +8,7 @@ import { local, srv, pollJob } from '../api.js';
 import { store, on, loadRoom, loadLogs, refreshFriends, me } from '../store.js';
 import { gameName, LANG } from '../data/games.js';
 import { rulesEditor, randoEditor, randoLines } from './parts.js';
+import { playerChoices } from '../data/rules.js';
 import { stateChip } from './home.js';
 import { tradeBox, TRADES } from './trades.js';
 import { chatPanel } from './chat.js';
@@ -145,14 +146,18 @@ export async function renderRoom(container, roomId, { history = false } = {}) {
     const m = mine();
     return h('div', { class: 'room-head' },
       h('div', null,
-        h('h1', null, room.name, stateChip(room), room.visibility === 'public' ? chip('Publique', 'accent') : null),
+        h('h1', null, room.name, stateChip(room), room.mode === 'nuzlocke' ? chip('Nuzlocke') : null, room.visibility === 'public' ? chip('Publique', 'accent') : null),
         h('div', { class: 'meta' },
           h('span', null, gameName(room.game?.gameId)),
-          h('span', null, '·'), h('span', null, `${room.members.length}/${room.maxPlayers} joueur(s)`),
+          h('span', null, '·'), h('span', null, room.maxPlayers === 1 ? 'Solo' : `${room.members.length}/${room.maxPlayers} joueur(s)`),
           room.code && room.state === 'lobby' ? [h('span', null, '·'),
             h('button', { class: 'chip', title: 'Copier le code', onclick: () => copy(room.code) }, icon('copy'), h('span', { class: 'mono' }, room.code))] : null)),
       h('div', { class: 'row' },
-        room.state === 'lobby' && isLeader() ? btn(room.visibility === 'public' ? 'Rendre privée' : 'Rendre publique', (e) => act(e.currentTarget,
+        room.state === 'lobby' && isLeader() ? h('label', { class: 'row small muted', style: { gap: '6px' }, title: 'Le nombre de joueurs peut changer tant que l’aventure n’est pas lancée' },
+          'Joueurs', h('select', { class: 'input', style: { width: '90px' },
+            onchange: (e) => srv.post(`/rooms/${roomId}/settings`, { maxPlayers: Number(e.target.value) }).catch((err) => { errorToast(err); draw(); }) },
+          playerChoices(room.mode).map(([n, label]) => h('option', { value: n, selected: n === room.maxPlayers, disabled: n < room.members.length }, label)))) : null,
+        room.state === 'lobby' && isLeader() && room.maxPlayers >= 2 ? btn(room.visibility === 'public' ? 'Rendre privée' : 'Rendre publique', (e) => act(e.currentTarget,
           () => srv.post(`/rooms/${roomId}/settings`, { visibility: room.visibility === 'public' ? 'private' : 'public' })),
         { kind: 'ghost', iconName: room.visibility === 'public' ? 'lock' : 'globe',
           title: room.visibility === 'public' ? 'Seuls vos invités (ou le code) pourront entrer' : 'La salle apparaît dans « Salles publiques » : n’importe qui peut la rejoindre tant qu’elle n’est pas lancée' }) : null,
@@ -240,7 +245,7 @@ export async function renderRoom(container, roomId, { history = false } = {}) {
           h('ul', { class: 'muted small', style: { margin: '10px 0 0', paddingLeft: '18px' } }, randoLines(room.rando, gen()).map((l) => h('li', null, l))),
           h('p', { class: 'tiny faint mt-s' }, 'Seed ', h('span', { class: 'mono' }, room.rando?.seed || '—')))),
         h('div', { class: 'card' }, h('h3', null, 'Règles'), h('p', { class: 'tiny faint mt-s' }, isLeader() ? 'Modifiables à tout moment, même en cours de partie.' : 'Fixées par le chef de salle.'),
-          rulesEditor(room.rules, { editable: isLeader(), onChange: setRules }))),
+          rulesEditor(room.rules, { editable: isLeader(), mode: room.mode, onChange: setRules }))),
       m ? h('div', { class: 'card mt chat-card' }, h('h3', { class: 'mb' }, 'Discussion de la salle'), chatBox()) : null,
       m ? h('div', { class: 'action-bar' },
         h('div', { class: 'grow' },
@@ -265,7 +270,7 @@ export async function renderRoom(container, roomId, { history = false } = {}) {
       h('div', { class: 'grid2 mt-l' },
         h('div', { class: 'card' }, h('h3', null, 'Randomisation'),
           h('ul', { class: 'muted small', style: { margin: '10px 0 0', paddingLeft: '18px' } }, randoLines(room.rando || {}, gen()).map((l) => h('li', null, l)))),
-        h('div', { class: 'card' }, h('h3', null, 'Règles'), rulesEditor(room.rules || {}, { editable: false, onChange: () => {} }))));
+        h('div', { class: 'card' }, h('h3', null, 'Règles'), rulesEditor(room.rules || {}, { editable: false, mode: room.mode, onChange: () => {} }))));
   }
 
   function invitedView() {
@@ -414,7 +419,7 @@ export async function renderRoom(container, roomId, { history = false } = {}) {
     switch (ui.tab) {
       case 'players': content = playersTab(); break;
       case 'journal': drawLogs(); content = logBox; break;
-      case 'rules': content = h('div', { class: 'card' }, rulesEditor(room.rules, { editable: isLeader() && room.state === 'running', onChange: setRules })); break;
+      case 'rules': content = h('div', { class: 'card' }, rulesEditor(room.rules, { editable: isLeader() && room.state === 'running', mode: room.mode, onChange: setRules })); break;
       case 'rom': content = (drawRomOnly(), romBox); break;
       case 'chat': content = h('div', { class: 'card chat-card' }, chatBox()); break;
       case 'battles': content = duelsBox(); break;

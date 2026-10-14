@@ -96,7 +96,7 @@ public final class Rooms {
         List<Room> found = new ArrayList<>();
         for (Room r : rooms.values()) {
             synchronized (r) {
-                if (!"public".equals(r.visibility) || !"lobby".equals(r.state)) {
+                if (!"public".equals(r.visibility) || !"lobby".equals(r.state) || r.maxPlayers < 2) {
                     continue;
                 }
                 if (mode != null && !mode.isBlank() && !mode.equals(r.mode)) {
@@ -252,7 +252,7 @@ public final class Rooms {
         Room r = get(id);
         synchronized (r) {
             boolean member = r.member(user.id) != null;
-            boolean open = "public".equals(r.visibility) && "lobby".equals(r.state);
+            boolean open = "public".equals(r.visibility) && "lobby".equals(r.state) && r.maxPlayers >= 2;
             if (!member && !r.invites.contains(user.id) && !r.history.contains(user.id) && !open) {
                 throw new Http.Fail(403, "Vous ne faites pas partie de cette salle.");
             }
@@ -289,13 +289,20 @@ public final class Rooms {
         r.game = Json.map("gameId", gameId, "name", Json.str(game, "name"), "gen", Json.num(game, "gen", 0),
                 "platform", Json.str(game, "platform"), "romCode", Json.str(game, "romCode"), "lang", Json.str(game, "lang"),
                 "crc", Json.str(game, "crc"));
-        r.maxPlayers = (int) Math.max(1, Math.min(4, Json.num(body, "maxPlayers", 4)));
-        r.visibility = "public".equals(Json.str(body, "visibility")) ? "public" : "private";
         String mode = Json.str(body, "mode");
-        r.mode = mode != null && mode.matches("[a-z]{2,16}") ? mode : "soullink";
+        r.mode = mode != null && Room.MODES.contains(mode) ? mode : "soullink";
+        r.maxPlayers = (int) Math.max(Room.minPlayers(r.mode), Math.min(Room.maxPlayers(r.mode),
+                Json.num(body, "maxPlayers", Math.max(2, Room.minPlayers(r.mode)))));
+        // a room for one player is never listed: nobody could join it
+        r.visibility = "public".equals(Json.str(body, "visibility")) && r.maxPlayers >= 2 ? "public" : "private";
+        r.rules = Room.defaultRules(r.mode);
         Map<String, Object> rules = Json.obj(body.get("rules"));
         if (rules != null) {
-            r.rules.putAll(rules);
+            for (Map.Entry<String, Object> e : rules.entrySet()) {
+                if (r.rules.containsKey(e.getKey())) {
+                    r.rules.put(e.getKey(), e.getValue());
+                }
+            }
         }
         Map<String, Object> rando = Json.obj(body.get("rando"));
         r.rando = rando == null ? new LinkedHashMap<>() : rando;
@@ -343,7 +350,7 @@ public final class Rooms {
             if (rules != null) {
                 List<String> changed = new ArrayList<>();
                 for (Map.Entry<String, Object> e : rules.entrySet()) {
-                    if (!Room.defaultRules().containsKey(e.getKey())) {
+                    if (!Room.defaultRules(r.mode).containsKey(e.getKey())) {
                         continue;
                     }
                     Object before = r.rules.get(e.getKey());
@@ -356,11 +363,21 @@ public final class Rooms {
                     out.log(r.member(user.id), "rules", user.display + " modifie les règles : " + String.join(", ", changed), null);
                 }
             }
+            if (body.containsKey("maxPlayers")) {
+                if (!"lobby".equals(r.state)) {
+                    throw new Http.Fail(409, "Le nombre de joueurs ne peut plus changer une fois l'aventure lancée.");
+                }
+                int asked = (int) Json.num(body, "maxPlayers", r.maxPlayers);
+                if (asked < r.members.size()) {
+                    throw new Http.Fail(409, "Il y a déjà " + r.members.size() + " joueur(s) dans la salle.");
+                }
+                r.maxPlayers = Math.max(Room.minPlayers(r.mode), Math.min(Room.maxPlayers(r.mode), asked));
+            }
             if (body.containsKey("visibility")) {
                 r.visibility = "public".equals(Json.str(body, "visibility")) ? "public" : "private";
             }
-            if (body.containsKey("maxPlayers") && "lobby".equals(r.state)) {
-                r.maxPlayers = (int) Math.max(Math.max(1, r.members.size()), Math.min(4, Json.num(body, "maxPlayers", r.maxPlayers)));
+            if (r.maxPlayers < 2) {
+                r.visibility = "private"; // a room for one player is never listed
             }
             Map<String, Object> rando = Json.obj(body.get("rando"));
             if (rando != null) {
@@ -411,7 +428,7 @@ public final class Rooms {
             if (r.member(user.id) != null) {
                 return r.view(hub, true);
             }
-            if (!byCode && !r.invites.contains(user.id) && !"public".equals(r.visibility)) {
+            if (!byCode && !r.invites.contains(user.id) && !("public".equals(r.visibility) && r.maxPlayers >= 2)) {
                 throw new Http.Fail(403, "Vous n'êtes pas invité dans cette salle.");
             }
             if (!"lobby".equals(r.state)) {
@@ -550,6 +567,9 @@ public final class Rooms {
             if (!"lobby".equals(r.state)) {
                 throw new Http.Fail(409, "L'aventure est déjà lancée.");
             }
+            if (r.members.size() < Room.minPlayers(r.mode)) {
+                throw new Http.Fail(409, "Il faut au moins " + Room.minPlayers(r.mode) + " joueurs pour lancer un " + r.runName() + ".");
+            }
             List<String> waiting = new ArrayList<>();
             for (Room.Member m : r.members) {
                 if (!m.ready) {
@@ -577,7 +597,9 @@ public final class Rooms {
             Room.Out out = new Room.Out();
             out.log(null, "launch", "L'aventure commence ! " + r.members.size() + " joueur(s) sur " + r.gameName() + ".", null);
             if (r.rule("startWithBalls")) {
-                out.log(null, "info", "Le Soul Link commencera vraiment quand chaque joueur aura une Poké Ball : "
+                out.log(null, "info", r.nuzlocke()
+                        ? "Le Nuzlocke de chaque joueur commence à sa première Poké Ball : d'ici là, un Pokémon K.O. ne meurt pas."
+                        : "Le Soul Link commencera vraiment quand chaque joueur aura une Poké Ball : "
                         + "d'ici là, un Pokémon K.O. ne meurt pas.", null);
             }
             r.checkStart(out);

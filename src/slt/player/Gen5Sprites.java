@@ -54,6 +54,7 @@ final class Gen5Sprites {
     private boolean failed;
     private final Map<String, String> cache = new HashMap<>();
     private final Map<Integer, Integer> counts = new HashMap<>();
+    private final Map<String, int[]> sizes = new HashMap<>();
 
     Gen5Sprites(Path rom, String narc) {
         this(rom, narc, false);
@@ -89,6 +90,20 @@ final class Gen5Sprites {
         }
         cache.put(key, png);
         return png;
+    }
+
+    /** Width and height of image {@code frame} of texture file {@code file} (32 x 32 when unknown). */
+    int[] size(int file, int frame) {
+        return sizes.computeIfAbsent(file + ":" + frame, k -> {
+            byte[] btx = member(file);
+            if (btx != null) {
+                List<Texture> t = textures(btx, byNumber);
+                if (frame >= 0 && frame < t.size()) {
+                    return new int[]{t.get(frame).image.getWidth(), t.get(frame).image.getHeight()};
+                }
+            }
+            return new int[]{32, 32};
+        });
     }
 
     private byte[] member(int i) {

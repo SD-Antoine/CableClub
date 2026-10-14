@@ -28,8 +28,28 @@ public final class Room {
 
     // ------------------------------------------------------------------ rules
 
-    /** Rules of a new room; the leader may change them at any time. */
+    /** Game modes of the rooms, with the number of players each allows. */
+    public static final Set<String> MODES = Set.of("soullink", "nuzlocke");
+
+    public static int minPlayers(String mode) {
+        return "soullink".equals(mode) ? 2 : 1;
+    }
+
+    public static int maxPlayers(String mode) {
+        return "nuzlocke".equals(mode) ? 10 : 5;
+    }
+
+    /** Rules of the Nuzlocke that Cable Club cannot check: the players keep to them on their honour. */
+    static final List<String> HONOR_RULES = List.of("honorNoHealItems", "honorNoHeldItems", "honorNoMultiExp", "honorNoMasterBall",
+            "honorNoEvolution", "honorNoFly", "honorNoRepel", "honorSetMode", "honorCsException", "honorNotepad");
+
+    /** Rules of a new Soul Link room; the leader may change them at any time. */
     public static Map<String, Object> defaultRules() {
+        return defaultRules("soullink");
+    }
+
+    /** Rules of a new room of a mode; the leader may change them at any time. */
+    public static Map<String, Object> defaultRules(String mode) {
         Map<String, Object> r = new LinkedHashMap<>();
         r.put("shinyClause", true);        // a shiny can always be caught (not linked)
         r.put("dupesClause", true);        // an evolution line already owned in the room is ignored
@@ -44,6 +64,18 @@ public final class Room {
         r.put("autoEnd", true);            // beating the Champion is detected in the game and ends the run
         r.put("startWithBalls", true);     // deaths count once every player has had a Poké Ball
         r.put("saveStates", false);        // save states allowed in the player
+        if ("nuzlocke".equals(mode)) {
+            // each player has their own Nuzlocke: nothing is shared, nobody is linked
+            r.put("shinyClause", false);   // a shiny can be caught even in a zone already used
+            r.put("dupesClause", false);   // an evolution line the player already owns is ignored (they meet another one)
+            r.put("giftPokemon", true);
+            r.put("naming", "free");
+            r.put("pauseForNaming", false);
+            r.put("refundCancelled", false);
+            for (String k : HONOR_RULES) {
+                r.put(k, false);
+            }
+        }
         return r;
     }
 
@@ -412,12 +444,25 @@ public final class Room {
         if (v instanceof Boolean b) {
             return b;
         }
-        return Boolean.TRUE.equals(defaultRules().get(key));
+        return Boolean.TRUE.equals(defaultRules(mode).get(key));
     }
 
     String ruleText(String key) {
         Object v = rules.get(key);
-        return v == null ? String.valueOf(defaultRules().get(key)) : v.toString();
+        return v == null ? String.valueOf(defaultRules(mode).get(key)) : v.toString();
+    }
+
+    boolean nuzlocke() {
+        return "nuzlocke".equals(mode);
+    }
+
+    String runName() {
+        return nuzlocke() ? "Nuzlocke" : "Soul Link";
+    }
+
+    /** Do the deaths count for this player? Soul Link: once everybody has a Poké Ball; Nuzlocke: once they have theirs. */
+    boolean started(Member m) {
+        return nuzlocke() ? !rule("startWithBalls") || m.hasBalls : linkStarted;
     }
 
     String gameName() {
@@ -476,6 +521,8 @@ public final class Room {
                 hint = " — zone annulée";
             } else if ("dead".equals(z.status)) {
                 hint = " — lien perdu";
+            } else if (nuzlocke()) {
+                hint = e != null ? " — première rencontre déjà faite ici" : "";
             } else if (e != null) {
                 hint = " — capture déjà faite ici";
             } else if (!z.entries.isEmpty()) {
@@ -511,13 +558,19 @@ public final class Room {
                 Json.map("species", (long) species, "speciesName", speciesName, "level", (long) level, "zone", zone,
                         "shiny", shiny, "kind", e.kind));
         switch (e.kind) {
-            case "zone" -> out.notice(m, "info", "Première rencontre de " + zone + " : elle compte pour le Soul Link.");
+            case "zone" -> out.notice(m, "info", nuzlocke()
+                    ? "Première rencontre de " + zone + " : c'est votre seule chance ici (fuir ou le battre l'épuise)."
+                    : "Première rencontre de " + zone + " : elle compte pour le Soul Link.");
             case "shiny" -> out.notice(m, "ok", "Chromatique ! Capture libre (clause chromatique), sans lien.");
-            case "used" -> out.notice(m, "warn", zone + " : vous y avez déjà capturé ou mis K.O. un Pokémon. Capture interdite.");
+            case "used" -> out.notice(m, "warn", nuzlocke()
+                    ? zone + " : vous y avez déjà rencontré un Pokémon. Capture interdite."
+                    : zone + " : vous y avez déjà capturé ou mis K.O. un Pokémon. Capture interdite.");
             case "cancelled" -> out.notice(m, "warn", zone + " est annulée pour la salle. Capture interdite.");
-            case "dupe" -> out.notice(m, "warn", "Doublon : cette lignée d'évolution est déjà dans la salle. Rencontre ignorée, fuyez ou mettez-le K.O.");
+            case "dupe" -> out.notice(m, "warn", nuzlocke()
+                    ? "Doublon : vous avez déjà cette lignée d'évolution. Rencontre ignorée, fuyez ou mettez-le K.O."
+                    : "Doublon : cette lignée d'évolution est déjà dans la salle. Rencontre ignorée, fuyez ou mettez-le K.O.");
             case "legendary" -> out.notice(m, "warn", "Légendaire interdit par les règles : ne le capturez pas.");
-            case "noballs" -> out.notice(m, "info", "Pas encore de Poké Ball : cette rencontre ne compte pas pour le Soul Link.");
+            case "noballs" -> out.notice(m, "info", "Pas encore de Poké Ball : cette rencontre ne compte pas pour le " + runName() + ".");
             default -> {
                 // nothing to say
             }
@@ -539,6 +592,10 @@ public final class Room {
         if (linkStarted || !"running".equals(state)) {
             return;
         }
+        if (nuzlocke()) {
+            linkStarted = true; // nobody waits for the others: each player's rules start with their own first Poké Ball
+            return;
+        }
         if (rule("startWithBalls") && !members.stream().allMatch(x -> x.hasBalls)) {
             return;
         }
@@ -553,6 +610,26 @@ public final class Room {
 
     /** Does this wild Pokémon count for its zone? */
     private String classify(Member m, String key, int species, boolean shiny) {
+        if (nuzlocke()) {
+            // each player alone: the first wild Pokémon met in a zone is the only one that can be caught there
+            if (!started(m)) {
+                return "noballs";
+            }
+            if (shiny && rule("shinyClause")) {
+                return "shiny";
+            }
+            if (LEGENDARIES.contains(species) && !rule("legendaries")) {
+                return "legendary";
+            }
+            Zone nz = zones.get(key);
+            if (nz != null && nz.entries.containsKey(m.userId)) {
+                return "used";
+            }
+            if (rule("dupesClause") && ownedFamily(m, species, key, false)) {
+                return "dupe";
+            }
+            return "zone";
+        }
         if (!m.hasBalls && rule("startWithBalls")) {
             return "noballs";
         }
@@ -569,16 +646,19 @@ public final class Room {
         if (z != null && z.entries.containsKey(m.userId)) {
             return "used";
         }
-        if (rule("dupesClause") && ownedFamily(m, species, key)) {
+        if (rule("dupesClause") && ownedFamily(m, species, key, true)) {
             return "dupe";
         }
         return "zone";
     }
 
     /** An evolution line already caught by someone in the room (encountering player's evolution data). */
-    private boolean ownedFamily(Member m, int species, String zoneKey) {
+    private boolean ownedFamily(Member m, int species, String zoneKey, boolean everyone) {
         int fam = m.family(species);
         for (Member other : members) {
+            if (!everyone && other != m) {
+                continue;
+            }
             for (MonRec r : other.mons.values()) {
                 if ("released".equals(r.status) && r.reason != null && r.reason.startsWith("interdit")) {
                     continue;
@@ -604,6 +684,31 @@ public final class Room {
         m.encounter = null;
         boolean killed = Json.bool(ev, "wildFainted", false);
         String who = e.speciesName == null ? "#" + e.species : e.speciesName;
+        if (nuzlocke()) {
+            if (killed) {
+                m.stats.wildKills++;
+            }
+            if ("zone".equals(e.kind)) {
+                // the first Pokémon of the zone got away or was beaten: no second chance in this zone
+                Zone z = zone(e.zoneKey, e.zone);
+                if (!z.entries.containsKey(m.userId)) {
+                    Entry entry = new Entry();
+                    entry.result = killed ? "killed" : "fled";
+                    entry.uid = e.uid;
+                    entry.species = e.species;
+                    entry.speciesName = e.speciesName;
+                    entry.level = e.level;
+                    entry.at = System.currentTimeMillis();
+                    z.entries.put(m.userId, entry);
+                }
+                out.log(m, killed ? "kill" : "flee", m.name + (killed ? " met K.O. " : " quitte le combat contre ") + who
+                        + ", première rencontre de " + e.zone + " : pas de seconde chance ici", Json.map("zone", e.zone));
+            } else {
+                out.log(m, killed ? "kill" : "flee", m.name + (killed ? " met K.O. " : " quitte le combat contre ") + who
+                        + " (" + e.zone + ")", Json.map("zone", e.zone));
+            }
+            return;
+        }
         if (!killed) {
             out.log(m, "flee", m.name + " quitte le combat contre " + who, Json.map("zone", e.zone));
             return;
@@ -693,14 +798,22 @@ public final class Room {
         Encounter e = m.encounter;
         boolean wild = "wild".equals(origin) || (e != null && uid.equals(e.uid));
         if (!wild && first) {
-            // the first Pokémon received is the starter: linked with the other starters
             r.zone = "Départ";
+            if (nuzlocke()) {
+                bonus(m, r, "Pokémon de départ", out);
+                return;
+            }
+            // the first Pokémon received is the starter: linked with the other starters
             link(m, r, zone(STARTER, "Départ"), null, out);
             return;
         }
         if (!wild) {
             if (!rule("giftPokemon")) {
                 release(m, r, "interdit : Pokémon offert ou échangé", out);
+                return;
+            }
+            if (nuzlocke()) {
+                bonus(m, r, "Pokémon offert", out);
                 return;
             }
             Zone z = zones.get(zoneKey(zone));
@@ -767,6 +880,9 @@ public final class Room {
         out.log(m, "capture", m.name + " capture " + r.label() + " N." + r.level + " (" + z.name + ")",
                 Json.map("zone", z.name, "species", (long) r.species, "speciesName", r.speciesName, "level", (long) r.level,
                         "shiny", r.shiny));
+        if (nuzlocke()) {
+            return; // alone: nobody to link with, the Pokémon is simply the player's for the zone
+        }
         if (z.nickname != null) {
             r.nickname = z.nickname;
         }
@@ -885,16 +1001,17 @@ public final class Room {
         if (r == null || !"alive".equals(r.status) || "existing".equals(r.origin)) {
             return;
         }
-        if (!linkStarted) {
-            out.log(m, "faint", r.label() + " de " + m.name + " est K.O., sans conséquence : le Soul Link n'a pas encore commencé.", null);
-            out.notice(m, "info", r.label() + " est K.O. mais ne meurt pas : le Soul Link commence quand chaque joueur a une Poké Ball.");
+        if (!started(m)) {
+            out.log(m, "faint", r.label() + " de " + m.name + " est K.O., sans conséquence : le " + runName() + " n'a pas encore commencé.", null);
+            out.notice(m, "info", r.label() + " est K.O. mais ne meurt pas : le " + runName() + " commence "
+                    + (nuzlocke() ? "à votre première Poké Ball." : "quand chaque joueur a une Poké Ball."));
             return;
         }
         r.status = "dead";
         r.reason = "K.O.";
         m.stats.deaths++;
         out.log(m, "death", "☠ " + r.label() + " de " + m.name + " est mort" + (r.zone != null ? " (" + r.zone + ")" : ""), null);
-        if (r.bonus || r.zoneKey == null) {
+        if (nuzlocke() || r.bonus || r.zoneKey == null) {
             return;
         }
         Zone z = zones.get(r.zoneKey);
@@ -938,6 +1055,14 @@ public final class Room {
 
     private void whiteout(Member m, Out out) {
         out.log(m, "whiteout", "L'équipe de " + m.name + " est entièrement K.O.", null);
+        if (nuzlocke()) {
+            if (rule("wipeEndsRun") && started(m) && !"wiped".equals(m.status)) {
+                m.status = "wiped";
+                out.log(m, "wipe", "☠ " + m.name + " a perdu son Nuzlocke : toute son équipe est tombée.", null);
+                endWhenAllDone(out);
+            }
+            return;
+        }
         if (rule("wipeEndsRun") && linkStarted) {
             m.status = "wiped";
             finish("defeat", "L'équipe de " + m.name + " est tombée.", out);
@@ -1015,7 +1140,15 @@ public final class Room {
         m.status = "champion";
         out.log(m, "champion", "🏆 " + m.name + " bat le Maître de la Ligue !", null);
         if (!rule("autoEnd")) {
-            return; // the leader ends the Soul Link by hand
+            return; // the leader ends the run by hand
+        }
+        if (nuzlocke()) {
+            if ("first".equals(ruleText("endWhen"))) {
+                finish("victory", m.name + " a battu le Maître de la Ligue.", out);
+            } else {
+                endWhenAllDone(out);
+            }
+            return;
         }
         boolean all = members.stream().allMatch(x -> "champion".equals(x.status));
         if ("first".equals(ruleText("endWhen")) || all) {
@@ -1023,7 +1156,16 @@ public final class Room {
         }
     }
 
-    /** Ends the Soul Link: victory, defeat or abandon. */
+    /** Nuzlocke: the run ends when every player has either beaten the League or lost their team. */
+    private void endWhenAllDone(Out out) {
+        if (!members.stream().allMatch(x -> "champion".equals(x.status) || "wiped".equals(x.status))) {
+            return;
+        }
+        boolean any = members.stream().anyMatch(x -> "champion".equals(x.status));
+        finish(any ? "victory" : "defeat", any ? "Tous les joueurs ont terminé leur Nuzlocke." : "Toutes les équipes sont tombées.", out);
+    }
+
+    /** Ends the run: victory, defeat or abandon. */
     void finish(String outcome, String reason, Out out) {
         if (!"running".equals(state)) {
             return;
@@ -1033,9 +1175,9 @@ public final class Room {
         namingQueue.clear();
         ended = Json.map("at", System.currentTimeMillis(), "outcome", outcome, "reason", reason, "summary", summary());
         String title = switch (outcome) {
-            case "victory" -> "Soul Link réussi !";
-            case "defeat" -> "Soul Link perdu.";
-            default -> "Soul Link abandonné.";
+            case "victory" -> runName() + " réussi !";
+            case "defeat" -> runName() + " perdu.";
+            default -> runName() + " abandonné.";
         };
         out.log(null, "end", title + " " + reason, Json.map("outcome", outcome));
         out.ended = true;
@@ -1089,7 +1231,7 @@ public final class Room {
                 }
             }
         } else if ("finished".equals(state) || "abandoned".equals(state)) {
-            pause = Json.map("reason", "ended", "text", "Le Soul Link est terminé.");
+            pause = Json.map("reason", "ended", "text", "Le " + runName() + " est terminé.");
         }
         return Json.map("room", id, "doomed", doomed, "release", release, "nicknames", nicknames, "pause", pause,
                 "refunds", new ArrayList<Object>(m.refunds), "deathBox", rule("deathBox"),

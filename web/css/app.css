@@ -688,3 +688,7 @@ details.advanced[open] > summary { margin-bottom: 4px; }
 .t-ghost { --mt: #735797; } .t-dragon { --mt: #6f35fc; } .t-dark { --mt: #705746; } .t-steel { --mt: #b7b7ce; }
 .t-fairy { --mt: #d685ad; } .t-normal { --mt: #a8a77a; }
 .battle-controls.end b { white-space: nowrap; }
+.rule-section { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--faint); padding: 14px 0 4px; border-bottom: 1px solid var(--line); }
+.rule-row.soon { opacity: .5; }
+.nav-item.mode-item.soon { opacity: .45; cursor: default; }
+.nav-item.mode-item.soon .chip { margin-left: auto; font-size: 10px; }

@@ -5,6 +5,7 @@ import { srv } from '../api.js';
 import { store, on, refreshRooms, loadRoom } from '../store.js';
 import { gameName } from '../data/games.js';
 import { openCreateRoom } from './create-room.js';
+import { MODE_PLAYERS } from '../data/rules.js';
 
 export function stateChip(room) {
   if (room.state === 'lobby') return chip('Salon', '', true);
@@ -27,17 +28,17 @@ export function renderHome(container, { mode = 'soullink' } = {}) {
     const mine = rooms.filter((r) => !r.invited);
     mount(page,
       h('div', { class: 'row between mb' },
-        h('p', { class: 'muted' }, 'Créez une salle de 1 à 4 joueurs, rejoignez celle d’un ami ou une salle publique.'),
+        h('p', { class: 'muted' }, `Créez une salle (${MODE_PLAYERS[mode].min === 1 ? 'solo ou ' : ''}de ${Math.max(2, MODE_PLAYERS[mode].min)} à ${MODE_PLAYERS[mode].max} joueurs), rejoignez celle d’un ami ou une salle publique.`),
         h('div', { class: 'row' },
           btn('Rejoindre avec un code', joinWithCode, { iconName: 'door' }),
-          btn('Nouvelle salle', () => openCreateRoom(), { kind: 'primary', iconName: 'plus' }))),
+          btn('Nouvelle salle', () => openCreateRoom(mode), { kind: 'primary', iconName: 'plus' }))),
       invites.length ? h('div', null,
         h('div', { class: 'section-title' }, h('h2', null, 'Invitations')),
         h('div', { class: 'stack' }, invites.map(inviteCard))) : null,
       invites.length ? h('div', { class: 'section-title' }, h('h2', null, 'Mes salles')) : null,
       mine.length ? h('div', { class: 'stack' }, mine.map(roomCard))
         : h('div', { class: 'empty' }, h('b', null, 'Aucune salle pour l’instant'),
-          'Créez-en une pour lancer un Soul Link, puis invitez vos amis… ou rejoignez une salle publique.'));
+          `Créez-en une pour lancer un ${mode === 'nuzlocke' ? 'Nuzlocke' : 'Soul Link'}, puis invitez vos amis… ou rejoignez une salle publique.`));
   }
 
   function roomCard(room) {

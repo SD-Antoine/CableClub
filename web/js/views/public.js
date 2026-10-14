@@ -6,6 +6,7 @@ import { srv } from '../api.js';
 import { store, loadRoom } from '../store.js';
 import { gameName } from '../data/games.js';
 import { randoLines } from './parts.js';
+import { playerChoices } from '../data/rules.js';
 
 export function renderPublic(container, { mode = 'soullink' } = {}) {
   const page = h('div');
@@ -30,7 +31,7 @@ export function renderPublic(container, { mode = 'soullink' } = {}) {
   function drawFilters() {
     mount(filters, h('div', { class: 'row wrap' },
       h('span', { class: 'small muted' }, 'Taille'),
-      seg([[0, 'Toutes'], [1, '1'], [2, '2'], [3, '3'], [4, '4']], st.size, (v) => { st.size = v; drawFilters(); load(); }),
+      seg([[0, 'Toutes'], ...playerChoices(mode).filter(([n]) => n >= 2)], st.size, (v) => { st.size = v; drawFilters(); load(); }),
       h('label', { class: 'row small muted', style: { gap: '8px' } }, switchEl(st.full, (v) => { st.full = v; load(); }), 'Salles complètes')));
   }
 

@@ -1,5 +1,17 @@
 # Nouveautés de Cable Club (anciennement SLT)
 
+## 0.7.0 — 2026-10-14
+
+- **Mode Nuzlocke**, avec son onglet : des salles de **1 (solo) à 10 joueurs**, chacun jouant son propre Nuzlocke (rien n'est lié entre les joueurs). Cable Club applique dans les jeux les deux règles de base : un Pokémon K.O. est mort (boîte des morts), et seul le premier Pokémon sauvage rencontré dans chaque zone peut être capturé (fuir ou le battre épuise la zone). Règles optionnelles appliquées : clause des doublons (lignées que vous possédez), clause chromatique, légendaires interdits ou non, Pokémon offerts, équipe entière K.O. = partie perdue. Règles d'honneur affichées aux joueurs (non vérifiables) : pas d'objets de soin, d'objet tenu, de Multi Exp, de Master Ball, d'évolution, de Vol, de Repousse, mode Défini, exception pour les CS, aucun Pokémon dans le PC. Le Nuzlocke Hardcore, le Sololocke et le Shinylocke sont annoncés (grisés).
+- **Salles solo** : le choix « 1 » devient « Solo ». Une salle solo ne peut pas être publique.
+- **Soul Link de 2 à 5 joueurs** (au lieu de 1 à 4).
+- **Le nombre de joueurs d'une salle se change** tant que l'aventure n'est pas lancée (liste « Joueurs » dans la salle).
+- Le taux de chromatiques reste réglable dans tous les modes.
+
+- **Le Pokémon des partenaires, visible en jeu dans HeartGold et SoulSilver** : le Pokémon qui suit chaque joueur apparaît dans le jeu des autres, à sa place, avec la même orientation et la même animation de marche que dans le jeu de son dresseur (son vrai sprite, lu dans la ROM). Les formes spéciales qui n'ont pas de sprite de suiveur ne sont pas affichées.
+- **Fin du « marcher sur la tête »** (4e et 5e génération) : un partenaire qui passe derrière un personnage du jeu (PNJ, Pokémon suiveur) est maintenant masqué par lui, au lieu d'être dessiné par-dessus. Dans les jeux de 4e génération, votre propre personnage, redessiné par-dessus un partenaire qui passe derrière vous, est enfin exactement superposé au vrai (il était décalé de quelques pixels), et les partenaires sont posés exactement sur leur case.
+- **Déplacements fluides en 4e génération, et un peu en 5e** : les jeux DS ne changent d'image qu'une fois sur deux, et ce que Cable Club lisait dans la mémoire (caméra, positions) ne correspondait pas toujours à l'image affichée : à chaque pas, les partenaires faisaient un petit saut de côté, 30 fois par seconde, par rapport au décor (le « déchirement »). Ils restent maintenant collés au décor.
+
 ## 0.6.2 — 2026-10-14
 
 - **`SLT.exe` disparaît** : le programme s'appelle seulement `CableClub.exe`, et l'archive `CableClub-x.y.z-windows-x64.zip`. Depuis la 0.6.0 ou la 0.6.1, la mise à jour automatique s'en occupe : l'ancien `SLT.exe` est supprimé au premier lancement (un raccourci vers lui est à refaire vers `CableClub.exe`).

@@ -54,6 +54,20 @@ const BOX_H = 46;
 // a player walking this close behind (in pixels) is partly hidden by this player's sprite
 const BEHIND_X = 20;
 const BEHIND_Y = 34;
+// sprites of the Pokémon following a player: "g4p-<texture>-<image>"
+const FOLLOWER_PREFIX = 'g4p-';
+// a character of the game (a person) fills, in its 32 x 32 sprite, the columns 7 to 23 and the rows 6 to 30: another
+// character that stands in front of a player hides the part of them under that box
+const CHAR_X1 = 7;
+const CHAR_X2 = 24;
+const CHAR_Y1 = 6;
+const CHAR_Y2 = 31;
+
+/** The Pokémon following, in a point of the way [t, map, x, y, sprite, z, pet x, y, z, pet sprite]; null when there is none. */
+function petOf(p) {
+  return p.length >= 10 && typeof p[9] === 'string' && typeof p[6] === 'number'
+    ? { x: p[6], y: p[7], z: p[8], sid: p[9] } : null;
+}
 
 export class GhostLayer {
   /**
@@ -137,9 +151,21 @@ export class GhostLayer {
     return s;
   }
 
-  /** A sprite of this player, decoded once: switching between walking frames is then instant. */
+  /** The Pokémon following a player (HeartGold / SoulSilver): its own element and sprites, drawn like a player without name. */
+  followerOf(s) {
+    if (!s.pet) {
+      const el = document.createElement('div');
+      el.className = 'pg pg-pet';
+      this.layer.appendChild(el);
+      s.pet = { el, sprites: new Map(), shown: null };
+    }
+    return s.pet;
+  }
+
+  /** A sprite of this player (or of the Pokémon following them), decoded once: switching between frames is then instant. */
   sprite(s, sid, png, w, h) {
-    if (!png || s.sprites.has(sid)) return;
+    const holder = String(sid).startsWith(FOLLOWER_PREFIX) ? this.followerOf(s) : s;
+    if (!png || holder.sprites.has(sid)) return;
     const img = document.createElement('img');
     img.alt = '';
     img.className = 'pg-sprite';
@@ -150,11 +176,11 @@ export class GhostLayer {
     img.style.height = `${sh}px`;
     img.style.display = 'none';
     img.decode?.().catch(() => {});
-    s.el.appendChild(img);
-    s.sprites.set(sid, { img, w: sw, h: sh });
-    if (s.sprites.size > 64) {
-      const [oldest, o] = s.sprites.entries().next().value;
-      if (oldest !== s.shown) { o.img.remove(); s.sprites.delete(oldest); }
+    holder.el.appendChild(img);
+    holder.sprites.set(sid, { img, w: sw, h: sh });
+    if (holder.sprites.size > 128) {
+      const [oldest, o] = holder.sprites.entries().next().value;
+      if (oldest !== holder.shown) { o.img.remove(); holder.sprites.delete(oldest); }
     }
   }
 
@@ -187,12 +213,18 @@ export class GhostLayer {
       for (const [at, o] of s.offs) if (now - at < 5000) late = Math.max(late, o - min);
       s.offset = min;
       s.delay = Math.min(1000, BATCH_MS + late + 40);
+      let pet = null;
       if (Array.isArray(g.pts)) {
         for (const p of g.pts) {
-          if (Array.isArray(p) && p.length >= 4) points.push({ t: p[0], map: p[1], x: p[2], y: p[3], sid: p[4] ?? null, z: p[5] });
+          if (Array.isArray(p) && p.length >= 4) {
+            pet = petOf(p);
+            points.push({ t: p[0], map: p[1], x: p[2], y: p[3], sid: p[4] ?? null, z: p[5], pet });
+          }
         }
       }
-      points.push({ t: g.t, map: g.map, x: g.x, y: g.y, sid: g.sid ?? null, z: g.z });
+      // the Pokémon following travels inside the points of the way (the server relays no field of its own): the
+      // live position has the one of the last point
+      points.push({ t: g.t, map: g.map, x: g.x, y: g.y, sid: g.sid ?? null, z: g.z, pet });
     } else {
       // from one reading to the next; the room's latest list places the player at once
       s.offset = 0;
@@ -223,7 +255,12 @@ export class GhostLayer {
     if (t <= from) return a;
     const k = (t - from) / (b.t - from);
     const z = typeof a.z === 'number' && typeof b.z === 'number' ? a.z + (b.z - a.z) * k : a.z;
-    return { map: a.map, x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k, z, sid: a.sid };
+    // the Pokémon following glides on its own (it does not jump: no glide over a warp)
+    let pet = a.pet ?? null;
+    if (pet && b.pet && Math.abs(b.pet.x - pet.x) <= warp && Math.abs(b.pet.y - pet.y) <= warp && Math.abs(b.pet.z - pet.z) <= warp) {
+      pet = { x: pet.x + (b.pet.x - pet.x) * k, y: pet.y + (b.pet.y - pet.y) * k, z: pet.z + (b.pet.z - pet.z) * k, sid: pet.sid };
+    }
+    return { map: a.map, x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k, z, sid: a.sid, pet };
   }
 
   /** Where a point of the 3D world (in world units) appears on the top screen (256 x 192), and its depth; null if behind. */
@@ -244,7 +281,8 @@ export class GhostLayer {
    */
   static place(me, p, sprite) {
     if (!me.mtx) {
-      return { left: me.ax + (p.x - me.x) - sprite.w / 2, top: me.ay + (p.y - me.y) - sprite.h, scale: 1 };
+      const top = me.ay + (p.y - me.y) - sprite.h;
+      return { left: me.ax + (p.x - me.x) - sprite.w / 2, top, scale: 1, feetY: top + sprite.h };
     }
     if (typeof p.z !== 'number') return null;
     const x = p.x / 16;
@@ -253,8 +291,75 @@ export class GhostLayer {
     const feet = GhostLayer.project(me.mtx, x, y, z);
     if (!feet) return null;
     const scale = Math.max(0.25, Math.min(4, (me.depth > 0 ? me.depth : feet.w) / feet.w));
-    // measured on White 2: the game draws the sprite one pixel to the right of the point
-    return { left: feet.x + 1 - (sprite.w * scale) / 2, top: feet.y - sprite.h * scale, scale, bottom: 192 };
+    // measured on White 2: the game draws the sprite one pixel to the right of the point (me.dx); in generation 4 the
+    // point of the ground is a few rows above the bottom of the sprite (me.drop)
+    const drop = me.drop || 0;
+    return { left: feet.x + (me.dx ?? 1) - (sprite.w * scale) / 2, top: feet.y - (sprite.h - drop) * scale, scale, bottom: 192 + drop * scale, feetY: feet.y };
+  }
+
+  /**
+   * Cuts out of a drawn character the parts that other characters of the game (people, Pokémon) standing in front
+   * of it hide: the game draws those in its own image, under this layer. A rectangle of the size of a character
+   * around the feet of each (the image of the game stays visible there). Empty when nothing is in the way.
+   */
+  static cuts(me, left, top, w, h, feetY) {
+    const npcs = me.others;
+    if (!npcs || !npcs.length) return '';
+    let path = '';
+    const drop = me.drop || 0;
+    for (const n of npcs) {
+      if (n.y - feetY <= 0.5) continue; // behind or level with this one: it stays in front
+      const k = me.depth > 0 && n.w > 0 ? Math.max(0.25, Math.min(4, me.depth / n.w)) : 1;
+      const qx = n.x + (me.dx ?? 1) - 16 * k; // where its sprite is drawn (the sprites of the others: see place)
+      const qy = n.y - (32 - drop) * k;
+      const x1 = Math.round(qx + CHAR_X1 * k);
+      const x2 = Math.round(qx + CHAR_X2 * k);
+      const y1 = Math.round(qy + CHAR_Y1 * k);
+      const y2 = Math.round(qy + CHAR_Y2 * k);
+      if (x2 <= left || x1 >= left + w || y2 <= top || y1 >= top + h) continue;
+      path += ` M${x1 - left} ${y1 - top}H${x2 - left}V${y2 - top}H${x1 - left}Z`;
+    }
+    return path ? `path(evenodd, "M-800 -800H1200V1200H-800Z${path}")` : '';
+  }
+
+  /**
+   * Places one character drawn over the game (a player, or the Pokémon following one) with the sprite {@code sid} of
+   * {@code holder} ({ el, sprites, shown }) at {@code pos}. Returns null when it stays hidden, else { covered }:
+   * whether it walks behind this player (whose sprite is then redrawn over it).
+   */
+  drawOne(me, holder, sid, pos, mine) {
+    const sprite = holder.sprites.get(sid);
+    const hide = () => { holder.el.style.display = 'none'; return null; };
+    if (!sprite) return hide();
+    const box = GhostLayer.place(me, pos, sprite);
+    const left = box && Math.round(box.left);
+    const top = box && Math.round(box.top);
+    // 3D games (DS): only on the top screen
+    if (!box || left < -40 || left > 300 || top < -60 || top > 220
+      || (box.bottom !== undefined && top + sprite.h * box.scale > box.bottom + 8)) return hide();
+    const w = Math.round(sprite.w * box.scale);
+    const h = Math.round(sprite.h * box.scale);
+    let covered = false;
+    if (me.feet) {
+      // in front of this player: over them; behind: under them (their sprite is redrawn over, or the other hidden)
+      const feetY = box.feetY;
+      const behind = me.feet.y - feetY > 0.5 && me.feet.y - feetY < BEHIND_Y && Math.abs(left + w / 2 - (me.feet.x + (me.dx ?? 1))) < BEHIND_X;
+      if (behind && !mine) return hide();
+      covered = behind;
+      holder.el.style.zIndex = String(Math.round(feetY * 2) + 1);
+    }
+    if (sid !== holder.shown) {
+      if (holder.shown !== null) holder.sprites.get(holder.shown)?.img.style.setProperty('display', 'none');
+      sprite.img.style.display = 'block';
+      holder.shown = sid;
+    }
+    if (sprite.img.style.width !== `${w}px`) { sprite.img.style.width = `${w}px`; sprite.img.style.height = `${h}px`; }
+    holder.el.style.display = '';
+    holder.el.style.transform = `translate(${left}px, ${top}px)`;
+    holder.el.style.width = `${w}px`;
+    const cut = me.feet ? GhostLayer.cuts(me, left, top, w, h, box.feetY) : '';
+    if (holder.cut !== cut) { holder.el.style.clipPath = cut; holder.cut = cut; }
+    return { covered };
   }
 
   /**
@@ -296,41 +401,34 @@ export class GhostLayer {
       const sprite = sid !== null ? s.sprites.get(sid) : null;
       // only while the field is shown: never over a battle, a menu or a transition (3D games: a message box stays over them)
       const visible = me && (me.free ?? me.ow) && p && p.map === me.map && sprite && who;
-      if (!visible) { s.el.style.display = 'none'; continue; }
-      const box = GhostLayer.place(me, p, sprite);
-      const left = box && Math.round(box.left);
-      const top = box && Math.round(box.top);
-      // 3D games (DS): only on the top screen
-      if (!box || left < -40 || left > 300 || top < -60 || top > 220
-        || (box.bottom !== undefined && top + sprite.h * box.scale > box.bottom + 8)) { s.el.style.display = 'none'; continue; }
-      if (sid !== s.shown) {
-        if (s.shown !== null) s.sprites.get(s.shown)?.img.style.setProperty('display', 'none');
-        sprite.img.style.display = 'block';
-        s.shown = sid;
+      if (!visible) {
+        s.el.style.display = 'none';
+        if (s.pet) s.pet.el.style.display = 'none';
+        continue;
       }
-      const w = Math.round(sprite.w * box.scale);
-      const h = Math.round(sprite.h * box.scale);
-      if (sprite.img.style.width !== `${w}px`) { sprite.img.style.width = `${w}px`; sprite.img.style.height = `${h}px`; }
-      if (me.feet) {
-        // in front of this player: over them; behind: under them (their sprite is redrawn over, or the other hidden)
-        const feetY = top + h;
-        const behind = me.feet.y - feetY > 0.5 && me.feet.y - feetY < BEHIND_Y && Math.abs(left + w / 2 - (me.feet.x + 1)) < BEHIND_X;
-        if (behind && !mine) { s.el.style.display = 'none'; continue; }
-        covered ||= behind;
-        s.el.style.zIndex = String(Math.round(feetY * 2) + 1);
+      const drawn = this.drawOne(me, s, sid, p, mine);
+      if (drawn) {
+        covered ||= drawn.covered;
+        const offline = who.online === false || now - s.seen > 8000 || s.st === 'offline';
+        s.el.classList.toggle('offline', offline);
+        if (s.name.textContent !== who.name) s.name.textContent = who.name;
+        s.name.style.setProperty('--player', who.color);
+        const key = offline ? 'offline' : who.trading ? 'trade' : ['battle', 'dialogue', 'trade'].includes(s.st) ? s.st : '';
+        if (key !== s.iconKey) {
+          s.iconKey = key;
+          s.icon.innerHTML = key ? ICONS[key] : '';
+          s.icon.style.display = key ? '' : 'none';
+        }
       }
-      s.el.style.display = '';
-      s.el.style.transform = `translate(${left}px, ${top}px)`;
-      s.el.style.width = `${w}px`;
-      const offline = who.online === false || now - s.seen > 8000 || s.st === 'offline';
-      s.el.classList.toggle('offline', offline);
-      if (s.name.textContent !== who.name) s.name.textContent = who.name;
-      s.name.style.setProperty('--player', who.color);
-      const key = offline ? 'offline' : who.trading ? 'trade' : ['battle', 'dialogue', 'trade'].includes(s.st) ? s.st : '';
-      if (key !== s.iconKey) {
-        s.iconKey = key;
-        s.icon.innerHTML = key ? ICONS[key] : '';
-        s.icon.style.display = key ? '' : 'none';
+      // the Pokémon following (3D games)
+      if (s.pet) {
+        const petSid = p.pet && s.pet.sprites.has(p.pet.sid) ? p.pet.sid : null;
+        const petDrawn = petSid !== null && drawn && me.mtx ? this.drawOne(me, s.pet, petSid, p.pet, mine) : null;
+        if (!petDrawn) s.pet.el.style.display = 'none';
+        else {
+          covered ||= petDrawn.covered;
+          s.pet.el.classList.toggle('offline', s.el.classList.contains('offline'));
+        }
       }
     }
     const shown = covered ? mine : null;
@@ -341,14 +439,14 @@ export class GhostLayer {
     if (shown) {
       const st = shown.img.style;
       st.display = 'block';
-      st.transform = `translate(${Math.round(me.feet.x + 1 - shown.w / 2)}px, ${Math.round(me.feet.y - shown.h)}px)`;
+      st.transform = `translate(${Math.round(me.feet.x + (me.dx ?? 1) - shown.w / 2)}px, ${Math.round(me.feet.y - (shown.h - (me.drop || 0)))}px)`;
       st.zIndex = String(Math.round(me.feet.y * 2));
     }
   }
 
   clear() {
     this.stop();
-    for (const s of this.ghosts.values()) s.el.remove();
+    for (const s of this.ghosts.values()) { s.el.remove(); s.pet?.el.remove(); }
     this.ghosts.clear();
   }
 }

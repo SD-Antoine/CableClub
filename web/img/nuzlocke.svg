@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Nuzlocke">
+  <rect width="64" height="64" rx="14" fill="#2b2530"/>
+  <path d="M20 50V27a12 12 0 0 1 24 0v23z" fill="#d9d4df"/>
+  <path d="M20 50h24" stroke="#8d8697" stroke-width="3" stroke-linecap="round"/>
+  <path d="M32 22v14M26 28h12" stroke="#2b2530" stroke-width="3.4" stroke-linecap="round"/>
+  <path d="M14 52c4-2 7 1 11-1s8 2 12 0 7 2 13 0" fill="none" stroke="#5f9c6a" stroke-width="3" stroke-linecap="round"/>
+</svg>
