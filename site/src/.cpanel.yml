@@ -3,5 +3,5 @@
 # the files are copied into the web root of cableclub.app. Change SITE_DIR if the domain's folder is another one.
 deployment:
   tasks:
-    - export SITE_DIR="$HOME/cableclub.app"
+    - export SITE_DIR="$HOME/cableclub.app/public"
     - /bin/bash -c 'set -e; [ -n "$HOME" ] && [ -d "$SITE_DIR" ] || { echo "Dossier du site introuvable : $SITE_DIR"; exit 1; }; /bin/rsync -a --delete --exclude=.git --exclude=.cpanel.yml --exclude=.well-known --exclude=cgi-bin ./ "$SITE_DIR/"'

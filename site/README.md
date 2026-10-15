@@ -18,7 +18,7 @@ cd site/dist && python -m http.server 8080   # voir le résultat sur http://loca
 
 GitHub Actions ([`site.yml`](../.github/workflows/site.yml)) construit le site et le range dans la branche **`site`** du dépôt,
 à chaque changement de `site/` ou du CHANGELOG sur `main` et après chaque version publiée. cPanel clone cette branche
-(Git Version Control) et son `.cpanel.yml` copie les fichiers dans le dossier du domaine (`~/cableclub.app` ; changer
+(Git Version Control) et son `.cpanel.yml` copie les fichiers dans le dossier du domaine (`~/cableclub.app/public` ; changer
 `SITE_DIR` dans `src/.cpanel.yml` si c'est un autre dossier).
 
 ### Mise en place (une seule fois)
