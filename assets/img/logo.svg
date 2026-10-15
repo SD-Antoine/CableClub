@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="cc" x1="0" y1="0" x2="0.7" y2="1">
+      <stop offset="0" stop-color="#8aa4ff"/>
+      <stop offset="1" stop-color="#b38cff"/>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="2" width="60" height="60" rx="14" fill="#16171b"/>
+  <!-- the cable: a C that runs from one plug to the other -->
+  <path d="M38 15.5 C28 15.5 14.5 18.5 14.5 32 C14.5 45.5 28 48.5 38 48.5" fill="none" stroke="url(#cc)" stroke-width="7" stroke-linecap="round"/>
+  <path d="M15.6 26 C16.6 20 22 16.6 30 16.2" fill="none" stroke="#ffffff" stroke-opacity=".28" stroke-width="1.6" stroke-linecap="round"/>
+  <!-- the plugs: a flared boot, a body and a metal tip with its two contacts -->
+  <path d="M37 12 L42.4 10.2 V20.8 L37 19 Z" fill="#c9cde0"/>
+  <rect x="41.4" y="9.6" width="11.4" height="11.6" rx="3" fill="#ecece9"/>
+  <rect x="51.6" y="12.2" width="7" height="6.4" rx="1.4" fill="#a6abb5"/>
+  <path d="M54.4 13.6 v3.6 M56.6 13.6 v3.6" stroke="#6b7184" stroke-width="1.1" stroke-linecap="round"/>
+  <path d="M37 52 L42.4 53.8 V43.2 L37 45 Z" fill="#c9cde0"/>
+  <rect x="41.4" y="42.8" width="11.4" height="11.6" rx="3" fill="#ecece9"/>
+  <rect x="51.6" y="45.4" width="7" height="6.4" rx="1.4" fill="#a6abb5"/>
+  <path d="M54.4 46.8 v3.6 M56.6 46.8 v3.6" stroke="#6b7184" stroke-width="1.1" stroke-linecap="round"/>
+</svg>

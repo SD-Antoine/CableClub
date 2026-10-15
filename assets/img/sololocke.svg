@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Sololocke">
+  <rect x="2" y="2" width="60" height="60" rx="14" fill="#1b1a1f"/>
+  <!-- a party of six places, one Pokémon alone in it -->
+  <g fill="none" stroke="#4c4b57" stroke-width="2.7">
+    <circle cx="46.3" cy="24.7" r="6.2"/>
+    <circle cx="46.3" cy="41.3" r="6.2"/>
+    <circle cx="32" cy="49.5" r="6.2"/>
+    <circle cx="17.7" cy="41.3" r="6.2"/>
+    <circle cx="17.7" cy="24.7" r="6.2"/>
+  </g>
+  <circle cx="32" cy="16.5" r="8" fill="#4fd1b5"/>
+  <g fill="#1b1a1f">
+    <ellipse cx="32" cy="18.9" rx="2.9" ry="2.4"/>
+    <circle cx="28.6" cy="15.9" r="1.2"/>
+    <circle cx="30.6" cy="13.9" r="1.25"/>
+    <circle cx="33.4" cy="13.9" r="1.25"/>
+    <circle cx="35.4" cy="15.9" r="1.2"/>
+  </g>
+</svg>
