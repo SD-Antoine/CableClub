@@ -74,7 +74,13 @@ $hash = (Get-FileHash -Algorithm SHA256 $target).Hash.ToLower()
 # who signed it (the same key as the previous versions, or Android refuses the update)
 $apksigner = Get-ChildItem (Join-Path $Sdk 'build-tools') -Recurse -Filter 'apksigner.bat' | Sort-Object FullName | Select-Object -Last 1
 if ($apksigner) {
-    $cert = & $apksigner.FullName verify --print-certs $target 2>&1 | Select-String 'certificate SHA-256 digest' | Select-Object -First 1
+    # the whole output first: a pipeline stopped early (Select-Object -First) kills apksigner, exit code -1
+    $ErrorActionPreference = 'Continue'
+    $lines = & $apksigner.FullName verify --print-certs $target 2>&1 | ForEach-Object { "$_" }
+    $code = $LASTEXITCODE
+    $ErrorActionPreference = 'Stop'
+    if ($code -ne 0) { throw "apksigner : signature de l'APK invalide (code $code)" }
+    $cert = $lines | Where-Object { $_ -match 'certificate SHA-256 digest' } | Select-Object -First 1
     Write-Host "    signature : $cert"
 }
 Write-Host ("==> OK : {0} ({1:N1} Mo)" -f $target, ((Get-Item $target).Length / 1MB)) -ForegroundColor Green
