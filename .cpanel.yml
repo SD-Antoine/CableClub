@@ -2,4 +2,4 @@
 deployment:
   tasks:
     - export DEPLOYPATH=$HOME/cableclub.app/public/
-    - /bin/rsync -rlt --delete --chmod=D755,F644 --exclude=.git --exclude=.cpanel.yml --exclude=.well-known --exclude=cgi-bin ./ $DEPLOYPATH
+    - /bin/rsync -rltp --delete --chmod=D755,F644 --exclude=.git --exclude=.cpanel.yml --exclude=.well-known --exclude=cgi-bin ./ $DEPLOYPATH
