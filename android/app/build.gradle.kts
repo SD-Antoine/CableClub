@@ -174,6 +174,18 @@ android {
         }
     }
 
+    // where the app comes from: the APK of the GitHub releases updates itself (src/github), the Play Store version
+    // (bundle .aab) leaves its updates to Google Play, whose rules forbid any other way (src/play)
+    flavorDimensions += "store"
+    productFlavors {
+        create("github") {
+            dimension = "store"
+        }
+        create("play") {
+            dimension = "store"
+        }
+    }
+
     lint {
         abortOnError = false
         checkReleaseBuilds = false

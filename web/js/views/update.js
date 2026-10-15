@@ -126,6 +126,13 @@ export function updateSettings(switchEl, save) {
   }[u.state] || 'Pas encore vérifié.';
   const history = h('div');
   showChangelog(history);
+  // the version of the Play Store: Google Play updates it, Cable Club does not look anywhere else
+  if (u.state === 'store') {
+    return h('div', { class: 'stack' },
+      h('div', null, h('b', null, `Version installée : ${store.state?.version || '?'}`),
+        h('div', { class: 'small muted' }, 'Cette version de Cable Club vient du Play Store : c’est lui qui l’installe et la met à jour.')),
+      history);
+  }
   const check = btn('Rechercher une mise à jour', (e) => act(e.currentTarget, async () => {
     const s = await local.post('/api/update/check', {});
     store.state.update = s;

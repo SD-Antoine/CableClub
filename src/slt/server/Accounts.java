@@ -59,6 +59,8 @@ public final class Accounts {
         public long avatarAt;
         /** No message in the general chat until then (moderation). */
         public long mutedUntil;
+        /** When the user accepted the terms of use (0 = account older than them, or an old client). */
+        public long termsAt;
 
         User(String id, String username, String display, long createdAt) {
             this.id = id;
@@ -88,7 +90,7 @@ public final class Accounts {
                     "friends", new ArrayList<Object>(friends), "incoming", new ArrayList<Object>(incoming),
                     "outgoing", new ArrayList<Object>(outgoing), "blocked", new ArrayList<Object>(blocked),
                     "bio", bio, "favGame", favGame, "favPokemon", favPokemon, "avatarAt", avatarAt,
-                    "mutedUntil", mutedUntil);
+                    "mutedUntil", mutedUntil, "termsAt", termsAt);
         }
 
         static User fromJson(Map<String, Object> m) {
@@ -106,6 +108,7 @@ public final class Accounts {
             u.favPokemon = Json.str(m, "favPokemon") == null ? "" : Json.str(m, "favPokemon");
             u.avatarAt = Json.num(m, "avatarAt", 0);
             u.mutedUntil = Json.num(m, "mutedUntil", 0);
+            u.termsAt = Json.num(m, "termsAt", 0);
             return u;
         }
     }
@@ -129,7 +132,7 @@ public final class Accounts {
 
     // ------------------------------------------------------------ accounts
 
-    public synchronized User register(String username, String password, String display) {
+    public synchronized User register(String username, String password, String display, boolean terms) {
         String u = username == null ? "" : username.trim();
         if (!USERNAME.matcher(u).matches()) {
             throw new Http.Fail(400, "Identifiant invalide : 3 à 20 caractères, lettres, chiffres, « . », « - » ou « _ ».");
@@ -142,11 +145,37 @@ public final class Accounts {
         String name = cleanDisplay(display == null || display.isBlank() ? u : display);
         User user = new User(Ids.id(10), u, name, System.currentTimeMillis());
         setPassword(user, password);
+        // clients before 0.9 do not show the terms: the account is created all the same
+        user.termsAt = terms ? user.createdAt : 0;
         users.put(user.id, user);
         byName.put(key, user.id);
         save();
         Log.info("Serveur : nouveau compte " + u);
         return user;
+    }
+
+    /** Whether this is the user's password (no throttling: the caller holds a session). */
+    public boolean passwordIs(User user, String password) {
+        return password != null && verify(user, password);
+    }
+
+    /**
+     * Deletes an account: the user, their sessions, and their place in the friend lists and block lists of the
+     * others. What they left elsewhere (rooms, chat, picture) is removed by the caller.
+     */
+    public synchronized void delete(User user) {
+        users.remove(user.id);
+        byName.remove(user.username.toLowerCase(Locale.ROOT));
+        for (User o : users.values()) {
+            o.friends.remove(user.id);
+            o.incoming.remove(user.id);
+            o.outgoing.remove(user.id);
+            o.blocked.remove(user.id);
+        }
+        sessions.values().removeIf(s -> s.userId().equals(user.id));
+        save();
+        saveSessions();
+        Log.info("Serveur : compte supprimé " + user.username);
     }
 
     /** Checks the password; throttled per identifier and per address. */

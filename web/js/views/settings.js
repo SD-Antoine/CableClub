@@ -3,7 +3,7 @@
 // reached from « Moi », and say what differs there (touch buttons, no hosting, no file explorer).
 
 import { h, mount, btn, field, act, toast, seg, switchEl, keepScroll, icon } from '../ui.js';
-import { local } from '../api.js';
+import { local, openPage } from '../api.js';
 import { store, refreshState, on } from '../store.js';
 import { BUTTONS, ACTIONS, DEFAULT_KEYS, keyLabel, keyName, keymap } from '../game/keys.js';
 import { hostAddresses } from './parts.js';
@@ -25,6 +25,7 @@ export const SETTINGS_MENU = [
   { id: 'autres', label: 'Autres', children: [
     { id: 'mise-a-jour', label: 'Mise à jour', about: 'La version de Cable Club et sa recherche de mises à jour.' },
     { id: 'donnees', label: 'Données', about: 'Où Cable Club garde vos salles, vos sauvegardes et vos ROMs.' },
+    { id: 'a-propos', label: 'À propos', about: 'Licence, conditions d’utilisation, confidentialité et code source.' },
   ] },
 ];
 
@@ -122,6 +123,17 @@ export function renderSettings(container, { applyTheme, tab }) {
         h('p', { class: 'small muted' }, 'Ce dossier est visible depuis un ordinateur branché en USB (Android > data > app.cableclub). Il est effacé si vous désinstallez Cable Club : vos sauvegardes de cartouche restent copiées sur le serveur.'))
         : h('div', { class: 'row' }, h('span', { class: 'muted small grow mono ellipsis' }, store.state?.dataDir || ''),
           btn('Ouvrir le dossier', () => local.post('/api/data/reveal').catch((e) => toast(e.message, 'danger')), { kind: 'small', iconName: 'folder' }))),
+
+      'a-propos': () => section('À propos', h('div', { class: 'stack' },
+        h('p', null, h('b', null, `Cable Club ${store.state?.version || ''}`), ' — logiciel libre et gratuit (licence GPLv3), fait par des fans.'),
+        h('p', { class: 'small muted' }, 'Cable Club n’est ni affilié à Nintendo, Creatures, GAME FREAK ou The Pokémon Company, ni approuvé par eux. ',
+          'Pokémon est une marque de Nintendo, Creatures et GAME FREAK. Cable Club ne contient aucun jeu ni aucune ROM : ',
+          'vous utilisez les copies des jeux que vous possédez.'),
+        h('p', { class: 'small muted' }, 'Composants : mGBA, DeSmuME, melonDS DS, Universal Pokemon Randomizer ZX, Pokémon Showdown (détails dans THIRD-PARTY.txt).'),
+        h('div', { class: 'row wrap' },
+          [['Conditions d’utilisation', 'conditions'], ['Politique de confidentialité', 'confidentialite'],
+          ['Site de Cable Club', 'site'], ['Code source', 'source']].map(([label, which]) =>
+            btn(label, () => openPage(which).catch((e) => toast(e.message, 'danger')), { kind: 'small ghost', iconName: 'globe' }))))),
     };
 
     // the page is drawn again after each change (a key given, a switch…): the scrolling stays where it was

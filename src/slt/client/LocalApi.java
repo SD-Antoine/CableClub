@@ -86,6 +86,20 @@ final class LocalApi {
         r.on("POST", "/api/update/check", (ex, p) -> Http.json(ex, 200, app.updates.check()));
         r.on("POST", "/api/update/install", (ex, p) ->
                 Http.json(ex, 200, Json.map("job", app.jobs.start("Mise à jour de Cable Club", app.updates::install))));
+        // a page of the web, in the browser: the legal pages of the server in use, the Cable Club site
+        r.on("POST", "/api/open", (ex, p) -> {
+            String base = app.link.base() != null ? app.link.base() : "https://play.cableclub.app";
+            String page = Json.str(Http.readJson(ex), "page");
+            Desktop.browse(switch (page == null ? "" : page) {
+                case "confidentialite" -> base + "/confidentialite";
+                case "conditions" -> base + "/conditions";
+                case "suppression" -> base + "/compte/suppression";
+                case "site" -> "https://cableclub.app";
+                case "source" -> "https://github.com/SD-Antoine/CableClub";
+                default -> throw new Http.Fail(400, "Page inconnue.");
+            });
+            Http.ok(ex);
+        });
         r.on("POST", "/api/update/page", (ex, p) -> {
             Map<String, Object> u = app.updates.status();
             Desktop.browse(u.get("page") instanceof String page && page.startsWith("https://github.com/") ? page : Updates.PAGE);
@@ -143,6 +157,14 @@ final class LocalApi {
         });
         r.on("POST", "/api/auth/login", (ex, p) -> Http.json(ex, 200, app.link.login("/api/auth/login", Http.readJson(ex))));
         r.on("POST", "/api/auth/register", (ex, p) -> Http.json(ex, 200, app.link.login("/api/auth/register", Http.readJson(ex))));
+        // the account is deleted on the server (password checked there), then this app forgets the session
+        r.on("POST", "/api/account/delete", (ex, p) -> {
+            Map<String, Object> b = Http.readJson(ex);
+            app.link.call("POST", "/api/me/delete", Json.map("password", Json.str(b, "password")));
+            app.players.stop();
+            app.link.logout();
+            Http.json(ex, 200, state());
+        });
         r.on("POST", "/api/auth/logout", (ex, p) -> {
             app.players.stop();
             app.link.logout();

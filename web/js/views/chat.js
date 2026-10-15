@@ -6,6 +6,7 @@ import { h, mount, btn, avatar, icon, act, errorToast, clock, confirmDialog } fr
 import { srv } from '../api.js';
 import { store, on, me, refreshChat, chatOpen, markChatRead } from '../store.js';
 import { mobile } from '../platform.js';
+import { openReport } from './moderation.js';
 
 const MAX = 500;
 // messages of one author closer than this are shown as one block
@@ -117,7 +118,9 @@ export function chatPanel(ch, { compact = false, placeholder = null, readOnly = 
         h('div', { class: 'chat-body' },
           grouped ? null : h('div', { class: 'chat-meta' }, h('b', null, m.name), h('time', null, clock(m.at))),
           h('div', { class: 'chat-text' }, m.text)),
-        canDelete ? h('button', { class: 'chat-del', title: 'Supprimer', onclick: () => remove(m) }, icon('trash')) : null));
+        canDelete ? h('button', { class: 'chat-del', title: 'Supprimer', onclick: () => remove(m) }, icon('trash')) : null,
+        mine ? null : h('button', { class: ['chat-del', 'chat-report', canDelete && 'second'], title: 'Signaler ce message',
+          onclick: () => openReport({ userId: m.from, name: m.name, ch, msg: m.id, text: m.text }) }, icon('flag'))));
       prev = m;
     }
     mount(list, items);

@@ -6,6 +6,7 @@ import { local, srv } from '../api.js';
 import { store, refreshState, refreshFriends, me } from '../store.js';
 import { GAMES, gameName } from '../data/games.js';
 import { mobile } from '../platform.js';
+import { openReport, openDeleteAccount, adminDeleteAccount, reportsCard, legalLinks } from './moderation.js';
 
 const BIO_MAX = 160;
 
@@ -66,6 +67,7 @@ export async function openProfile(userId) {
       if (!p.blocked && !await confirmDialog(`Bloquer ${p.name}`, 'Vous ne verrez plus ses messages dans le chat et il ne pourra plus vous écrire en privé.', { okLabel: 'Bloquer', danger: true })) return;
       act(b, async () => { await srv.post(`/users/${p.id}/block`, { on: !p.blocked }); p.blocked = !p.blocked; draw(); });
     }, { kind: 'ghost danger small', iconName: 'block' }));
+    out.push(btn('Signaler', () => openReport({ userId: p.id, name: p.name }), { kind: 'ghost small', iconName: 'flag' }));
     if (self?.admin) {
       out.push(btn('Rendre muet 24 h', (e) => act(e.currentTarget, async () => {
         await srv.post('/chat/mute', { userId: p.id, minutes: 1440 }); toast(`${p.name} ne peut plus écrire dans le chat général pendant 24 h.`, 'ok');
@@ -73,6 +75,7 @@ export async function openProfile(userId) {
       out.push(btn('Rendre la parole', (e) => act(e.currentTarget, async () => {
         await srv.post('/chat/mute', { userId: p.id, minutes: 0 }); toast(`${p.name} peut de nouveau écrire.`, 'ok');
       }), { kind: 'ghost small' }));
+      out.push(btn('Supprimer le compte', () => adminDeleteAccount(p, () => dlg.close()), { kind: 'ghost small danger', iconName: 'trash' }));
     }
     return out;
   }
@@ -173,8 +176,14 @@ export function renderProfile(container) {
         btn('Se déconnecter', async (e) => {
           const b = e.currentTarget;
           if (await confirmDialog('Se déconnecter', 'Le jeu en cours sera fermé.')) act(b, async () => { await local.post('/api/auth/logout'); location.hash = '#/'; location.reload(); });
-        }, { kind: 'ghost danger', iconName: 'logout' }))),
-      u.createdAt ? h('p', { class: 'tiny faint center mt' }, `Compte créé le ${dateTime(u.createdAt)}`) : null);
+        }, { kind: 'ghost danger', iconName: 'logout' })),
+        h('div', { class: 'row top danger-zone' },
+          h('div', { class: 'grow' }, h('b', null, 'Supprimer mon compte'),
+            h('div', { class: 'tiny muted' }, 'Définitif : profil, amis, messages et sauvegardes du serveur.')),
+          btn('Supprimer…', () => openDeleteAccount(), { kind: 'ghost danger small', iconName: 'trash' }))),
+      u.admin ? [h('div', { class: 'section-title' }, h('h2', null, 'Modération')), reportsCard()] : null,
+      h('div', { class: 'center mt' }, legalLinks()),
+      u.createdAt ? h('p', { class: 'tiny faint center' }, `Compte créé le ${dateTime(u.createdAt)}`) : null);
     restore();
   }
 

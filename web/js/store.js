@@ -191,6 +191,13 @@ export function connectStream() {
   handle('ghost', (g) => emit('ghost', g));
   handle('friends', (f) => { refreshFriends().catch(() => {}); emit('friends-event', f); });
   handle('invite', (i) => { refreshRooms().catch(() => {}); emit('invite', i); });
+  // moderators: a report arrived or was handled (count in the profile)
+  handle('report', (d) => {
+    const u = store.state?.link?.user;
+    if (u) u.reports = d.open;
+    if (d.report) emit('notice', { level: 'warn', text: `Signalement : ${d.report.userName}, par ${d.report.byName}. À voir dans Mon profil › Modération.` });
+    emit('report', d);
+  });
   handle('kicked', (k) => { store.rooms.delete(k.roomId); emit('kicked', k); emit('rooms', store.rooms); });
   source.onerror = () => {
     if (store.connected) { store.connected = false; emit('disconnected'); }

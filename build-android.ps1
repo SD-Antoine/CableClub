@@ -1,18 +1,20 @@
 <#
-  Cable Club for Android: builds the APK (Windows, PowerShell 5.1+).
+  Cable Club for Android: builds the APK of the GitHub releases, or the bundle of the Play Store (Windows, PowerShell 5.1+).
 
   Requirements: what build.ps1 needs (JDK 21+, git), the Android SDK with its NDK (Android Studio installs them;
   ANDROID_HOME or %LOCALAPPDATA%\Android\Sdk), and for a release the signing key:
   %USERPROFILE%\.cableclub\android-signing.properties (storeFile, storePassword, keyAlias, keyPassword), or the file
   named by CABLECLUB_SIGNING. Without it the APK is signed with the debug key (tests only: no update over it).
 
-    .\build-android.ps1           APK into dist\CableClub-<version>-android.apk (+ .sha256)
+    .\build-android.ps1           APK into dist\CableClub-<version>-android.apk (+ .sha256): updates itself from GitHub
+    .\build-android.ps1 -Play     bundle for the Play Store: dist\CableClub-<version>-play.aab (updates by Google Play)
     .\build-android.ps1 -Debug    debug APK (installable next to nothing else: tests)
 
   The app runs the same sources as the PC version (src, web): see android\app\build.gradle.kts.
 #>
 param(
     [switch]$Debug,
+    [switch]$Play,
     [string]$Out = ''
 )
 
@@ -47,8 +49,8 @@ if (-not $Debug -and -not (Test-Path $signing)) {
     Write-Host "    attention : pas de cle de signature ($signing), APK signe avec la cle de debug (pas de mise a jour possible par-dessus)" -ForegroundColor Yellow
 }
 
-$task = if ($Debug) { 'assembleDebug' } else { 'assembleRelease' }
-Step "Construction de l'APK ($task)"
+$task = if ($Play) { 'bundlePlayRelease' } elseif ($Debug) { 'assembleGithubDebug' } else { 'assembleGithubRelease' }
+Step "Construction ($task)"
 Push-Location (Join-Path $Root 'android')
 try {
     $old = $ErrorActionPreference
@@ -61,10 +63,19 @@ try {
     Pop-Location
 }
 
-$kind = if ($Debug) { 'debug' } else { 'release' }
-$apk = Get-ChildItem (Join-Path $Root "android\app\build\outputs\apk\$kind") -Filter '*.apk' | Select-Object -First 1
-if (-not $apk) { throw 'APK introuvable apres la construction' }
 New-Item -ItemType Directory -Force $Dist | Out-Null
+if ($Play) {
+    # the bundle: Google Play makes the APK of each phone from it (and signs them with the app's key)
+    $aab = Get-ChildItem (Join-Path $Root 'android\app\build\outputs\bundle\playRelease') -Filter '*.aab' | Select-Object -First 1
+    if (-not $aab) { throw 'Bundle introuvable apres la construction' }
+    $target = Join-Path $Dist "CableClub-$Version-play.aab"
+    Copy-Item $aab.FullName $target -Force
+    Write-Host ("==> OK : {0} ({1:N1} Mo), a envoyer dans la Play Console" -f $target, ((Get-Item $target).Length / 1MB)) -ForegroundColor Green
+    exit 0
+}
+$kind = if ($Debug) { 'debug' } else { 'release' }
+$apk = Get-ChildItem (Join-Path $Root "android\app\build\outputs\apk\github\$kind") -Filter '*.apk' | Select-Object -First 1
+if (-not $apk) { throw 'APK introuvable apres la construction' }
 $name = if ($Debug) { "CableClub-$Version-android-debug.apk" } else { "CableClub-$Version-android.apk" }
 $target = Join-Path $Dist $name
 Copy-Item $apk.FullName $target -Force

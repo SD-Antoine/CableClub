@@ -32,6 +32,7 @@ public final class SltServer {
     final Avatars avatars;
     final Chat chat;
     final Battles battles;
+    final Reports reports;
     final String name;
     private final java.util.concurrent.ScheduledExecutorService timer =
             Executors.newSingleThreadScheduledExecutor(r -> {
@@ -49,6 +50,7 @@ public final class SltServer {
         this.avatars = new Avatars(dataDir);
         this.chat = new Chat(dataDir, accounts, rooms, hub);
         this.battles = new Battles(rooms, hub);
+        this.reports = new Reports(dataDir);
         this.name = name == null || name.isBlank() ? "Serveur Cable Club" : name;
         hub.avatars(userId -> {
             Accounts.User u = accounts.get(userId);

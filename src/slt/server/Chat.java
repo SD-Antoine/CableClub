@@ -469,6 +469,81 @@ final class Chat {
         Accounts.write(readsFile, Json.stringify(m));
     }
 
+    /** A message as the user sees it, to report it (null: no such message). */
+    Map<String, Object> message(Accounts.User u, String ch, long id) {
+        Channel c = channel(key(u, ch));
+        synchronized (c) {
+            for (Map<String, Object> m : c.msgs) {
+                if (Json.num(m, "id", 0) == id) {
+                    return new LinkedHashMap<>(m);
+                }
+            }
+        }
+        return null;
+    }
+
+    /** The key of a channel for a user (checks access): reports keep it. */
+    String channelKey(Accounts.User u, String ch) {
+        return key(u, ch);
+    }
+
+    /** The moderators who are online. */
+    List<String> onlineAdmins() {
+        List<String> out = new ArrayList<>();
+        for (String id : hub.onlineUsers()) {
+            if (admin(accounts.get(id))) {
+                out.add(id);
+            }
+        }
+        return out;
+    }
+
+    /**
+     * A deleted account: its private conversations go, its messages leave the other channels (their files are
+     * written again without them), and what it read is forgotten.
+     */
+    void accountDeleted(String userId) {
+        reads.remove(userId);
+        for (Map<String, Long> per : reads.values()) {
+            per.keySet().removeIf(k -> k.startsWith("dm-") && k.contains(userId));
+        }
+        readsDirty = true;
+        buckets.remove(userId);
+        List<Path> files;
+        try (java.util.stream.Stream<Path> s = Files.list(dir)) {
+            files = s.filter(p -> p.getFileName().toString().endsWith(".jsonl")).toList();
+        } catch (IOException e) {
+            Log.warn("Serveur : discussions non nettoyées : " + e.getMessage());
+            return;
+        }
+        for (Path f : files) {
+            String name = f.getFileName().toString();
+            String key = name.substring(0, name.length() - ".jsonl".length());
+            try {
+                if (key.startsWith("dm-") && key.contains(userId)) {
+                    channels.remove(key);
+                    Files.deleteIfExists(f);
+                    continue;
+                }
+                if (!Files.readString(f, StandardCharsets.UTF_8).contains(userId)) {
+                    continue;
+                }
+                Channel c = channel(key);
+                synchronized (c) {
+                    c.msgs.removeIf(m -> userId.equals(Json.str(m, "from")));
+                    StringBuilder sb = new StringBuilder();
+                    for (Map<String, Object> m : c.msgs) {
+                        sb.append(Json.stringify(m)).append('\n');
+                    }
+                    Accounts.write(f, sb.toString());
+                }
+            } catch (IOException | RuntimeException e) {
+                Log.warn("Serveur : discussion " + name + " non nettoyée : " + e.getMessage());
+            }
+        }
+        flush();
+    }
+
     /** A room was deleted: its channel goes too. */
     void roomDeleted(String roomId) {
         String key = "room-" + roomId;

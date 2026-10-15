@@ -1,5 +1,14 @@
 # Nouveautés de Cable Club (anciennement SLT)
 
+## 0.9.0 — 2026-10-15
+
+- **Supprimer son compte** : Mon profil › Supprimer mon compte (avec votre mot de passe), ou sans l'application sur la page « Supprimer un compte » du serveur. Le compte, le profil, la photo, les amis, les messages et les sauvegardes envoyées au serveur sont effacés tout de suite ; dans une aventure déjà lancée avec d'autres joueurs, la place reste pour eux sous le nom « Compte supprimé ».
+- **Signaler** un message (petit drapeau sur chaque message des autres) ou un joueur (sur son profil) : les modérateurs du serveur le reçoivent aussitôt et le traitent dans Mon profil › Modération (supprimer le message, rendre muet, supprimer le compte en cas de manquement grave).
+- **Conditions d'utilisation et politique de confidentialité** du serveur officiel, à accepter en créant un compte ; on les retrouve dans Réglages › Autres › À propos, avec la licence et la mention de non-affiliation.
+- **Nouveaux logos** Nuzlocke, Sololocke et Shinylocke (sans Poké Ball).
+- **Version Play Store** de l'application Android (bundle `.aab`, mises à jour par Google Play) à côté de l'APK de GitHub ; guide de publication dans `docs/play-store`.
+- La version Windows pourra être signée par SignPath (signature de code gratuite pour les logiciels libres) : l'avertissement « éditeur inconnu » de Windows disparaîtra au fil des téléchargements.
+
 ## 0.8.0 — 2026-10-15
 
 - **Cable Club sur Android** : une application pour téléphone (`CableClub-0.8.0-android.apk`, Android 11 ou plus récent, avec un moteur web à jour : Android System WebView 111 ou plus récent, que le Play Store tient à jour), avec le même compte, les mêmes amis et les mêmes salles que sur PC. On y joue avec les joueurs sur PC, dans les mêmes règles, et les partenaires apparaissent dans le jeu comme sur PC (générations 1 à 5, Pokémon suiveur compris). L'interface est la même, allégée pour un petit écran : une barre en bas (Salles, Amis, Chat, ROMs, Moi), les réglages dans « Moi ».

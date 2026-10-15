@@ -1,7 +1,7 @@
 // First launch: choose the SLT server (join one or host it here), then log in or create an account.
 
-import { h, mount, icon, field, seg, act } from '../ui.js';
-import { local } from '../api.js';
+import { h, mount, icon, field, seg, act, errorToast } from '../ui.js';
+import { local, openPage } from '../api.js';
 import { store, refreshState, on } from '../store.js';
 import { hostAddresses } from './parts.js';
 import { mobile } from '../platform.js';
@@ -81,6 +81,9 @@ export function renderWelcome(container, onDone) {
       value: ui.pass || '', oninput: (e) => { ui.pass = e.target.value; } });
     const name = h('input', { class: 'input', placeholder: 'Nom visible par vos amis (facultatif)', value: ui.shownName || '', oninput: (e) => { ui.shownName = e.target.value; } });
     const submit = h('button', { class: 'btn primary big block', type: 'submit' }, ui.tab === 'login' ? 'Se connecter' : 'Créer mon compte');
+    // the terms of use and the privacy policy of the server (its pages /conditions and /confidentialite)
+    const terms = h('input', { type: 'checkbox', checked: !!ui.terms, onchange: (e) => { ui.terms = e.target.checked; } });
+    const page = (label, which) => h('a', { href: '#', onclick: (e) => { e.preventDefault(); openPage(which).catch(errorToast); } }, label);
     let hosted = null;
     if (ui.hosted) {
       hosted = h('div');
@@ -97,7 +100,9 @@ export function renderWelcome(container, onDone) {
       e.preventDefault();
       act(submit, async () => {
         const path = ui.tab === 'login' ? '/api/auth/login' : '/api/auth/register';
-        await local.post(path, { username: user.value.trim(), password: pass.value, name: name.value.trim() || undefined });
+        if (ui.tab === 'register' && !terms.checked) throw new Error('Pour créer un compte, acceptez les conditions d’utilisation.');
+        await local.post(path, { username: user.value.trim(), password: pass.value, name: name.value.trim() || undefined,
+          terms: ui.tab === 'register' ? true : undefined });
         await refreshState();
         onDone();
       });
@@ -110,6 +115,9 @@ export function renderWelcome(container, onDone) {
       field('Identifiant', user, ui.tab === 'register' ? '3 à 20 caractères : lettres, chiffres, « . », « - », « _ ».' : null),
       field('Mot de passe', pass, ui.tab === 'register' ? '8 caractères minimum.' : null),
       ui.tab === 'register' ? field('Nom affiché', name) : null,
+      ui.tab === 'register' ? h('label', { class: 'check-line small' }, terms,
+        h('span', null, 'J’ai 13 ans ou plus et j’accepte les ', page('conditions d’utilisation', 'conditions'),
+          ' du serveur. Ma vie privée : ', page('politique de confidentialité', 'confidentialite'), '.')) : null,
       submit);
   }
 

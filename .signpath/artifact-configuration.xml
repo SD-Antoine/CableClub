@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Artifact configuration of Cable Club in SignPath (copy it into the project "CableClub" of the SignPath
+  organization). The artifact is the folder dist\CableClub uploaded by .github/workflows/release.yml: the
+  launcher CableClub.exe made by jpackage is signed; the Java runtime and the emulator cores are left as they are
+  (third-party binaries).
+-->
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <zip-file>
+    <pe-file path="CableClub.exe" product-name="CableClub">
+      <authenticode-sign/>
+    </pe-file>
+  </zip-file>
+</artifact-configuration>

@@ -37,6 +37,9 @@ export const srv = {
   post: (p, b) => request('POST', `/api/srv${p}`, b ?? {}),
 };
 
+/** Opens a page of the web in the browser: 'confidentialite', 'conditions', 'suppression', 'site', 'source'. */
+export const openPage = (page) => local.post('/api/open', { page });
+
 export async function pollJob(jobId, onUpdate) {
   for (;;) {
     const s = await local.get(`/api/jobs/${jobId}`);

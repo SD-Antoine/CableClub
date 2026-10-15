@@ -2,8 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
-    <!-- updates: the new APK is handed to Android's installer (the player confirms) -->
-    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- the version published on GitHub also installs its updates: see src/github/AndroidManifest.xml -->
 
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
     <uses-feature android:name="android.hardware.gamepad" android:required="false" />
@@ -36,13 +35,5 @@
             android:name="app.cableclub.GameService"
             android:exported="false"
             android:process=":jeu" />
-
-        <receiver
-            android:name="app.cableclub.InstallReceiver"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="app.cableclub.INSTALLATION" />
-            </intent-filter>
-        </receiver>
     </application>
 </manifest>

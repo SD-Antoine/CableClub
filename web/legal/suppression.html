@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Supprimer un compte — Cable Club</title>
+<link rel="stylesheet" href="/legal/legal.css">
+</head>
+<body>
+<main>
+<header><img src="/legal/logo.svg" alt=""><div><b>Cable Club</b><span>Supprimer un compte</span></div></header>
+
+<h1>Supprimer votre compte Cable Club</h1>
+<p>Le plus simple est de le faire dans l'application : <b>Mon profil › Supprimer mon compte</b>.
+Si vous n'avez plus l'application, utilisez ce formulaire.</p>
+
+<h2>Ce qui est supprimé, tout de suite</h2>
+<ul>
+  <li>votre compte, votre profil et votre photo ;</li>
+  <li>vos amis, vos demandes d'ami, vos blocages ;</li>
+  <li>vos messages du chat (privés et publics) et les signalements vous concernant ;</li>
+  <li>vos salles pas encore lancées et les sauvegardes que vous avez envoyées au serveur.</li>
+</ul>
+<p>Dans une aventure déjà lancée avec d'autres joueurs, votre place reste pour eux (leurs règles en dépendent), sous le nom
+« Compte supprimé », sans votre nom dans le journal de la salle. Les copies de sauvegarde du serveur sont effacées au bout de
+60 jours au plus. Rien n'est effacé sur vos appareils : ROMs, parties et réglages y restent.</p>
+
+<div class="card">
+  <form id="f">
+    <label for="u">Identifiant</label>
+    <input type="text" id="u" autocomplete="username" required>
+    <label for="p">Mot de passe</label>
+    <input type="password" id="p" autocomplete="current-password" required>
+    <label class="check"><input type="checkbox" id="c" required> Je comprends que la suppression est définitive.</label>
+    <button type="submit" id="b">Supprimer mon compte</button>
+    <div id="m" class="msg"></div>
+  </form>
+</div>
+
+<p class="muted">Mot de passe oublié ? Écrivez à <a href="mailto:contact@cableclub.app">contact@cableclub.app</a> en donnant votre identifiant :
+la suppression est faite après vérification que le compte est bien le vôtre.</p>
+
+<footer><a href="/confidentialite">Confidentialité</a><a href="/conditions">Conditions d'utilisation</a></footer>
+</main>
+<script>
+  const f = document.getElementById('f');
+  const m = document.getElementById('m');
+  const b = document.getElementById('b');
+  f.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    m.className = 'msg';
+    m.textContent = '';
+    b.disabled = true;
+    try {
+      const r = await fetch('/api/account/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: document.getElementById('u').value.trim(), password: document.getElementById('p').value }),
+      });
+      const t = await r.text();
+      if (!r.ok) {
+        let msg = 'La suppression a échoué (' + r.status + ').';
+        try { msg = JSON.parse(t).error || msg; } catch (err) { /* not JSON */ }
+        throw new Error(msg);
+      }
+      f.innerHTML = '<p><b>Votre compte a été supprimé.</b> Merci d\'avoir joué à Cable Club.</p>';
+    } catch (err) {
+      m.className = 'msg err';
+      m.textContent = err.message;
+      b.disabled = false;
+    }
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,37 @@
+/* Public pages of a Cable Club server (privacy policy, terms of use, account deletion). */
+:root {
+  --bg: #f3f3f1; --surface: #ffffff; --text: #1c1c1e; --muted: #5d5d63; --line: #dcdcd6; --accent: #3b5bd6; --danger: #c2413a;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #161616; --surface: #1f1f20; --text: #ececec; --muted: #a3a3a8; --line: #313133; --accent: #8aa4ff; --danger: #ef6b62; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+main { max-width: 760px; margin: 0 auto; padding: 32px 16px 64px; }
+header { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+header img { width: 44px; height: 44px; border-radius: 10px; }
+header b { font-size: 18px; }
+header span { color: var(--muted); font-size: 14px; display: block; }
+h1 { font-size: 28px; line-height: 1.25; margin: 0 0 6px; }
+h2 { font-size: 19px; margin: 32px 0 8px; }
+p, li { color: var(--text); }
+.muted { color: var(--muted); font-size: 14px; }
+a { color: var(--accent); }
+ul { padding-left: 22px; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; margin: 8px 0; }
+th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+th { font-weight: 600; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 20px; margin: 16px 0; }
+label { display: block; font-size: 14px; font-weight: 600; margin: 12px 0 4px; }
+input[type=text], input[type=password] { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--bg); color: var(--text); font: inherit; }
+.check { display: flex; gap: 10px; align-items: flex-start; font-weight: 400; }
+.check input { margin-top: 5px; }
+button { margin-top: 16px; padding: 10px 18px; border: 0; border-radius: 8px; background: var(--danger); color: #fff; font: inherit;
+  font-weight: 600; cursor: pointer; }
+button:disabled { opacity: .5; cursor: default; }
+.msg { margin-top: 12px; font-size: 14px; }
+.msg.err { color: var(--danger); }
+footer { margin-top: 48px; color: var(--muted); font-size: 13px; border-top: 1px solid var(--line); padding-top: 16px; }
+footer a { margin-right: 14px; }

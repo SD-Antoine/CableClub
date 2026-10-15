@@ -20,6 +20,7 @@ final class ServerApi {
     private final Chat chat;
     private final Avatars avatars;
     private final Battles battles;
+    private final Reports reports;
     private final Http.Router router = new Http.Router();
 
     ServerApi(SltServer server) {
@@ -30,6 +31,7 @@ final class ServerApi {
         this.chat = server.chat;
         this.avatars = server.avatars;
         this.battles = server.battles;
+        this.reports = server.reports;
         routes();
     }
 
@@ -37,6 +39,9 @@ final class ServerApi {
         String path = ex.getRequestURI().getPath();
         try {
             if (!path.startsWith("/api/")) {
+                if (page(ex, path)) {
+                    return;
+                }
                 Http.json(ex, 200, Json.map("app", "SLT", "role", "server", "version", SltServer.VERSION,
                         "message", "Serveur Cable Club. Connectez-vous depuis l'application Cable Club."));
                 return;
@@ -52,6 +57,61 @@ final class ServerApi {
         }
     }
 
+    /** The public pages of the server (web/legal): privacy policy, terms of use, deleting an account without the app. */
+    private static final Map<String, String> PAGES = Map.of(
+            "/confidentialite", "confidentialite.html",
+            "/conditions", "conditions.html",
+            "/compte/suppression", "suppression.html");
+
+    private boolean page(HttpExchange ex, String path) throws java.io.IOException {
+        String file = PAGES.get(path.endsWith("/") && path.length() > 1 ? path.substring(0, path.length() - 1) : path);
+        if (file == null && path.matches("/legal/[a-z0-9-]+\\.(css|svg|png)")) {
+            file = path.substring("/legal/".length());
+        }
+        if (file == null || !"GET".equals(ex.getRequestMethod())) {
+            return false;
+        }
+        byte[] data;
+        try (java.io.InputStream in = ServerApi.class.getResourceAsStream("/web/legal/" + file)) {
+            if (in == null) {
+                return false;
+            }
+            data = in.readAllBytes();
+        }
+        String type = file.endsWith(".html") ? "text/html; charset=utf-8" : file.endsWith(".css") ? "text/css; charset=utf-8"
+                : file.endsWith(".svg") ? "image/svg+xml" : "image/png";
+        ex.getResponseHeaders().set("Cache-Control", "public, max-age=3600");
+        ex.getResponseHeaders().set("X-Content-Type-Options", "nosniff");
+        Http.bytes(ex, 200, type, data);
+        return true;
+    }
+
+    /**
+     * Deletes an account and what it left on the server: its place in the rooms (anonymised once the adventure
+     * started), its messages, its picture, the reports about it.
+     */
+    private void deleteAccount(Accounts.User u) {
+        List<String> told = new ArrayList<>(u.friends);
+        told.addAll(u.incoming);
+        told.addAll(u.outgoing);
+        rooms.accountDeleted(u);
+        chat.accountDeleted(u.id);
+        reports.forget(u.id);
+        avatars.delete(u.id);
+        accounts.delete(u);
+        for (String f : told) {
+            hub.send(f, "friends", Json.map("reason", "removed"));
+        }
+    }
+
+    private Accounts.User admin(HttpExchange ex) {
+        Accounts.User u = user(ex);
+        if (!chat.admin(u)) {
+            throw new Http.Fail(403, "Réservé aux modérateurs.");
+        }
+        return u;
+    }
+
     private Accounts.User user(HttpExchange ex) {
         Accounts.User u = accounts.session(Http.bearer(ex));
         if (u == null) {
@@ -62,7 +122,11 @@ final class ServerApi {
 
     private Map<String, Object> me(Accounts.User u) {
         Map<String, Object> m = u.profile();
-        m.put("admin", chat.admin(u));
+        boolean admin = chat.admin(u);
+        m.put("admin", admin);
+        if (admin) {
+            m.put("reports", reports.open());
+        }
         return m;
     }
 
@@ -75,7 +139,8 @@ final class ServerApi {
         // ------------------------------------------------------------ auth
         r.on("POST", "/api/auth/register", (ex, p) -> {
             Map<String, Object> b = Http.readJson(ex);
-            Accounts.User u = accounts.register(Json.str(b, "username"), Json.str(b, "password"), Json.str(b, "name"));
+            Accounts.User u = accounts.register(Json.str(b, "username"), Json.str(b, "password"), Json.str(b, "name"),
+                    Json.bool(b, "terms", false));
             Http.json(ex, 200, Json.map("token", accounts.openSession(u), "user", me(u)));
         });
         r.on("POST", "/api/auth/login", (ex, p) -> {
@@ -169,6 +234,68 @@ final class ServerApi {
             chat.delete(user(ex), p.get("ch"), parse(p.get("msg"), -1));
             Http.ok(ex);
         });
+        // ---------------------------------------------- account deletion
+        // from the app (session + password)
+        r.on("POST", "/api/me/delete", (ex, p) -> {
+            Accounts.User u = user(ex);
+            if (!accounts.passwordIs(u, Json.str(Http.readJson(ex), "password"))) {
+                throw new Http.Fail(403, "Mot de passe incorrect.");
+            }
+            deleteAccount(u);
+            Http.ok(ex);
+        });
+        // from the web page /compte/suppression (identifier + password, throttled as a login)
+        r.on("POST", "/api/account/delete", (ex, p) -> {
+            Map<String, Object> b = Http.readJson(ex);
+            deleteAccount(accounts.login(Json.str(b, "username"), Json.str(b, "password"), Http.clientIp(ex)));
+            Http.ok(ex);
+        });
+
+        // ------------------------------------------------------ moderation
+        // a player reports a message ({userId, ch, msg}) or a player ({userId})
+        r.on("POST", "/api/report", (ex, p) -> {
+            Accounts.User u = user(ex);
+            Map<String, Object> b = Http.readJson(ex);
+            Accounts.User about = other(Json.str(b, "userId"));
+            if (about.id.equals(u.id)) {
+                throw new Http.Fail(400, "Vous ne pouvez pas vous signaler vous-même.");
+            }
+            String ch = Json.str(b, "ch");
+            Map<String, Object> msg = null;
+            String key = null;
+            if (ch != null) {
+                key = chat.channelKey(u, ch);
+                msg = chat.message(u, ch, Json.num(b, "msg", -1));
+                if (msg == null || !about.id.equals(Json.str(msg, "from"))) {
+                    throw new Http.Fail(404, "Message introuvable.");
+                }
+            }
+            Map<String, Object> report = reports.add(u, about, key, msg, Json.str(b, "reason"));
+            hub.send(chat.onlineAdmins(), "report", Json.map("open", reports.open(), "report", report));
+            Http.ok(ex);
+        });
+        r.on("GET", "/api/admin/reports", (ex, p) -> {
+            admin(ex);
+            Http.json(ex, 200, Json.map("reports", reports.all()));
+        });
+        r.on("POST", "/api/admin/reports/{id}/done", (ex, p) -> {
+            Accounts.User u = admin(ex);
+            reports.done(parse(p.get("id"), -1), u, Json.bool(Http.readJson(ex), "done", true));
+            hub.send(chat.onlineAdmins(), "report", Json.map("open", reports.open()));
+            Http.ok(ex);
+        });
+        // a moderator deletes an account (serious or repeated breaches of the terms of use)
+        r.on("POST", "/api/admin/users/{id}/delete", (ex, p) -> {
+            Accounts.User u = admin(ex);
+            Accounts.User target = other(p.get("id"));
+            if (target.id.equals(u.id)) {
+                throw new Http.Fail(400, "Supprimez votre propre compte depuis votre profil.");
+            }
+            Log.info("Serveur : " + u.username + " supprime le compte " + target.username + " (modération)");
+            deleteAccount(target);
+            Http.ok(ex);
+        });
+
         r.on("POST", "/api/me/password", (ex, p) -> {
             Accounts.User u = user(ex);
             Map<String, Object> b = Http.readJson(ex);

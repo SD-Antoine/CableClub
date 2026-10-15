@@ -5,7 +5,14 @@
 # The APK is signed with the release key, given by four secrets of the repository:
 # ANDROID_KEYSTORE_BASE64 (the .jks file in base64), ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS,
 # ANDROID_KEY_PASSWORD. Without them the release has no APK (never one signed with another key:
-# Android would refuse it as an update).
+# Android would refuse it as an update). The bundle of the Play Store (.aab) is built with them too and
+# left in the artifacts of the run (to send to the Play Console), not in the release.
+#
+# CableClub.exe is signed by SignPath (free code signing for open source, certificate of the SignPath
+# Foundation) when the secret SIGNPATH_API_TOKEN and the variable SIGNPATH_ORGANIZATION_ID exist
+# (variables SIGNPATH_PROJECT_SLUG and SIGNPATH_POLICY_SLUG: 'CableClub' and 'release-signing' when absent).
+# Each signing waits for the manual approval of an approver in SignPath (up to 12 hours).
+# The artifact configuration to set in SignPath: .signpath/artifact-configuration.xml.
 name: Release
 
 on:
@@ -37,6 +44,53 @@ jobs:
       - name: Build
         shell: powershell
         run: .\build.ps1
+
+      # --------------------------------------------------- Windows code signing (SignPath)
+      - name: SignPath
+        id: signpath
+        shell: powershell
+        env:
+          TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+          ORG: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+        run: |
+          if (-not $env:TOKEN -or -not $env:ORG) { Write-Host '::warning::SignPath non configure : CableClub.exe n est pas signe'; exit 0 }
+          "ok=true" | Out-File -Append -Encoding ascii $env:GITHUB_OUTPUT
+
+      - name: Unsigned Windows build
+        id: unsigned
+        if: steps.signpath.outputs.ok == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: CableClub-windows-non-signe
+          path: dist/CableClub/
+          if-no-files-found: error
+
+      - name: Code signing
+        if: steps.signpath.outputs.ok == 'true'
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG || 'CableClub' }}
+          signing-policy-slug: ${{ vars.SIGNPATH_POLICY_SLUG || 'release-signing' }}
+          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 43200
+          output-artifact-directory: dist/signe
+
+      - name: Signed package
+        if: steps.signpath.outputs.ok == 'true'
+        shell: powershell
+        run: |
+          $sig = Get-AuthenticodeSignature dist\signe\CableClub.exe
+          if ($sig.Status -ne 'Valid') { throw "CableClub.exe signe : signature $($sig.Status)" }
+          Write-Host "    signe par : $($sig.SignerCertificate.Subject)"
+          Remove-Item -Recurse -Force dist\CableClub
+          Move-Item dist\signe dist\CableClub
+          $zip = "dist\CableClub-$env:VERSION-windows-x64.zip"
+          Remove-Item $zip
+          Compress-Archive -Path dist\CableClub -DestinationPath $zip
+          "SIGNED=1" | Out-File -Append -Encoding ascii $env:GITHUB_ENV
 
       # the packaged SLT must start and serve the whole interface (0.4.1 and 0.4.2 did not)
       - name: Smoke test
@@ -71,6 +125,15 @@ jobs:
           & $sdkmanager 'platforms;android-36.1' 'ndk;29.0.14206865' 'build-tools;36.0.0' | Out-Null
           if ($LASTEXITCODE -ne 0) { throw 'sdkmanager a echoue' }
           .\build-android.ps1
+          .\build-android.ps1 -Play
+
+      - name: Play Store bundle
+        if: steps.signing.outputs.ok == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: CableClub-play-aab
+          path: dist/CableClub-*-play.aab
+          if-no-files-found: error
 
       - name: Notes
         shell: powershell
@@ -85,6 +148,10 @@ jobs:
           if ($out.Count -eq 0) { $out.Add("SLT $env:VERSION") }
           $out.Add('')
           foreach ($l in (Get-Content -Encoding UTF8 .github/release-footer.md)) { $out.Add($l.Replace('{VERSION}', $env:VERSION)) }
+          if ($env:SIGNED) {
+            $out.Add('')
+            $out.Add('Signature de `CableClub.exe` : [Code signing policy](https://github.com/SD-Antoine/CableClub#code-signing-policy) — free code signing provided by SignPath.io, certificate by SignPath Foundation.')
+          }
           [IO.File]::WriteAllLines("$PWD\notes.md", $out, (New-Object System.Text.UTF8Encoding $false))
 
       - name: Publish

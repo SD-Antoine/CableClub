@@ -992,6 +992,94 @@ public final class Rooms {
         }
     }
 
+    // ------------------------------------------------- account deletion
+
+    /** The name left in the rooms (journal, players) by a deleted account. */
+    static final String DELETED = "Compte supprimé";
+
+    /**
+     * An account is deleted: it leaves the rooms not launched; in the others its place stays (the adventure of the
+     * other players depends on it) under {@link #DELETED}, without its save, its screen and its name in the journal.
+     * A room nobody else played in goes with it.
+     */
+    void accountDeleted(Accounts.User user) {
+        for (Room r : new ArrayList<>(rooms.values())) {
+            synchronized (r) {
+                Room.Member m = r.member(user.id);
+                if (m == null && !r.history.contains(user.id) && !r.invites.contains(user.id)) {
+                    continue;
+                }
+                r.invites.remove(user.id);
+                if (m != null && "lobby".equals(r.state)) {
+                    removeMember(r, user.id);
+                    continue;
+                }
+                boolean others = false;
+                for (Room.Member o : r.members) {
+                    others |= !o.userId.equals(user.id);
+                }
+                if (!others) {
+                    Collection<String> before = audience(r);
+                    rooms.remove(r.id);
+                    deleteFiles(r);
+                    hub.send(before, "room-deleted", Json.map("roomId", r.id));
+                    onDeleted.accept(r.id);
+                    continue;
+                }
+                r.history.remove(user.id);
+                if (m != null) {
+                    m.name = DELETED;
+                    if (r.isLeader(user.id)) {
+                        for (Room.Member o : r.members) {
+                            if (!o.userId.equals(user.id)) {
+                                r.leaderId = o.userId;
+                                break;
+                            }
+                        }
+                    }
+                }
+                anonymizeLog(r, user);
+                try {
+                    Files.deleteIfExists(saveDir.resolve(r.id).resolve(user.id + ".sav"));
+                    Files.deleteIfExists(saveDir.resolve(r.id).resolve(user.id + ".json"));
+                } catch (IOException e) {
+                    Log.warn("Serveur : sauvegarde de " + user.username + " non supprimée : " + e.getMessage());
+                }
+                screens.remove(r.id + "/" + user.id);
+                ghosts.remove(r.id + "/" + user.id);
+                commit(r, new Room.Out());
+            }
+        }
+    }
+
+    /** The journal of a room without the name of a deleted account. */
+    private void anonymizeLog(Room r, Accounts.User user) {
+        Path f = logDir.resolve(r.id + ".jsonl");
+        if (!Files.isRegularFile(f)) {
+            return;
+        }
+        try {
+            StringBuilder sb = new StringBuilder();
+            for (String line : Files.readAllLines(f, StandardCharsets.UTF_8)) {
+                if (line.isBlank()) {
+                    continue;
+                }
+                Map<String, Object> m = Json.parseObject(line);
+                if (user.id.equals(Json.str(m, "user"))) {
+                    m.put("name", DELETED);
+                }
+                String text = Json.str(m, "text");
+                if (text != null && user.display.length() >= 2) {
+                    m.put("text", text.replace(user.display, DELETED));
+                }
+                sb.append(Json.stringify(m)).append('\n');
+            }
+            Accounts.write(f, sb.toString());
+        } catch (IOException | RuntimeException e) {
+            Log.warn("Serveur : journal de la salle " + r.id + " non anonymisé : " + e.getMessage());
+        }
+    }
+
     // ------------------------------------------------------- persistence
 
     private void save(Room r) {

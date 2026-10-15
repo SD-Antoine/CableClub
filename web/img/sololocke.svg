@@ -8,8 +8,12 @@
     <circle cx="17.7" cy="41.3" r="6.2"/>
     <circle cx="17.7" cy="24.7" r="6.2"/>
   </g>
-  <circle cx="32" cy="16.5" r="7.6" fill="#f4f4f2" stroke="#1b1a1f" stroke-width="2"/>
-  <path d="M24.4 16.5a7.6 7.6 0 0 1 15.2 0z" fill="#4fd1b5"/>
-  <path d="M24.4 16.5h15.2" stroke="#1b1a1f" stroke-width="2.3"/>
-  <circle cx="32" cy="16.5" r="2.4" fill="#f4f4f2" stroke="#1b1a1f" stroke-width="1.8"/>
+  <circle cx="32" cy="16.5" r="8" fill="#4fd1b5"/>
+  <g fill="#1b1a1f">
+    <ellipse cx="32" cy="18.9" rx="2.9" ry="2.4"/>
+    <circle cx="28.6" cy="15.9" r="1.2"/>
+    <circle cx="30.6" cy="13.9" r="1.25"/>
+    <circle cx="33.4" cy="13.9" r="1.25"/>
+    <circle cx="35.4" cy="15.9" r="1.2"/>
+  </g>
 </svg>

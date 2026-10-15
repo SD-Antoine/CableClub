@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The version published on GitHub updates itself: the new APK is handed to Android's installer (the player confirms). -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+    <application>
+        <receiver
+            android:name="app.cableclub.InstallReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="app.cableclub.INSTALLATION" />
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>

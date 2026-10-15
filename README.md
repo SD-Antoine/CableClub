@@ -275,7 +275,27 @@ Prérequis : JDK 21 et git.
    Windows et publie la release (zip + empreinte SHA-256, notes tirées du
    CHANGELOG). Les SLT installés la proposent alors à leurs joueurs.
 
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://about.signpath.io/), certificate by
+[SignPath Foundation](https://signpath.org/).
+
+`CableClub.exe` (version Windows) est signé par SignPath à chaque version publiée, à partir du
+code de ce dépôt compilé par GitHub Actions ([release.yml](.github/workflows/release.yml)) ;
+rien d'autre n'est signé avec ce certificat. Chaque signature est approuvée à la main.
+
+- Auteurs (committers) et relecteurs (reviewers) : [membres du dépôt](https://github.com/SD-Antoine/CableClub/graphs/contributors),
+  aujourd'hui [SD-Antoine](https://github.com/SD-Antoine). Toute contribution extérieure passe par une
+  pull request relue.
+- Approbateurs (approvers) : [SD-Antoine](https://github.com/SD-Antoine).
+
+Confidentialité : Cable Club ne transmet des informations qu'aux serveurs que l'utilisateur choisit
+(serveur Cable Club, serveur d'un ami) et à GitHub pour les mises à jour ; voir la
+[politique de confidentialité](https://play.cableclub.app/confidentialite) du serveur officiel.
+
 ## Licence
 
 GPLv3 — voir [LICENSE](LICENSE) et [THIRD-PARTY.txt](THIRD-PARTY.txt).
-Pokémon © Nintendo, Creatures Inc., GAME FREAK inc.
+Pokémon © Nintendo, Creatures Inc., GAME FREAK inc. Cable Club n'est ni affilié à Nintendo,
+Creatures, GAME FREAK ou The Pokémon Company, ni approuvé par eux.
+[Conditions d'utilisation](https://play.cableclub.app/conditions) du serveur officiel.
