@@ -11,3 +11,4 @@
 *.nds
 *.sav
 *.srm
+/site/dist/

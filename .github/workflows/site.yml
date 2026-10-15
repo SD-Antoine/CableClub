@@ -1,0 +1,74 @@
+# Builds the site of Cable Club (folder site/, see site/build.mjs) and publishes it to its hosting (o2switch, cPanel) by FTPS.
+#
+# Runs when the site or the patch notes change on main, after each release (new download links) and on demand.
+# Secrets of the repository (Settings > Secrets and variables > Actions):
+#   FTP_SERVER    host name of the server of the account (cPanel "Nom d'hôte du serveur", e.g. xxxx.o2switch.net)
+#   FTP_USERNAME  an FTP account made for this, whose folder is the web root of cableclub.app
+#   FTP_PASSWORD  its password
+# Variables (all optional): FTP_DIR (folder on the server, default ./), FTP_SECURITY (strict or loose, default strict),
+#   SITE_SIGNED (1 once SignPath signs CableClub.exe: the page of the downloads then shows the code signing policy).
+# Without the secrets the site is only built (and kept as an artifact of the run).
+name: Site
+
+on:
+  push:
+    branches: [main]
+    paths: ['site/**', 'CHANGELOG.md', '.github/workflows/site.yml']
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: site
+  cancel-in-progress: false
+
+jobs:
+  site:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Build
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          SITE_SIGNED: ${{ vars.SITE_SIGNED }}
+        run: node site/build.mjs
+
+      - name: Hosting configured?
+        id: hosting
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+        run: |
+          if [ -n "$FTP_SERVER" ] && [ -n "$FTP_USERNAME" ] && [ -n "$FTP_PASSWORD" ]; then echo "ok=true" >> "$GITHUB_OUTPUT"
+          else echo "::warning::Hebergement non configure (secrets FTP_SERVER, FTP_USERNAME, FTP_PASSWORD) : le site est construit mais pas publie"; fi
+
+      - name: Publish (FTPS)
+        if: steps.hosting.outputs.ok == 'true'
+        uses: SamKirkland/FTP-Deploy-Action@v4.4.0
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftps
+          security: ${{ vars.FTP_SECURITY || 'strict' }}
+          local-dir: ./site/dist/
+          server-dir: ${{ vars.FTP_DIR || './' }}
+
+      - name: Built site
+        if: steps.hosting.outputs.ok != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: cableclub-site
+          path: site/dist/
+          include-hidden-files: true
