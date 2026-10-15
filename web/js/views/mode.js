@@ -5,6 +5,7 @@ import { h, mount } from '../ui.js';
 import { renderHome } from './home.js';
 import { renderPublic } from './public.js';
 import { renderHistory } from './history.js';
+import { mobile } from '../platform.js';
 
 export const MODES = {
   soullink: {
@@ -25,6 +26,8 @@ export const MODES = {
 };
 
 const TABS = [['salles', 'Mes salles'], ['publiques', 'Salles publiques'], ['historique', 'Historique']];
+// the phone has no side rail: the modes are chosen at the top of the page
+const PHONE_TABS = [['salles', 'Mes salles'], ['publiques', 'Publiques'], ['historique', 'Historique']];
 
 export function renderMode(container, mode, tab) {
   const m = MODES[mode]?.soon ? MODES.soullink : MODES[mode] || MODES.soullink;
@@ -32,9 +35,12 @@ export function renderMode(container, mode, tab) {
   const page = h('div', { class: 'page' });
   const body = h('div');
   mount(page,
-    h('div', { class: 'mode-head' }, h('img', { src: m.logo, alt: '' }),
+    mobile ? h('div', { class: 'mode-switch' }, Object.values(MODES).map((x) => (x.soon
+      ? h('span', { class: 'mode-pill soon' }, h('img', { src: x.logo, alt: '' }), x.name)
+      : h('a', { class: ['mode-pill', x === m && 'active'], href: x.hash }, h('img', { src: x.logo, alt: '' }), x.name)))) : null,
+    mobile ? null : h('div', { class: 'mode-head' }, h('img', { src: m.logo, alt: '' }),
       h('div', null, h('h1', null, m.name), h('p', { class: 'muted' }, m.blurb))),
-    h('div', { class: 'tabs' }, TABS.map(([id, label]) => h('button', { class: current === id ? 'active' : '',
+    h('div', { class: 'tabs' }, (mobile ? PHONE_TABS : TABS).map(([id, label]) => h('button', { class: current === id ? 'active' : '',
       onclick: () => { location.hash = id === 'salles' ? m.hash : `${m.hash}/${id}`; } }, label))),
     body);
   container.appendChild(page);

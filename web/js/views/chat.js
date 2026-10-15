@@ -5,6 +5,7 @@
 import { h, mount, btn, avatar, icon, act, errorToast, clock, confirmDialog } from '../ui.js';
 import { srv } from '../api.js';
 import { store, on, me, refreshChat, chatOpen, markChatRead } from '../store.js';
+import { mobile } from '../platform.js';
 
 const MAX = 500;
 // messages of one author closer than this are shown as one block
@@ -148,9 +149,12 @@ export function chatPanel(ch, { compact = false, placeholder = null, readOnly = 
   };
 }
 
-/** The chat page: the player's channels on the left, the open one on the right. */
+/**
+ * The chat page: the player's channels on the left, the open one on the right. On the phone, one at a time: the
+ * list (no channel given), or the conversation with a way back to the list.
+ */
 export function renderChat(container, current) {
-  const page = h('div', { class: 'chat-page' });
+  const page = h('div', { class: ['chat-page', mobile && (current ? 'phone-open' : 'phone-list')] });
   container.appendChild(page);
   const side = h('aside', { class: 'chat-side' });
   const main = h('section', { class: 'chat-main' });
@@ -202,6 +206,7 @@ export function renderChat(container, current) {
       shown = ch;
     }
     const head = h('div', { class: 'chat-head' },
+      mobile ? h('a', { class: 'btn ghost icon-only', href: '#/chat', title: 'Conversations' }, icon('back')) : null,
       ch === 'global' ? h('span', { class: 'chat-chan-icon big' }, icon('globe'))
         : ch.startsWith('dm-') ? avatar(c?.title, 2, { id: ch.slice(3), pic: c?.user?.avatar || 0, online: c ? !!c.online : null })
           : h('span', { class: 'chat-chan-icon big' }, icon('rooms')),
@@ -213,9 +218,15 @@ export function renderChat(container, current) {
   }
 
   drawSide();
+  if (mobile && !current) {
+    refreshChat().then(() => drawSide()).catch(() => {});
+    const offList = on('chat-list', () => drawSide());
+    return () => offList();
+  }
   drawMain();
   refreshChat().then(() => { drawSide(); drawMain(); }).catch(() => {});
-  setTimeout(() => panel?.focus(), 50);
+  // the phone opens its keyboard only when the player touches the field
+  if (!mobile) setTimeout(() => panel?.focus(), 50);
   const off = on('chat-list', () => drawSide());
   return () => { off(); panel?.destroy(); };
 }

@@ -3,14 +3,12 @@ package slt.player;
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
-import java.lang.foreign.MemorySegment;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Locale;
 
-import static java.lang.foreign.ValueLayout.JAVA_BYTE;
 
 /**
  * Development tool: drives a game headless from a text script (inputs,
@@ -157,29 +155,28 @@ final class ScriptRunner {
                     // poke ADDR HEX: writes bytes on the console bus (tests)
                     long addr = Long.parseLong(t[1], 16);
                     byte[] b = java.util.HexFormat.of().parseHex(t[2]);
-                    MemorySegment seg = seg(addr, b.length);
-                    MemorySegment.copy(b, 0, seg, JAVA_BYTE, 0, b.length);
+                    Ram.put(seg(addr, b.length), 0, b, 0, b.length);
                     break;
                 }
                 case "copy": {
                     // copy SRC DST LEN (hex addresses, decimal length)
                     int len = Integer.parseInt(t[3]);
-                    byte[] b = seg(Long.parseLong(t[1], 16), len).toArray(JAVA_BYTE);
-                    MemorySegment.copy(b, 0, seg(Long.parseLong(t[2], 16), len), JAVA_BYTE, 0, len);
+                    byte[] b = Ram.bytes(seg(Long.parseLong(t[1], 16), len));
+                    Ram.put(seg(Long.parseLong(t[2], 16), len), 0, b, 0, len);
                     break;
                 }
                 case "peek": {
                     long addr = Long.parseLong(t[1], 16);
                     int len = Integer.parseInt(t[2]);
-                    System.out.println("MEM " + t[1] + " " + java.util.HexFormat.of().formatHex(seg(addr, len).toArray(JAVA_BYTE)));
+                    System.out.println("MEM " + t[1] + " " + java.util.HexFormat.of().formatHex(Ram.bytes(seg(addr, len))));
                     break;
                 }
                 case "sram": {
                     // sram OFFSET LEN: cartridge save memory (hex offset)
-                    MemorySegment sr = core.saveRam();
+                    java.nio.ByteBuffer sr = core.saveRam();
                     long off = Long.parseLong(t[1], 16);
                     int len = Integer.parseInt(t[2]);
-                    System.out.println("SRAM " + t[1] + " " + (sr == null ? "?" : java.util.HexFormat.of().formatHex(sr.asSlice(off, len).toArray(JAVA_BYTE))));
+                    System.out.println("SRAM " + t[1] + " " + (sr == null ? "?" : java.util.HexFormat.of().formatHex(Ram.bytes(sr, off, len))));
                     break;
                 }
                 case "presence":
@@ -254,17 +251,15 @@ final class ScriptRunner {
                 }
                 case "objects5": {
                     // objects5: generation 5, the movement models around the player
-                    MemorySegment ram = core.systemRam();
-                    java.lang.foreign.ValueLayout.OfInt i32 = java.lang.foreign.ValueLayout.JAVA_INT_UNALIGNED.withOrder(java.nio.ByteOrder.LITTLE_ENDIAN);
-                    java.lang.foreign.ValueLayout.OfShort u16 = java.lang.foreign.ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(java.nio.ByteOrder.LITTLE_ENDIAN);
-                    int size = (int) ram.byteSize() - 0x300;
+                    java.nio.ByteBuffer ram = core.systemRam();
+                    int size = ram.capacity() - 0x300;
                     int player = -1;
                     for (int o = 0; o < size && player < 0; o += 4) {
-                        if (ram.get(i32, o + 8) == 0xFF) {
-                            int gx = ram.get(u16, o + 0x3C) & 0xFFFF;
-                            int gz = ram.get(u16, o + 0x40) & 0xFFFF;
-                            int x = ram.get(i32, o + 0x44);
-                            int z = ram.get(i32, o + 0x4C);
+                        if (ram.getInt(o + 8) == 0xFF) {
+                            int gx = ram.getShort(o + 0x3C) & 0xFFFF;
+                            int gz = ram.getShort(o + 0x40) & 0xFFFF;
+                            int x = ram.getInt(o + 0x44);
+                            int z = ram.getInt(o + 0x4C);
                             if ((gx != 0 || gz != 0) && Math.abs((x >> 16) - gx) <= 1 && Math.abs((z >> 16) - gz) <= 1) {
                                 player = o;
                             }
@@ -276,18 +271,18 @@ final class ScriptRunner {
                         if (o < 0 || o + 0x100 >= size) {
                             continue;
                         }
-                        int gx = ram.get(u16, o + 0x3C) & 0xFFFF;
-                        int gz = ram.get(u16, o + 0x40) & 0xFFFF;
-                        int x = ram.get(i32, o + 0x44);
-                        int z = ram.get(i32, o + 0x4C);
+                        int gx = ram.getShort(o + 0x3C) & 0xFFFF;
+                        int gz = ram.getShort(o + 0x40) & 0xFFFF;
+                        int x = ram.getInt(o + 0x44);
+                        int z = ram.getInt(o + 0x4C);
                         boolean plausible = (gx != 0 || gz != 0) && Math.abs((x >> 16) - gx) <= 1 && Math.abs((z >> 16) - gz) <= 1;
                         if (!plausible) {
                             continue;
                         }
                         System.out.println(String.format(Locale.ROOT, "OBJ5 %+3d @%08X w0=%08X w1=%08X id=%d code=%04X dir(+18)=%d tile=%d,%d pos=%.1f,%.1f,%.1f +10=%08X +14=%08X +1C=%08X +20=%08X",
-                                k, 0x02000000 + o, ram.get(i32, o), ram.get(i32, o + 4), ram.get(i32, o + 8), ram.get(u16, o + 0x0C) & 0xFFFF, ram.get(u16, o + 0x18) & 0xFFFF,
-                                gx, gz, x / 4096.0, ram.get(i32, o + 0x48) / 4096.0, ram.get(i32, o + 0x4C) / 4096.0,
-                                ram.get(i32, o + 0x10), ram.get(i32, o + 0x14), ram.get(i32, o + 0x1C), ram.get(i32, o + 0x20)));
+                                k, 0x02000000 + o, ram.getInt(o), ram.getInt(o + 4), ram.getInt(o + 8), ram.getShort(o + 0x0C) & 0xFFFF, ram.getShort(o + 0x18) & 0xFFFF,
+                                gx, gz, x / 4096.0, ram.getInt(o + 0x48) / 4096.0, ram.getInt(o + 0x4C) / 4096.0,
+                                ram.getInt(o + 0x10), ram.getInt(o + 0x14), ram.getInt(o + 0x1C), ram.getInt(o + 0x20)));
                     }
                     break;
                 }
@@ -299,17 +294,15 @@ final class ScriptRunner {
                     if (m5 == null) {
                         throw new IllegalStateException("annotate5 : pas de caméra lue");
                     }
-                    MemorySegment ram = core.systemRam();
-                    java.lang.foreign.ValueLayout.OfInt i32 = java.lang.foreign.ValueLayout.JAVA_INT_UNALIGNED.withOrder(java.nio.ByteOrder.LITTLE_ENDIAN);
-                    java.lang.foreign.ValueLayout.OfShort u16 = java.lang.foreign.ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(java.nio.ByteOrder.LITTLE_ENDIAN);
-                    int size = (int) ram.byteSize() - 0x300;
+                    java.nio.ByteBuffer ram = core.systemRam();
+                    int size = ram.capacity() - 0x300;
                     int player = -1;
                     for (int o = 0; o < size && player < 0; o += 4) {
-                        if (ram.get(i32, o + 8) == 0xFF) {
-                            int gx = ram.get(u16, o + 0x3C) & 0xFFFF;
-                            int gz = ram.get(u16, o + 0x40) & 0xFFFF;
-                            int x = ram.get(i32, o + 0x44);
-                            int z = ram.get(i32, o + 0x4C);
+                        if (ram.getInt(o + 8) == 0xFF) {
+                            int gx = ram.getShort(o + 0x3C) & 0xFFFF;
+                            int gz = ram.getShort(o + 0x40) & 0xFFFF;
+                            int x = ram.getInt(o + 0x44);
+                            int z = ram.getInt(o + 0x4C);
                             if ((gx != 0 || gz != 0) && Math.abs((x >> 16) - gx) <= 1 && Math.abs((z >> 16) - gz) <= 1) {
                                 player = o;
                             }
@@ -324,17 +317,17 @@ final class ScriptRunner {
                         if (o < 0 || o + 0x100 >= size) {
                             continue;
                         }
-                        int gx = ram.get(u16, o + 0x3C) & 0xFFFF;
-                        int gz = ram.get(u16, o + 0x40) & 0xFFFF;
-                        double x = ram.get(i32, o + 0x44) / 4096.0;
-                        double y = ram.get(i32, o + 0x48) / 4096.0;
-                        double z = ram.get(i32, o + 0x4C) / 4096.0;
+                        int gx = ram.getShort(o + 0x3C) & 0xFFFF;
+                        int gz = ram.getShort(o + 0x40) & 0xFFFF;
+                        double x = ram.getInt(o + 0x44) / 4096.0;
+                        double y = ram.getInt(o + 0x48) / 4096.0;
+                        double z = ram.getInt(o + 0x4C) / 4096.0;
                         if ((gx == 0 && gz == 0) || Math.abs((((int) x) >> 4) - gx) > 1 && Math.abs(((int) x >> 16) - gx) > 1) {
                             continue;
                         }
                         double[] f = project(m5, new double[]{x, y, z});
-                        System.out.println(String.format(Locale.ROOT, "ANNOT5 %+3d w0=%08X w1=%08X id=%d code=%04X pos=%.1f,%.1f,%.1f feet=%s", k, ram.get(i32, o), ram.get(i32, o + 4),
-                                ram.get(i32, o + 8), ram.get(u16, o + 0x0C) & 0xFFFF, x, y, z, f == null ? "-" : String.format(Locale.ROOT, "%.1f,%.1f", f[0], f[1])));
+                        System.out.println(String.format(Locale.ROOT, "ANNOT5 %+3d w0=%08X w1=%08X id=%d code=%04X pos=%.1f,%.1f,%.1f feet=%s", k, ram.getInt(o), ram.getInt(o + 4),
+                                ram.getInt(o + 8), ram.getShort(o + 0x0C) & 0xFFFF, x, y, z, f == null ? "-" : String.format(Locale.ROOT, "%.1f,%.1f", f[0], f[1])));
                         if (f == null || f[0] < -40 || f[0] > 300 || f[1] < -40 || f[1] > 230) {
                             continue;
                         }
@@ -342,7 +335,7 @@ final class ScriptRunner {
                         g2.drawRect((int) Math.round(f[0]) - 8, (int) Math.round(f[1]) - 23, 17, 25);
                         g2.fillRect((int) Math.round(f[0]) - 1, (int) Math.round(f[1]) - 1, 3, 3);
                         g2.setColor(java.awt.Color.YELLOW);
-                        g2.drawString(k + ":" + Integer.toHexString(ram.get(u16, o + 0x0C) & 0xFFFF), (int) Math.round(f[0]) - 8, (int) Math.round(f[1]) - 25);
+                        g2.drawString(k + ":" + Integer.toHexString(ram.getShort(o + 0x0C) & 0xFFFF), (int) Math.round(f[0]) - 8, (int) Math.round(f[1]) - 25);
                     }
                     g2.dispose();
                     ImageIO.write(img, "png", out.resolve(t[1] + ".png").toFile());
@@ -420,12 +413,11 @@ final class ScriptRunner {
                     // words ADDR COUNT: 32-bit words of the console memory, 6 per line
                     long addr = Long.parseLong(t[1], 16);
                     int count = Integer.parseInt(t[2]);
-                    MemorySegment sg = seg(addr, count * 4);
-                    java.lang.foreign.ValueLayout.OfInt le = java.lang.foreign.ValueLayout.JAVA_INT_UNALIGNED.withOrder(java.nio.ByteOrder.LITTLE_ENDIAN);
+                    java.nio.ByteBuffer sg = seg(addr, count * 4);
                     for (int i = 0; i < count; i += 6) {
                         StringBuilder sb = new StringBuilder(String.format("WORDS %08X:", addr + 4L * i));
                         for (int j = i; j < Math.min(count, i + 6); j++) {
-                            sb.append(String.format(" %08X", sg.get(le, 4L * j)));
+                            sb.append(String.format(" %08X", sg.getInt(4 * j)));
                         }
                         System.out.println(sb);
                     }
@@ -468,10 +460,10 @@ final class ScriptRunner {
     }
 
     /** Console memory: the bus, or the DS main RAM (0x02000000) the core only exposes as system RAM. */
-    private MemorySegment seg(long addr, int len) {
-        MemorySegment s = core.bus(addr, len);
+    private java.nio.ByteBuffer seg(long addr, int len) {
+        java.nio.ByteBuffer s = core.bus(addr, len);
         if (s == null && addr >= 0x02000000L && addr + len <= 0x02400000L && core.systemRam() != null) {
-            s = core.systemRam().asSlice(addr - 0x02000000L, len);
+            s = Ram.slice(core.systemRam(), addr - 0x02000000L, len);
         }
         if (s == null) {
             throw new IllegalArgumentException("Adresse inaccessible : " + Long.toHexString(addr));
@@ -526,16 +518,15 @@ final class ScriptRunner {
         if (m == null) {
             throw new IllegalStateException("annotate : pas de caméra lue");
         }
-        MemorySegment ram = core.systemRam();
-        java.lang.foreign.ValueLayout.OfInt i32 = java.lang.foreign.ValueLayout.JAVA_INT_UNALIGNED.withOrder(java.nio.ByteOrder.LITTLE_ENDIAN);
-        int size = (int) ram.byteSize() - 0x300;
+        java.nio.ByteBuffer ram = core.systemRam();
+        int size = ram.capacity() - 0x300;
         int player = -1;
         for (int o = 0; o < size && player < 0; o += 4) {
-            if (ram.get(i32, o + 8) == 0xFF) {
-                int gx = ram.get(i32, o + 0x64);
-                int gz = ram.get(i32, o + 0x6C);
-                int x = ram.get(i32, o + 0x70);
-                int z = ram.get(i32, o + 0x78);
+            if (ram.getInt(o + 8) == 0xFF) {
+                int gx = ram.getInt(o + 0x64);
+                int gz = ram.getInt(o + 0x6C);
+                int x = ram.getInt(o + 0x70);
+                int z = ram.getInt(o + 0x78);
                 if (gx > 0 && gz > 0 && gx < 0x10000 && gz < 0x10000 && Math.abs((x >> 16) - gx) <= 1 && Math.abs((z >> 16) - gz) <= 1) {
                     player = o;
                 }
@@ -551,18 +542,18 @@ final class ScriptRunner {
             if (o + stride >= size) {
                 break;
             }
-            int flags = ram.get(i32, o);
-            int gx = ram.get(i32, o + 0x64);
-            int gz = ram.get(i32, o + 0x6C);
-            double x = ram.get(i32, o + 0x70) / 4096.0;
-            double y = ram.get(i32, o + 0x74) / 4096.0;
-            double z = ram.get(i32, o + 0x78) / 4096.0;
+            int flags = ram.getInt((int) o);
+            int gx = ram.getInt(o + 0x64);
+            int gz = ram.getInt(o + 0x6C);
+            double x = ram.getInt(o + 0x70) / 4096.0;
+            double y = ram.getInt(o + 0x74) / 4096.0;
+            double z = ram.getInt(o + 0x78) / 4096.0;
             if ((flags & 1) == 0 || gx <= 0 || gz <= 0 || gx > 0x10000 || gz > 0x10000) {
                 continue;
             }
             double[] f = project(m, new double[]{x, y, z});
-            System.out.println(String.format(Locale.ROOT, "ANNOT %2d flags=%08X id=%d gfx=%d face=%d feet=%s", k, flags, ram.get(i32, o + 8), ram.get(i32, o + 0x10),
-                    ram.get(i32, o + 0x28), f == null ? "-" : String.format(Locale.ROOT, "%.1f,%.1f", f[0], f[1])));
+            System.out.println(String.format(Locale.ROOT, "ANNOT %2d flags=%08X id=%d gfx=%d face=%d feet=%s", k, flags, ram.getInt(o + 8), ram.getInt(o + 0x10),
+                    ram.getInt(o + 0x28), f == null ? "-" : String.format(Locale.ROOT, "%.1f,%.1f", f[0], f[1])));
             if (f == null) {
                 continue;
             }
@@ -570,23 +561,22 @@ final class ScriptRunner {
             g2.drawRect((int) Math.round(f[0]) - 8, (int) Math.round(f[1]) - 23, 17, 25);
             g2.fillRect((int) Math.round(f[0]) - 1, (int) Math.round(f[1]) - 1, 3, 3);
             g2.setColor(java.awt.Color.YELLOW);
-            g2.drawString(k + ":" + ram.get(i32, o + 0x10), (int) Math.round(f[0]) - 8, (int) Math.round(f[1]) - 25);
+            g2.drawString(k + ":" + ram.getInt(o + 0x10), (int) Math.round(f[0]) - 8, (int) Math.round(f[1]) - 25);
         }
         g2.dispose();
         ImageIO.write(img, "png", out.resolve(name + ".png").toFile());
     }
 
     private void followTrace(String button, int n, String narc, int member) throws IOException {
-        MemorySegment ram = core.systemRam();
-        java.lang.foreign.ValueLayout.OfInt i32 = java.lang.foreign.ValueLayout.JAVA_INT_UNALIGNED.withOrder(java.nio.ByteOrder.LITTLE_ENDIAN);
-        int size = (int) ram.byteSize() - 0x300;
+        java.nio.ByteBuffer ram = core.systemRam();
+        int size = ram.capacity() - 0x300;
         int player = -1;
         for (int o = 0; o < size && player < 0; o += 4) {
-            if (ram.get(i32, o + 8) == 0xFF) {
-                int gx = ram.get(i32, o + 0x64);
-                int gz = ram.get(i32, o + 0x6C);
-                int x = ram.get(i32, o + 0x70);
-                int z = ram.get(i32, o + 0x78);
+            if (ram.getInt(o + 8) == 0xFF) {
+                int gx = ram.getInt(o + 0x64);
+                int gz = ram.getInt(o + 0x6C);
+                int x = ram.getInt(o + 0x70);
+                int z = ram.getInt(o + 0x78);
                 if (gx > 0 && gz > 0 && gx < 0x10000 && gz < 0x10000 && Math.abs((x >> 16) - gx) <= 1 && Math.abs((z >> 16) - gz) <= 1) {
                     player = o;
                 }
@@ -594,7 +584,7 @@ final class ScriptRunner {
         }
         int follower = -1;
         for (int k = 1; k < 40 && follower < 0; k++) {
-            if (player + k * 0x12C + 0x12C < size && ram.get(i32, player + k * 0x12C + 8) == 253) {
+            if (player + k * 0x12C + 0x12C < size && ram.getInt(player + k * 0x12C + 8) == 253) {
                 follower = player + k * 0x12C;
             }
         }
@@ -618,7 +608,7 @@ final class ScriptRunner {
             int[] px = core.pixels();
             StringBuilder changed = new StringBuilder();
             for (int k = 0; k < 75; k++) {
-                int v = ram.get(i32, follower + 4 * k);
+                int v = ram.getInt(follower + 4 * k);
                 if (v != prevWords[k]) {
                     changed.append(String.format(" +%X=%X", 4 * k, v));
                 }
@@ -626,7 +616,7 @@ final class ScriptRunner {
             }
             String best = "-";
             if (m != null) {
-                double[] feet = project(m, new double[]{ram.get(i32, follower + 0x70) / 4096.0, ram.get(i32, follower + 0x74) / 4096.0, ram.get(i32, follower + 0x78) / 4096.0});
+                double[] feet = project(m, new double[]{ram.getInt(follower + 0x70) / 4096.0, ram.getInt(follower + 0x74) / 4096.0, ram.getInt(follower + 0x78) / 4096.0});
                 if (feet != null) {
                     int bestBad = Integer.MAX_VALUE;
                     int bestFrame = -1;
@@ -671,8 +661,8 @@ final class ScriptRunner {
                 }
             }
             System.out.println(String.format(Locale.ROOT, "FTRACE %3d pos %.2f,%.2f tile %d,%d face %d  %s  | words%s", i,
-                    ram.get(i32, follower + 0x70) / 4096.0, ram.get(i32, follower + 0x78) / 4096.0, ram.get(i32, follower + 0x64), ram.get(i32, follower + 0x6C),
-                    ram.get(i32, follower + 0x28), best, changed));
+                    ram.getInt(follower + 0x70) / 4096.0, ram.getInt(follower + 0x78) / 4096.0, ram.getInt(follower + 0x64), ram.getInt(follower + 0x6C),
+                    ram.getInt(follower + 0x28), best, changed));
         }
         input.mask = 0;
     }
@@ -684,16 +674,15 @@ final class ScriptRunner {
         if (m == null) {
             throw new IllegalStateException("findfollower : pas de caméra lue");
         }
-        MemorySegment ram = core.systemRam();
-        java.lang.foreign.ValueLayout.OfInt i32 = java.lang.foreign.ValueLayout.JAVA_INT_UNALIGNED.withOrder(java.nio.ByteOrder.LITTLE_ENDIAN);
-        int size = (int) ram.byteSize() - 0x300;
+        java.nio.ByteBuffer ram = core.systemRam();
+        int size = ram.capacity() - 0x300;
         int player = -1;
         for (int o = 0; o < size && player < 0; o += 4) {
-            if (ram.get(i32, o + 8) == 0xFF) {
-                int gx = ram.get(i32, o + 0x64);
-                int gz = ram.get(i32, o + 0x6C);
-                int x = ram.get(i32, o + 0x70);
-                int z = ram.get(i32, o + 0x78);
+            if (ram.getInt(o + 8) == 0xFF) {
+                int gx = ram.getInt(o + 0x64);
+                int gz = ram.getInt(o + 0x6C);
+                int x = ram.getInt(o + 0x70);
+                int z = ram.getInt(o + 0x78);
                 if (gx > 0 && gz > 0 && gx < 0x10000 && gz < 0x10000 && Math.abs((x >> 16) - gx) <= 1 && Math.abs((z >> 16) - gz) <= 1) {
                     player = o;
                 }
@@ -702,10 +691,10 @@ final class ScriptRunner {
         double[] feet = null;
         for (int k = 1; k < 40 && feet == null; k++) {
             int o = player + k * 0x12C;
-            if (o + 0x12C < size && ram.get(i32, o + 8) == 253) {
-                double[] w = {ram.get(i32, o + 0x70) / 4096.0, ram.get(i32, o + 0x74) / 4096.0, ram.get(i32, o + 0x78) / 4096.0};
+            if (o + 0x12C < size && ram.getInt(o + 8) == 253) {
+                double[] w = {ram.getInt(o + 0x70) / 4096.0, ram.getInt(o + 0x74) / 4096.0, ram.getInt(o + 0x78) / 4096.0};
                 feet = project(m, w);
-                System.out.println(String.format(Locale.ROOT, "FOLLOWER object %d gfx %d at %.1f,%.1f,%.1f -> screen %s", k, ram.get(i32, o + 0x10), w[0], w[1], w[2],
+                System.out.println(String.format(Locale.ROOT, "FOLLOWER object %d gfx %d at %.1f,%.1f,%.1f -> screen %s", k, ram.getInt(o + 0x10), w[0], w[1], w[2],
                         feet == null ? "-" : String.format(Locale.ROOT, "%.1f,%.1f", feet[0], feet[1])));
             }
         }
@@ -777,26 +766,24 @@ final class ScriptRunner {
     }
 
     private void followTable() {
-        MemorySegment ram = core.systemRam();
+        java.nio.ByteBuffer ram = core.systemRam();
         long ref = ram == null ? -1 : Gen4Followers.locate(ram);
         if (ref < 0) {
             System.out.println("FOLLOWTABLE introuvable");
             return;
         }
-        java.lang.foreign.ValueLayout.OfInt i32 = java.lang.foreign.ValueLayout.JAVA_INT_UNALIGNED.withOrder(java.nio.ByteOrder.LITTLE_ENDIAN);
-        java.lang.foreign.ValueLayout.OfShort u16 = java.lang.foreign.ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(java.nio.ByteOrder.LITTLE_ENDIAN);
         System.out.println(String.format("FOLLOWTABLE entrée de référence @%08X", 0x02000000L + ref));
         int usual = 0;
         for (int k = -1100; k <= 1100; k++) {
             long o = ref + 12L * k;
-            if (o < 0 || o + 12 > ram.byteSize()) {
+            if (o < 0 || o + 12 > ram.capacity()) {
                 continue;
             }
-            int member = ram.get(i32, o);
-            int a = ram.get(u16, o + 4) & 0xFFFF;
-            int b = ram.get(u16, o + 6) & 0xFFFF;
-            int c = ram.get(u16, o + 8) & 0xFFFF;
-            int d = ram.get(u16, o + 10) & 0xFFFF;
+            int member = ram.getInt((int) o);
+            int a = ram.getShort((int) o + 4) & 0xFFFF;
+            int b = ram.getShort((int) o + 6) & 0xFFFF;
+            int c = ram.getShort((int) o + 8) & 0xFFFF;
+            int d = ram.getShort((int) o + 10) & 0xFFFF;
             if (member >= 297 && member < 863) {
                 if (a == 751 && c == 832 && d == 0) {
                     usual++;
@@ -809,16 +796,15 @@ final class ScriptRunner {
     }
 
     private void objects4(int around) {
-        MemorySegment ram = core.systemRam();
-        java.lang.foreign.ValueLayout.OfInt i32 = java.lang.foreign.ValueLayout.JAVA_INT_UNALIGNED.withOrder(java.nio.ByteOrder.LITTLE_ENDIAN);
-        int size = (int) ram.byteSize() - 0x300;
+        java.nio.ByteBuffer ram = core.systemRam();
+        int size = ram.capacity() - 0x300;
         int player = -1;
         for (int o = 0; o < size && player < 0; o += 4) {
-            if (ram.get(i32, o + 8) == 0xFF) {
-                int gx = ram.get(i32, o + 0x64);
-                int gz = ram.get(i32, o + 0x6C);
-                int x = ram.get(i32, o + 0x70);
-                int z = ram.get(i32, o + 0x78);
+            if (ram.getInt(o + 8) == 0xFF) {
+                int gx = ram.getInt(o + 0x64);
+                int gz = ram.getInt(o + 0x6C);
+                int x = ram.getInt(o + 0x70);
+                int z = ram.getInt(o + 0x78);
                 if (gx > 0 && gz > 0 && gx < 0x10000 && gz < 0x10000 && Math.abs((x >> 16) - gx) <= 1 && Math.abs((z >> 16) - gz) <= 1) {
                     player = o;
                 }
@@ -827,15 +813,15 @@ final class ScriptRunner {
         System.out.println("OBJECTS4 player at 0x" + Long.toHexString(0x02000000L + player));
         // every plausible object of the RAM, whatever the stride
         for (int o = 0; o < size; o += 4) {
-            int id = ram.get(i32, o + 8);
-            int gx = ram.get(i32, o + 0x64);
-            int gz = ram.get(i32, o + 0x6C);
-            int x = ram.get(i32, o + 0x70);
-            int z = ram.get(i32, o + 0x78);
+            int id = ram.getInt(o + 8);
+            int gx = ram.getInt(o + 0x64);
+            int gz = ram.getInt(o + 0x6C);
+            int x = ram.getInt(o + 0x70);
+            int z = ram.getInt(o + 0x78);
             if (o != player && gx > 0 && gz > 0 && gx < 0x1000 && gz < 0x1000 && Math.abs((x >> 16) - gx) <= 1 && Math.abs((z >> 16) - gz) <= 1
                     && id >= 0 && id < 0x100) {
                 System.out.println(String.format(Locale.ROOT, "ANY @%08X (%+d from the player) id=%d gfx=%d tile=%d,%d pos=%.1f,%.1f face=%d w0=%08X",
-                        0x02000000 + o, o - player, id, ram.get(i32, o + 0x10), gx, gz, x / 4096.0, z / 4096.0, ram.get(i32, o + 0x28), ram.get(i32, o)));
+                        0x02000000 + o, o - player, id, ram.getInt(o + 0x10), gx, gz, x / 4096.0, z / 4096.0, ram.getInt(o + 0x28), ram.getInt(o)));
             }
         }
         for (int k = -around; k <= around; k++) {
@@ -843,20 +829,20 @@ final class ScriptRunner {
             if (o < 0 || o + 0x128 > size) {
                 continue;
             }
-            int gx = ram.get(i32, o + 0x64);
-            int gz = ram.get(i32, o + 0x6C);
-            int x = ram.get(i32, o + 0x70);
-            int z = ram.get(i32, o + 0x78);
+            int gx = ram.getInt(o + 0x64);
+            int gz = ram.getInt(o + 0x6C);
+            int x = ram.getInt(o + 0x70);
+            int z = ram.getInt(o + 0x78);
             boolean plausible = gx > 0 && gz > 0 && gx < 0x10000 && gz < 0x10000 && Math.abs((x >> 16) - gx) <= 1 && Math.abs((z >> 16) - gz) <= 1;
             if (!plausible) {
                 continue;
             }
             StringBuilder sb = new StringBuilder(String.format(Locale.ROOT,
                     "OBJ %+3d @%08X  w0=%08X w1=%08X id=%d  +0C=%08X gfx(+10)=%d  +14=%08X +18=%08X +1C=%08X +20=%08X +24=%08X face(+28)=%d  tile=%d,%d,%d  pos=%.2f,%.2f,%.2f  +7C=%08X +80=%08X +84=%08X",
-                    k, 0x02000000 + o, ram.get(i32, o), ram.get(i32, o + 4), ram.get(i32, o + 8), ram.get(i32, o + 0x0C), ram.get(i32, o + 0x10),
-                    ram.get(i32, o + 0x14), ram.get(i32, o + 0x18), ram.get(i32, o + 0x1C), ram.get(i32, o + 0x20), ram.get(i32, o + 0x24),
-                    ram.get(i32, o + 0x28), gx, ram.get(i32, o + 0x68), gz, x / 4096.0, ram.get(i32, o + 0x74) / 4096.0, z / 4096.0,
-                    ram.get(i32, o + 0x7C), ram.get(i32, o + 0x80), ram.get(i32, o + 0x84)));
+                    k, 0x02000000 + o, ram.getInt(o), ram.getInt(o + 4), ram.getInt(o + 8), ram.getInt(o + 0x0C), ram.getInt(o + 0x10),
+                    ram.getInt(o + 0x14), ram.getInt(o + 0x18), ram.getInt(o + 0x1C), ram.getInt(o + 0x20), ram.getInt(o + 0x24),
+                    ram.getInt(o + 0x28), gx, ram.getInt(o + 0x68), gz, x / 4096.0, ram.getInt(o + 0x74) / 4096.0, z / 4096.0,
+                    ram.getInt(o + 0x7C), ram.getInt(o + 0x80), ram.getInt(o + 0x84)));
             System.out.println(sb);
         }
     }
@@ -1139,9 +1125,9 @@ final class ScriptRunner {
     }
 
     private void dump(String name) throws IOException {
-        MemorySegment ram = core.systemRam();
+        java.nio.ByteBuffer ram = core.systemRam();
         if (ram != null) {
-            Files.write(out.resolve(name + ".sysram.bin"), ram.toArray(JAVA_BYTE));
+            Files.write(out.resolve(name + ".sysram.bin"), Ram.bytes(ram));
         }
         int i = 0;
         StringBuilder index = new StringBuilder();
@@ -1150,7 +1136,7 @@ final class ScriptRunner {
                 continue; // cartridge ROM mirrors
             }
             String f = String.format(Locale.ROOT, "%s.%02d_%08x.bin", name, i++, r.start());
-            Files.write(out.resolve(f), r.data().toArray(JAVA_BYTE));
+            Files.write(out.resolve(f), Ram.bytes(r.data()));
             index.append(f).append(' ').append(Long.toHexString(r.start())).append(' ').append(r.length()).append('\n');
         }
         Files.writeString(out.resolve(name + ".regions.txt"), index.toString());

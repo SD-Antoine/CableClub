@@ -5,7 +5,6 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.Base64;
-import java.util.HexFormat;
 
 /** Random identifiers, invitation codes, session tokens and hashes. */
 public final class Ids {
@@ -54,10 +53,21 @@ public final class Ids {
     public static String sha256(String text) {
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
-            return HexFormat.of().formatHex(md.digest(text.getBytes(StandardCharsets.UTF_8)));
+            return hex(md.digest(text.getBytes(StandardCharsets.UTF_8)));
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException(e);
         }
+    }
+
+    /** Lowercase hexadecimal of bytes. */
+    public static String hex(byte[] b) {
+        char[] digits = "0123456789abcdef".toCharArray();
+        char[] out = new char[b.length * 2];
+        for (int i = 0; i < b.length; i++) {
+            out[2 * i] = digits[(b[i] >> 4) & 15];
+            out[2 * i + 1] = digits[b[i] & 15];
+        }
+        return new String(out);
     }
 
     /** Constant-time comparison. */

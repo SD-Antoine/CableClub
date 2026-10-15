@@ -27,6 +27,8 @@ final class Library {
 
     private final Path file;
     private final List<Map<String, Object>> roms = new ArrayList<>();
+    /** Where the app keeps its own copies of the player's files (the phone), or null: removing such a ROM deletes the copy. */
+    private volatile Path copies;
 
     Library(Path dataDir) {
         this.file = dataDir.resolve("bibliotheque.json");
@@ -108,9 +110,26 @@ final class Library {
     }
 
     synchronized void remove(String id) {
+        for (Map<String, Object> r : roms) {
+            if (id.equals(Json.str(r, "id"))) {
+                Path p = Path.of(Json.str(r, "path")).toAbsolutePath().normalize();
+                if (copies != null && p.startsWith(copies)) {
+                    try {
+                        Files.deleteIfExists(p);
+                    } catch (IOException e) {
+                        Log.warn("Copie de la ROM non supprimée : " + e.getMessage());
+                    }
+                }
+            }
+        }
         if (roms.removeIf(r -> id.equals(Json.str(r, "id")))) {
             save();
         }
+    }
+
+    /** The app copies the player's files into this folder (the phone's file picker only lends them). */
+    void copiesIn(Path dir) {
+        copies = dir.toAbsolutePath().normalize();
     }
 
     /**

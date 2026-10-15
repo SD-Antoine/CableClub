@@ -59,7 +59,7 @@ final class Changelog {
     private static String read(Path appDir) {
         try (InputStream in = Changelog.class.getResourceAsStream("/changelog.md")) {
             if (in != null) {
-                return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+                return new String(slt.Io.readAll(in), StandardCharsets.UTF_8);
             }
         } catch (IOException e) {
             Log.warn("Notes de version illisibles : " + e.getMessage());

@@ -1,12 +1,14 @@
 // Settings: one page for each entry of the « Réglages » menu of the side rail (game, controls, personalisation,
-// server, update, data). The account (password, logout) is on the profile page.
+// server, update, data). The account (password, logout) is on the profile page. On the phone the pages are
+// reached from « Moi », and say what differs there (touch buttons, no hosting, no file explorer).
 
-import { h, mount, btn, field, act, toast, seg, switchEl, keepScroll } from '../ui.js';
+import { h, mount, btn, field, act, toast, seg, switchEl, keepScroll, icon } from '../ui.js';
 import { local } from '../api.js';
 import { store, refreshState, on } from '../store.js';
 import { BUTTONS, ACTIONS, DEFAULT_KEYS, keyLabel, keyName, keymap } from '../game/keys.js';
 import { hostAddresses } from './parts.js';
 import { updateSettings } from './update.js';
+import { mobile } from '../platform.js';
 
 const THEMES = [
   ['onyx', 'Onyx', ['#161616', '#262627', '#8aa4ff']],
@@ -17,9 +19,9 @@ const THEMES = [
 /** The menu of the side rail: a page each, « Autres » only groups two of them. */
 export const SETTINGS_MENU = [
   { id: 'jeu', label: 'Jeu', about: 'Le son, l’image et le comportement du jeu pendant la partie.' },
-  { id: 'controles', label: 'Contrôles', about: 'Les touches du clavier et la manette.' },
+  { id: 'controles', label: 'Contrôles', about: mobile ? 'Les boutons à l’écran, la manette et le clavier.' : 'Les touches du clavier et la manette.' },
   { id: 'personnalisation', label: 'Personnalisation', about: 'L’arrière-plan et les couleurs de l’interface.' },
-  { id: 'serveur', label: 'Serveur', about: 'Le serveur auquel vous êtes connecté, ou celui que ce PC héberge.' },
+  { id: 'serveur', label: 'Serveur', about: mobile ? 'Le serveur auquel vous êtes connecté.' : 'Le serveur auquel vous êtes connecté, ou celui que ce PC héberge.' },
   { id: 'autres', label: 'Autres', children: [
     { id: 'mise-a-jour', label: 'Mise à jour', about: 'La version de Cable Club et sa recherche de mises à jour.' },
     { id: 'donnees', label: 'Données', about: 'Où Cable Club garde vos salles, vos sauvegardes et vos ROMs.' },
@@ -58,16 +60,19 @@ export function renderSettings(container, { applyTheme, tab }) {
           h('input', { type: 'range', class: 'vol-range', min: 0, max: 100, value: cfg.volume ?? 80, style: { width: '160px', '--fill': `${cfg.volume ?? 80}%` },
             oninput: (e) => { e.target.style.setProperty('--fill', `${e.target.value}%`); e.target.closest('.rule-row').querySelector('.vol-label').textContent = `${e.target.value} %`; },
             onchange: async (e) => { await save({ volume: Number(e.target.value) }); draw(); } })),
-        h('div', { class: 'rule-row' }, h('div', { class: 'grow' }, h('b', null, 'Direct des partenaires'),
-          h('small', null, 'Images par seconde envoyées et reçues pour voir les autres joueurs (moins = moins de connexion utilisée).')),
+        mobile ? h('div', { class: 'rule-row' }, h('div', { class: 'grow' }, h('b', null, 'Partager mon jeu'),
+          h('small', null, 'Images par seconde envoyées pour que les joueurs sur PC voient votre partie (moins = moins de données mobiles). Le téléphone n’affiche pas les jeux des autres.')),
+        seg([[0, 'Off'], [2, '2'], [4, '4']], Number(cfg.liveFps ?? 4), async (v) => { await save({ liveFps: v }); draw(); }))
+          : h('div', { class: 'rule-row' }, h('div', { class: 'grow' }, h('b', null, 'Direct des partenaires'),
+            h('small', null, 'Images par seconde envoyées et reçues pour voir les autres joueurs (moins = moins de connexion utilisée).')),
           seg([[0, 'Off'], [2, '2'], [4, '4'], [8, '8']], Number(cfg.liveFps ?? 4), async (v) => { await save({ liveFps: v }); draw(); })),
         h('div', { class: 'rule-row' }, h('div', { class: 'grow' }, h('b', null, 'Image lissée'), h('small', null, 'Désactivé : pixels nets (recommandé).')),
           switchEl(!!cfg.smooth, async (v) => { await save({ smooth: v }); draw(); })),
-        h('div', { class: 'rule-row' }, h('div', { class: 'grow' }, h('b', null, 'Pause quand la fenêtre est réduite'),
-          h('small', null, 'Le jeu s’arrête tant que Cable Club est réduit ou caché.')),
+        h('div', { class: 'rule-row' }, h('div', { class: 'grow' }, h('b', null, mobile ? 'Pause quand Cable Club passe en arrière-plan' : 'Pause quand la fenêtre est réduite'),
+          h('small', null, mobile ? 'Le jeu s’arrête quand vous changez d’application ou éteignez l’écran.' : 'Le jeu s’arrête tant que Cable Club est réduit ou caché.')),
           switchEl(cfg.pauseHidden !== false, async (v) => { await save({ pauseHidden: v }); draw(); })))),
 
-      controles: () => section('Contrôles', h('div', { class: 'stack' },
+      controles: () => (mobile ? phoneControls(cfg, keys) : section('Contrôles', h('div', { class: 'stack' },
         h('p', { class: 'muted small' }, 'Cliquez sur une touche puis appuyez sur la nouvelle. Les manettes Xbox (et compatibles) sont reconnues automatiquement.'),
         h('div', { class: 'keymap' }, [...BUTTONS, ...ACTIONS].map((b) => h('div', { class: 'key-row' },
           h('span', { class: 'small' }, b.label),
@@ -75,7 +80,7 @@ export function renderSettings(container, { applyTheme, tab }) {
             listening === b.id ? 'Appuyez…' : keyLabel(keys[b.id]))))),
         h('div', { class: 'row' }, btn('Touches par défaut', async () => { await save({ keys: { ...DEFAULT_KEYS } }); draw(); }, { kind: 'small ghost' }),
           h('span', { class: 'grow' }), h('span', { class: 'small muted' }, 'Manette n°'),
-          seg([[0, '1'], [1, '2'], [2, '3'], [3, '4']], Number(cfg.padIndex ?? 0), async (v) => { await save({ padIndex: v }); draw(); })))),
+          seg([[0, '1'], [1, '2'], [2, '3'], [3, '4']], Number(cfg.padIndex ?? 0), async (v) => { await save({ padIndex: v }); draw(); }))))),
 
       personnalisation: () => section('Arrière-plan', h('div', { class: 'theme-swatches' }, THEMES.map(([id, label, colors]) =>
         h('button', { type: 'button', class: ['swatch', (cfg.theme || 'onyx') === id && 'active'], onclick: async () => { applyTheme(id); await save({ theme: id }); draw(); } },
@@ -92,8 +97,8 @@ export function renderSettings(container, { applyTheme, tab }) {
             location.hash = '#/';
             location.reload();
           })))),
-        // advanced: off unless the player turns it on (the Cable Club server needs nothing on this PC)
-        h('details', { class: 'advanced', open: !!host.running }, h('summary', { class: 'small muted' }, 'Avancé'),
+        // advanced: off unless the player turns it on (the Cable Club server needs nothing on this PC); never on a phone
+        mobile ? h('p', { class: 'small muted' }, 'Un téléphone ne peut pas héberger de serveur : il se met en veille, Android ferme les applications en arrière-plan et les réseaux mobiles n’acceptent pas les connexions entrantes. Utilisez le serveur Cable Club, ou celui d’un ami sur PC.') : h('details', { class: 'advanced', open: !!host.running }, h('summary', { class: 'small muted' }, 'Avancé'),
           h('div', { class: 'rule-row' },
             h('div', { class: 'grow' }, h('b', null, 'Héberger un serveur sur ce PC'),
               host.running ? hostAddresses(host, { onInternet: async (v) => {
@@ -113,17 +118,40 @@ export function renderSettings(container, { applyTheme, tab }) {
 
       'mise-a-jour': () => section('Mise à jour', updateSettings(switchEl, async (patch) => { await save(patch); draw(); })),
 
-      donnees: () => section('Données', h('div', { class: 'row' }, h('span', { class: 'muted small grow mono ellipsis' }, store.state?.dataDir || ''),
-        btn('Ouvrir le dossier', () => local.post('/api/data/reveal').catch((e) => toast(e.message, 'danger')), { kind: 'small', iconName: 'folder' }))),
+      donnees: () => section('Données', mobile ? h('div', { class: 'stack' }, h('span', { class: 'muted small mono', style: { overflowWrap: 'anywhere' } }, store.state?.dataDir || ''),
+        h('p', { class: 'small muted' }, 'Ce dossier est visible depuis un ordinateur branché en USB (Android > data > app.cableclub). Il est effacé si vous désinstallez Cable Club : vos sauvegardes de cartouche restent copiées sur le serveur.'))
+        : h('div', { class: 'row' }, h('span', { class: 'muted small grow mono ellipsis' }, store.state?.dataDir || ''),
+          btn('Ouvrir le dossier', () => local.post('/api/data/reveal').catch((e) => toast(e.message, 'danger')), { kind: 'small', iconName: 'folder' }))),
     };
 
     // the page is drawn again after each change (a key given, a switch…): the scrolling stays where it was
     const restore = keepScroll(page);
     mount(page,
-      h('div', { class: 'page-head' }, h('div', null, h('h1', null, current.label), h('p', null, current.about))),
+      h('div', { class: 'page-head' }, h('div', { class: mobile ? 'row top' : null },
+        mobile ? h('a', { class: 'btn ghost icon-only', href: '#/moi', title: 'Retour' }, icon('back')) : null,
+        h('div', null, h('h1', null, current.label), h('p', null, current.about)))),
       pages[current.id](),
       h('p', { class: 'tiny faint center mt-l' }, `Cable Club ${store.state?.version || ''} · Projet de fans non officiel · Pokémon © Nintendo, Creatures, GAME FREAK`));
     restore();
+  }
+
+  /** The phone: the touch buttons, the vibrations, the gamepad, and the keyboard folded away. */
+  function phoneControls(cfg, keys) {
+    return section('Contrôles', h('div', { class: 'list' },
+      h('div', { class: 'rule-row' }, h('div', { class: 'grow' }, h('b', null, 'Boutons à l’écran'),
+        h('small', null, 'Auto : cachés tant qu’une manette est connectée.')),
+      seg([['auto', 'Auto'], ['always', 'Toujours'], ['never', 'Jamais']], cfg.touchControls || 'auto', async (v) => { await save({ touchControls: v }); draw(); })),
+      h('div', { class: 'rule-row' }, h('div', { class: 'grow' }, h('b', null, 'Vibrations'), h('small', null, 'Une petite vibration à chaque bouton touché.')),
+        switchEl(cfg.haptics !== false, async (v) => { await save({ haptics: v }); draw(); })),
+      h('div', { class: 'rule-row' }, h('div', { class: 'grow' }, h('b', null, 'Manette'),
+        h('small', null, 'Les manettes Bluetooth ou USB sont reconnues en jeu : boutons à la place de ceux de la console (celui du bas est B), gâchette droite = avance rapide.')),
+      seg([[0, '1'], [1, '2'], [2, '3'], [3, '4']], Number(cfg.padIndex ?? 0), async (v) => { await save({ padIndex: v }); draw(); })),
+      h('details', { class: 'advanced', open: !!listening }, h('summary', { class: 'small muted' }, 'Clavier'),
+        h('p', { class: 'muted small mb' }, 'Pour un clavier branché au téléphone : touchez une touche ci-dessous puis appuyez sur la nouvelle.'),
+        h('div', { class: 'keymap' }, BUTTONS.map((b) => h('div', { class: 'key-row' },
+          h('span', { class: 'small' }, b.label),
+          h('button', { type: 'button', class: ['kbd', listening === b.id && 'listening'], onclick: () => { listening = b.id; draw(); } },
+            listening === b.id ? 'Appuyez…' : keyLabel(keys[b.id]))))))));
   }
 
   // a section titled like the page (the heading above says it already) has no title of its own

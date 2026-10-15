@@ -32,6 +32,9 @@ final class Controls implements CoreHost.InputSource {
     private volatile int pointerX;
     private volatile int pointerY;
     private volatile boolean pointerDown;
+    // a touch shorter than one frame still reaches the game (as the keys)
+    private volatile boolean pointerLatched;
+    private volatile boolean framePointer;
     private final XInput xinput = XInput.load();
 
     Controls(int pad, int fastSpeed) {
@@ -66,12 +69,16 @@ final class Controls implements CoreHost.InputSource {
         keyMask = 0;
         latched = 0;
         pointerDown = false;
+        pointerLatched = false;
     }
 
     /** Pointer in libretro coordinates (-0x7fff..0x7fff over the whole frame). */
     void pointer(int x, int y, boolean down) {
         pointerX = x;
         pointerY = y;
+        if (down) {
+            pointerLatched = true;
+        }
         pointerDown = down;
     }
 
@@ -84,6 +91,8 @@ final class Controls implements CoreHost.InputSource {
             // a tap shorter than one frame still reaches the game
             frameKeys = keyMask | latched;
             latched = 0;
+            framePointer = pointerDown || pointerLatched;
+            pointerLatched = false;
         }
     }
 
@@ -108,7 +117,7 @@ final class Controls implements CoreHost.InputSource {
 
     @Override
     public boolean pointerPressed() {
-        return pointerDown;
+        return framePointer;
     }
 
     // ------------------------------------------------------------- XInput

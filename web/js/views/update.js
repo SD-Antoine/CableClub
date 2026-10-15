@@ -5,6 +5,7 @@
 import { h, mount, modal, btn, icon, act, toast } from '../ui.js';
 import { local, pollJob } from '../api.js';
 import { store } from '../store.js';
+import { mobile } from '../platform.js';
 
 /** A line of Markdown: **bold** and `code` become what they say, the rest stays text. */
 function inline(text) {
@@ -70,7 +71,10 @@ export function openUpdate() {
   const body = h('div', { class: 'stack' },
     h('p', null, `Vous avez la version ${u.current}. La nouvelle version ${u.version} est prête${sizeMb}.`),
     notes(u.notes),
-    u.installable
+    u.installable && mobile
+      ? h('p', { class: 'tiny faint' }, 'Cable Club télécharge la nouvelle version, puis Android vous demande de confirmer son installation '
+        + '(la première fois, il faut autoriser Cable Club à installer des applications). Vos données ne sont pas touchées.')
+      : u.installable
       ? h('p', { class: 'tiny faint' }, 'Cable Club télécharge la nouvelle version, la met à la place de l’ancienne et redémarre (environ une minute). ',
         'Vos données (salles, sauvegardes, ROMs, réglages) ne sont pas touchées.',
         hosting ? ' Votre serveur sera coupé quelques secondes : vos amis se reconnecteront tout seuls.' : '')
@@ -83,9 +87,15 @@ export function openUpdate() {
     actions: [
       { label: 'Plus tard', onClick: (close) => close() },
       { label: 'Voir sur GitHub', onClick: () => local.post('/api/update/page', {}).catch(() => {}) },
-      u.installable ? (installBtn = btn('Mettre à jour et redémarrer', () => act(installBtn, async () => {
+      u.installable ? (installBtn = btn(mobile ? 'Télécharger et installer' : 'Mettre à jour et redémarrer', () => act(installBtn, async () => {
         const res = await local.post('/api/update/install', {});
         await pollJob(res.job, (s) => { status.textContent = s.message || ''; });
+        if (mobile) {
+          // Android installs it: the app closes and opens again on the new version
+          mount(body, h('div', { class: 'empty' }, icon('download'), h('b', null, `Installation de Cable Club ${u.version}…`),
+            h('p', { class: 'small muted' }, 'Confirmez l’installation dans la fenêtre d’Android. Cable Club se ferme pendant l’installation : rouvrez-le ensuite.')));
+          return;
+        }
         mount(body, h('div', { class: 'empty' }, icon('refresh'), h('b', null, `Installation de Cable Club ${u.version}…`),
           h('p', { class: 'small muted' }, 'Cable Club se ferme et se rouvre tout seul sur la nouvelle version.')));
         const text = body.querySelector('p');

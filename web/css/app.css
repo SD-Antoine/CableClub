@@ -701,3 +701,174 @@ details.advanced[open] > summary { margin-bottom: 4px; }
 .app.compact .nav-sub, .app.compact .nav-group .icon.chevron { display: none; }
 .nav-item.mode-item.soon { opacity: .45; cursor: default; }
 .nav-item.mode-item.soon .chip { margin-left: auto; font-size: 10px; }
+
+/* the phone (Android app) ------------------------------------------------------- */
+html.mobile body { font-size: 15px; overscroll-behavior: none; -webkit-tap-highlight-color: transparent; }
+html.mobile .app.phone { flex-direction: column; height: 100vh; height: 100dvh; }
+html.mobile .page { padding: 18px 16px 28px; }
+html.mobile h1 { font-size: 21px; }
+html.mobile .page-head { flex-direction: column; align-items: stretch; gap: 12px; margin-bottom: 16px; }
+html.mobile .page-head .row { flex-wrap: wrap; }
+html.mobile .btn { height: 40px; }
+html.mobile .btn.small { height: 34px; }
+html.mobile .btn.icon-only { width: 40px; }
+html.mobile .btn.small.icon-only { width: 34px; }
+/* 16 px: the phone does not zoom on a field it opens the keyboard for */
+html.mobile .input, html.mobile select.input, html.mobile textarea.input { font-size: 16px; height: 42px; }
+html.mobile textarea.input { height: auto; }
+html.mobile .card { padding: 14px 16px; }
+html.mobile .room-head { flex-direction: column; gap: 12px; }
+html.mobile .room-head > .row { flex-wrap: wrap; }
+html.mobile .action-bar { flex-wrap: wrap; }
+html.mobile .table { font-size: 13px; }
+html.mobile .rule-row > .grow { min-width: 0; flex-basis: 100%; }
+html.mobile .rule-row .seg { flex-wrap: wrap; }
+html.mobile .keymap { grid-template-columns: 1fr; }
+html.mobile .toasts { left: 10px; right: 10px; bottom: 74px; }
+html.mobile .toast { min-width: 0; max-width: none; }
+html.mobile .modal-back { padding: 10px; align-items: end; }
+html.mobile .modal { max-height: 88vh; }
+html.mobile .modal-head { padding: 16px 16px 0; }
+html.mobile .modal-body { padding: 14px 16px; }
+html.mobile .modal-foot { padding: 12px 16px 14px; flex-wrap: wrap; }
+html.mobile .welcome { padding: 20px 18px; }
+html.mobile ::-webkit-scrollbar { width: 0; height: 0; }
+
+/* the bottom bar (on the left side when the phone is held sideways) */
+.tabbar { display: flex; flex: none; border-top: 1px solid var(--line); background: var(--bg); padding: 2px 4px; }
+.tab-item {
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 7px 0 5px; color: var(--muted);
+  font-size: 11px; position: relative; border-radius: 10px; min-width: 0;
+}
+.tab-item:hover { text-decoration: none; }
+.tab-item .icon { width: 22px; height: 22px; }
+.tab-item .avatar.s { width: 22px; height: 22px; font-size: 11px; }
+.tab-item .avatar .presence { display: none; }
+.tab-item.active { color: var(--accent); }
+.tab-item.active .avatar { box-shadow: 0 0 0 2px var(--accent); }
+.tab-item .count {
+  position: absolute; top: 2px; left: calc(50% + 6px); min-width: 17px; height: 17px; padding: 0 5px; border-radius: 9px;
+  background: var(--accent); color: var(--accent-ink); font-size: 10.5px; font-weight: 600; display: grid; place-items: center;
+}
+@media (orientation: landscape) {
+  html.mobile .app.phone { flex-direction: row-reverse; }
+  html.mobile .tabbar { flex-direction: column; justify-content: center; border-top: 0; border-right: 1px solid var(--line); width: 66px; padding: 4px; }
+  html.mobile .tab-item { flex: none; padding: 8px 0; }
+}
+
+/* the modes, chosen at the top of the rooms */
+.mode-switch { display: flex; gap: 8px; overflow-x: auto; margin: 0 -16px 14px; padding: 0 16px 2px; }
+.mode-pill {
+  display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 14px 0 8px; border-radius: 18px; flex: none;
+  background: var(--surface); border: 1px solid var(--line); color: var(--muted); white-space: nowrap; font-weight: 500;
+}
+.mode-pill:hover { text-decoration: none; }
+.mode-pill img { width: 22px; height: 22px; border-radius: 5px; }
+.mode-pill.active { color: var(--text); border-color: var(--accent); background: var(--accent-soft); }
+.mode-pill.soon { opacity: .4; }
+html.mobile .mode-head { gap: 12px; margin-bottom: 12px; }
+html.mobile .mode-head img { width: 40px; height: 40px; }
+html.mobile .mode-head p { font-size: 13px; }
+/* many tabs (a room) scroll sideways rather than overflow */
+html.mobile .tabs { overflow-x: auto; scrollbar-width: none; }
+html.mobile .tabs button { padding: 10px 8px; flex: 1 0 auto; white-space: nowrap; }
+
+/* « Moi »: the profile and the settings */
+.me-card { display: flex; align-items: center; gap: 14px; color: var(--text); }
+.me-card:hover { text-decoration: none; }
+.me-card b { display: block; font-size: 16px; }
+.list-card { padding: 2px 16px; }
+.list-link { display: flex; align-items: center; gap: 12px; padding: 13px 0; border-bottom: 1px solid var(--line); color: var(--text); }
+.list-link:last-child { border-bottom: 0; }
+.list-link:hover { text-decoration: none; }
+.list-link b { display: block; font-weight: 500; }
+.list-link small { display: block; color: var(--muted); font-size: 12.5px; }
+
+/* the chat: the conversations, then the one opened */
+.chat-page.phone-list .chat-main { display: none; }
+.chat-page.phone-list .chat-side { width: 100%; border-right: 0; padding: 10px 10px; }
+.chat-page.phone-open .chat-side { display: none; }
+.chat-page.phone-open .chat-head { padding: 8px 10px; gap: 8px; }
+.chat-page.phone-open .chat-msgs { padding: 10px 12px; }
+.chat-page.phone-open .chat-form { padding: 8px 10px 10px; }
+html.mobile .chat-del { display: grid; opacity: .55; }
+
+/* the game ----------------------------------------------------------------------- */
+.play.mobile .play-bar { height: 44px; padding: 0 4px; gap: 0; }
+.play.mobile .play-bar .title { gap: 6px; padding: 0 4px; }
+.play.mobile .play-bar .chip { max-width: 38vw; overflow: hidden; text-overflow: ellipsis; display: inline-block; line-height: 22px; }
+.play.mobile .stage { touch-action: none; user-select: none; -webkit-user-select: none; }
+.play.mobile .stage canvas { touch-action: none; }
+.play.mobile .osd { left: 8px; top: 8px; max-width: calc(100% - 16px); }
+.play.mobile .veil-box { padding: 18px; }
+.play.mobile .partner { margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+.play.mobile .partner:last-child { border-bottom: 0; }
+.play.mobile .side .tabs button { flex: 1; padding: 11px 6px; }
+.play.mobile .side { display: flex; }
+.play.mobile .side.hidden { display: none; }
+/* upright: the game at the top, the buttons under it, the panel's tabs at the bottom (a tab opens it as a sheet) */
+.play.mobile.portrait .play-body { flex-direction: column; position: relative; }
+.play.mobile.portrait .stage { place-items: start center; padding-top: 4px; }
+.play.mobile.portrait .side { width: auto; flex: none; border-left: 0; border-top: 1px solid var(--line); }
+.play.mobile.portrait .side .tabs { border-bottom: 0; padding: 0 4px; }
+.play.mobile.portrait .side .tabs button { border-bottom: 0; border-top: 2px solid transparent; margin: -1px 0 0; }
+.play.mobile.portrait .side .tabs button.active { border-top-color: var(--accent); }
+.play.mobile.portrait .side.open .side-body {
+  position: absolute; left: 0; right: 0; bottom: 46px; height: 60%; z-index: 6; background: var(--bg);
+  border-top: 1px solid var(--line-2); border-radius: 14px 14px 0 0; box-shadow: 0 -12px 30px rgba(0, 0, 0, .45);
+}
+/* sideways: the panel on the right, shown with its button */
+.play.mobile.landscape .side { width: min(300px, 40vw); }
+
+/* the touch buttons: drawn over the game sideways, under it upright */
+.play.mobile .stage { --d: 150px; --b: 62px; }
+.tp { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+.tp.hidden { display: none; }
+.tp-face, .tp-meta { pointer-events: none; }
+.tp-dpad, .tp-btn, .tp-pill { pointer-events: auto; touch-action: none; user-select: none; -webkit-user-select: none; }
+.tp-dpad { position: absolute; width: var(--d); height: var(--d); }
+.tp-arm, .tp-hub { position: absolute; background: rgba(255, 255, 255, .13); }
+.tp-arm { border: 1px solid rgba(255, 255, 255, .16); }
+.tp-arm.up, .tp-arm.down { left: calc(var(--d) / 3); width: calc(var(--d) / 3); height: calc(var(--d) / 3 + 1px); }
+.tp-arm.up { top: 0; border-radius: 10px 10px 0 0; border-bottom: 0; }
+.tp-arm.down { bottom: 0; border-radius: 0 0 10px 10px; border-top: 0; }
+.tp-arm.left, .tp-arm.right { top: calc(var(--d) / 3); height: calc(var(--d) / 3); width: calc(var(--d) / 3 + 1px); }
+.tp-arm.left { left: 0; border-radius: 10px 0 0 10px; border-right: 0; }
+.tp-arm.right { right: 0; border-radius: 0 10px 10px 0; border-left: 0; }
+.tp-hub { left: calc(var(--d) / 3); top: calc(var(--d) / 3); width: calc(var(--d) / 3); height: calc(var(--d) / 3); }
+.tp-arm.on, .tp-btn.on, .tp-pill.on { background: rgba(138, 164, 255, .55); border-color: rgba(138, 164, 255, .8); }
+.tp-face { position: absolute; width: var(--d); height: var(--d); }
+.tp-btn {
+  position: absolute; width: var(--b); height: var(--b); border-radius: 50%; display: grid; place-items: center;
+  font: 700 calc(var(--b) * .3) / 1 var(--font); color: rgba(255, 255, 255, .85);
+  background: rgba(255, 255, 255, .13); border: 1px solid rgba(255, 255, 255, .2);
+}
+/* two buttons: B low on the left, A high on the right (as on the console) */
+.tp-face.n2 .tp-a { right: 0; top: calc(var(--d) * .1); }
+.tp-face.n2 .tp-b { left: 0; bottom: calc(var(--d) * .1); }
+/* four (DS): X at the top, A on the right, B at the bottom, Y on the left */
+.tp-face.n4 { --b: calc(var(--d) * .38); }
+.tp-face.n4 .tp-x { left: calc((var(--d) - var(--b)) / 2); top: 0; }
+.tp-face.n4 .tp-a { right: 0; top: calc((var(--d) - var(--b)) / 2); }
+.tp-face.n4 .tp-b { left: calc((var(--d) - var(--b)) / 2); bottom: 0; }
+.tp-face.n4 .tp-y { left: 0; top: calc((var(--d) - var(--b)) / 2); }
+.tp-btn.tp-shoulder { width: calc(var(--d) * .56); height: 38px; border-radius: 12px; font-size: 15px; }
+.tp-l { left: 14px; }
+.tp-r { right: 14px; }
+.tp-meta { position: absolute; display: flex; gap: 16px; }
+.tp-pill {
+  height: 30px; padding: 0 14px; border-radius: 15px; display: grid; place-items: center; font-size: 11.5px; font-weight: 600;
+  letter-spacing: .05em; text-transform: uppercase; color: rgba(255, 255, 255, .75); background: rgba(255, 255, 255, .11);
+  border: 1px solid rgba(255, 255, 255, .16);
+}
+.play.mobile.portrait .tp { top: calc(var(--screen-h, 50%) + 6px); }
+.play.mobile.portrait .tp-dpad { left: 18px; top: calc(50% - var(--d) / 2 + 4px); }
+.play.mobile.portrait .tp-face { right: 18px; top: calc(50% - var(--d) / 2 + 4px); }
+/* L R just above the cross and the buttons, Start Select just under them: one group under the thumbs */
+.play.mobile.portrait .tp-shoulder { top: max(2px, calc(50% - var(--d) / 2 - 50px)); }
+.play.mobile.portrait .tp-meta { left: 50%; transform: translateX(-50%); top: min(calc(100% - 36px), calc(50% + var(--d) / 2 + 18px)); }
+.play.mobile.landscape .tp-dpad { left: max(12px, calc((100% - var(--screen-w, 0px)) / 4 - var(--d) / 2)); top: calc(56% - var(--d) / 2); }
+.play.mobile.landscape .tp-face { right: max(12px, calc((100% - var(--screen-w, 0px)) / 4 - var(--d) / 2)); top: calc(56% - var(--d) / 2); }
+.play.mobile.landscape .tp-shoulder { top: 10px; }
+.play.mobile.landscape .tp-meta { left: 14px; right: 14px; bottom: 8px; justify-content: space-between; }
+.game-menu .rule-row { padding: 10px 0; }

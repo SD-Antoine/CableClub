@@ -9,6 +9,11 @@ automatiquement dans les jeux**.
 (`CableClub-x.y.z-windows-x64.zip` : décompressez-le et lancez `CableClub.exe`, rien à
 installer). Les nouveautés de chaque version sont dans [CHANGELOG.md](CHANGELOG.md).
 
+**Sur téléphone** : `CableClub-x.y.z-android.apk` (Android 11 ou plus récent), sur la
+même page. Même compte et mêmes salles que sur PC ; jeu avec boutons à l'écran ou
+manette, partenaires visibles dans le jeu, chat et journal (sans les écrans des
+partenaires en direct). Voir [Version Android](#version-android).
+
 - **Comptes et amis** : chaque joueur a un compte sur le serveur SLT de son
   groupe ; on ajoute ses amis pour les inviter en un clic (présence en ligne).
 - **Salles de 1 à 4 joueurs** : le chef crée la salle (jeu, règles,
@@ -74,6 +79,26 @@ chaque jeu ce qu'il doit appliquer.
 | Morts dans les statistiques | Seul le joueur dont le Pokémon est tombé en premier compte la mort ; les âmes liées qui meurent avec lui ne comptent pas chez les partenaires. |
 | Échanges | Un Pokémon échangé quitte son lien et appartient au receveur (sans lien). Tant que les deux joueurs n'ont pas battu le Maître, seuls les chromatiques s'échangent. |
 | Fin | **Fin automatique contre le Maître** (règle activée par défaut) : SLT détecte la victoire dans le jeu et termine le Soul Link (quand tous l'ont battu, ou dès le premier, au choix). Sinon, défaite si une équipe entière tombe, ou fin déclarée par le chef. |
+
+## Version Android
+
+L'application Android (dossier [`android/`](android/)) fait tourner **le même code que
+la version PC** : l'interface (`web/`), l'API locale, le lien au serveur, le suivi
+automatique, la présence en jeu, la randomisation. Seules quelques classes ont une
+version Android du même nom (`android/app/src/main/java/slt/…`) : l'émulateur (une
+petite bibliothèque native, `android/app/src/main/jni/cclibretro.c`, à la place de
+l'API « foreign function » de Java), le son, les images, les requêtes réseau, le
+lancement du jeu (un service dans un processus à part, comme le processus du jeu
+sur PC), les mises à jour (APK confié à l'installateur d'Android).
+
+- Cœurs libretro pour Android : **mGBA** (GB, GBC, GBA) et **melonDS DS** (DS, bien
+  plus rapide que DeSmuME sur un processeur de téléphone). Les sauvegardes de jeu
+  DS sont converties entre le format de DeSmuME (`rom.dsv`) et le format brut
+  (serveur, téléphone) : une partie se continue d'un appareil à l'autre.
+- Construire : `.\build-android.ps1` (JDK 21, SDK Android avec le NDK ; la clé de
+  signature est lue dans `%USERPROFILE%\.cableclub\android-signing.properties`,
+  jamais dans le dépôt).
+- Pas d'hébergement de serveur sur téléphone.
 
 ## Randomisation
 

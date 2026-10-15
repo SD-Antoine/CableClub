@@ -4,18 +4,16 @@ import slt.Http;
 import slt.Invitation;
 import slt.Json;
 import slt.Log;
+import slt.Net;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
-import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -28,29 +26,25 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 final class ServerLink {
 
-    private final HttpClient http;
+    private final Net http;
     private final Config config;
     private final LocalHub hub;
     private final Map<String, Map<String, Object>> directives = new ConcurrentHashMap<>();
     private volatile boolean connected;
     private volatile long generation;
-    private volatile InputStream current;
+    private volatile Net.Stream current;
 
     ServerLink(Config config, LocalHub hub) {
         this.config = config;
         this.hub = hub;
         // encrypted connections: the server is recognised by its certificate's fingerprint, until it gets a
         // real certificate for its name (then the usual checks are enough and the fingerprint is forgotten)
-        this.http = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(5))
-                .version(HttpClient.Version.HTTP_1_1)
-                .sslContext(PinnedTls.context(() -> config.str("serverPin"), null, false, () -> {
-                    if (config.str("serverPin") != null) {
-                        Log.info("Le serveur a maintenant un certificat reconnu : son ancienne empreinte est oubliée");
-                        config.set("serverPin", null);
-                    }
-                }))
-                .build();
+        this.http = Net.client(PinnedTls.context(() -> config.str("serverPin"), null, false, () -> {
+            if (config.str("serverPin") != null) {
+                Log.info("Le serveur a maintenant un certificat reconnu : son ancienne empreinte est oubliée");
+                config.set("serverPin", null);
+            }
+        }), PinnedTls.pinnedBy(() -> config.str("serverPin"), false), 5000);
     }
 
     String base() {
@@ -134,7 +128,7 @@ final class ServerLink {
                 throw new Http.Fail(502, "Le serveur de ce code ne répond pas. " + diagnose(probe.attempts(), hasIpv6()));
             }
             String host = URI.create(candidates.get(0)).getHost();
-            if (host != null && Hosting.isLocalAddress(host)) {
+            if (host != null && Networks.isLocalAddress(host)) {
                 throw new Http.Fail(502, "Aucun serveur Cable Club ne répond à " + input.trim() + ". Cette adresse ne fonctionne que sur la "
                         + "même box (même Wi-Fi) que l'hôte. À distance, demandez à l'hôte son code d'invitation (Réglages > Serveur).");
             }
@@ -207,7 +201,7 @@ final class ServerLink {
         Map<String, Attempt> done = new java.util.concurrent.ConcurrentHashMap<>();
         java.util.concurrent.atomic.AtomicInteger left = new java.util.concurrent.atomic.AtomicInteger(candidates.size());
         for (String url : candidates) {
-            Thread.startVirtualThread(() -> {
+            slt.Jobs.background("slt-sonde", () -> {
                 try {
                     Attempt a = probeOne(url, pin);
                     done.put(url, a);
@@ -249,16 +243,13 @@ final class ServerLink {
 
     private Attempt probeOne(String url, String pin, boolean acceptAny) {
         java.util.concurrent.atomic.AtomicReference<String> seen = new java.util.concurrent.atomic.AtomicReference<>();
-        HttpClient.Builder b = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).version(HttpClient.Version.HTTP_1_1);
-        if (url.startsWith("https://")) {
-            b.sslContext(PinnedTls.context(() -> pin, seen, acceptAny));
-        }
+        boolean tls = url.startsWith("https://");
+        Net net = Net.client(tls ? PinnedTls.context(() -> pin, seen, acceptAny) : null, tls ? PinnedTls.pinnedBy(() -> pin, acceptAny) : null, 5000);
         try {
-            HttpResponse<String> r = b.build().send(HttpRequest.newBuilder(URI.create(url + "/api/server"))
-                    .timeout(Duration.ofSeconds(7)).GET().build(), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            Net.Response r = net.send("GET", url + "/api/server", null, null, 7000);
             Map<String, Object> info;
             try {
-                info = Json.parseObject(r.body());
+                info = Json.parseObject(r.text());
             } catch (RuntimeException e) {
                 return new Attempt(url, null, "not-slt");
             }
@@ -269,9 +260,6 @@ final class ServerLink {
             return new Attempt(url, new Found(url, fp, info), "ok");
         } catch (IOException | RuntimeException e) {
             return new Attempt(url, null, reason(e));
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return new Attempt(url, null, "error");
         }
     }
 
@@ -284,7 +272,7 @@ final class ServerLink {
      */
     static String reason(Throwable e) {
         for (Throwable t = e; t != null; t = t.getCause()) {
-            if (t instanceof java.net.http.HttpTimeoutException) {
+            if (t instanceof java.net.SocketTimeoutException) {
                 return "timeout";
             }
             if (t instanceof PinnedTls.Mismatch) {
@@ -322,7 +310,7 @@ final class ServerLink {
 
     /** Whether this PC has a public IPv6 address (otherwise the IPv6 addresses of a code cannot work from here). */
     private static boolean hasIpv6() {
-        return Hosting.networks().stream().anyMatch(n -> n[0].contains(":"));
+        return Networks.list().stream().anyMatch(n -> n[0].contains(":"));
     }
 
     /**
@@ -334,7 +322,7 @@ final class ServerLink {
         List<Attempt> v6 = new ArrayList<>();
         for (Attempt a : attempts) {
             String host = URI.create(a.url()).getHost();
-            String kind = Hosting.addressKind(host);
+            String kind = Networks.addressKind(host);
             if ("ipv6".equals(kind)) {
                 v6.add(a);
             } else if ("public".equals(kind)) {
@@ -433,68 +421,63 @@ final class ServerLink {
         if (b == null) {
             throw new Http.Fail(400, "Aucun serveur configuré.");
         }
-        HttpRequest.Builder rb = HttpRequest.newBuilder(URI.create(b + path)).timeout(Duration.ofSeconds(20));
+        Map<String, String> headers = new HashMap<>();
         if (auth) {
             String token = config.str("token");
             if (token == null) {
                 throw new Http.Fail(401, "Connectez-vous d'abord.");
             }
-            rb.header("Authorization", "Bearer " + token);
+            headers.put("Authorization", "Bearer " + token);
         }
+        byte[] payload = null;
         if (body != null && !"GET".equals(method)) {
-            rb.header("Content-Type", "application/json");
-            rb.method(method, HttpRequest.BodyPublishers.ofString(Json.stringify(body), StandardCharsets.UTF_8));
-        } else {
-            rb.method(method, HttpRequest.BodyPublishers.noBody());
+            headers.put("Content-Type", "application/json");
+            payload = Json.stringify(body).getBytes(StandardCharsets.UTF_8);
         }
-        HttpResponse<String> r;
+        Net.Response r;
         try {
-            r = http.send(rb.build(), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            r = http.send(method, b + path, headers, payload, 20_000);
         } catch (IOException e) {
+            if (Thread.currentThread().isInterrupted()) {
+                throw new Http.Fail(500, "Interrompu");
+            }
             throw new Http.Fail(502, "Serveur Cable Club injoignable (" + b + ").");
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new Http.Fail(500, "Interrompu");
         }
+        String text = r.text();
         Object data = null;
-        if (!r.body().isEmpty()) {
+        if (!text.isEmpty()) {
             try {
-                data = Json.parse(r.body());
+                data = Json.parse(text);
             } catch (IllegalArgumentException e) {
-                data = r.body();
+                data = text;
             }
         }
-        if (r.statusCode() == 401 && auth) {
+        if (r.status() == 401 && auth) {
             sessionLost();
         }
-        if (r.statusCode() >= 400) {
+        if (r.status() >= 400) {
             String msg = data instanceof Map ? Json.str(Json.obj(data), "error") : null;
-            throw new Http.Fail(r.statusCode(), msg == null ? "Erreur du serveur (" + r.statusCode() + ")" : msg);
+            throw new Http.Fail(r.status(), msg == null ? "Erreur du serveur (" + r.status() + ")" : msg);
         }
         return data;
     }
 
     /** Binary GET (saves); null when the server has nothing (204 / 404). */
     byte[] getBytes(String path) {
-        HttpResponse<byte[]> r = getResponse(path);
+        Net.Response r = getResponse(path);
         return r == null ? null : r.body();
     }
 
     /** Binary GET with its headers (live images carry their number); null when there is nothing. */
-    HttpResponse<byte[]> getResponse(String path) {
+    Net.Response getResponse(String path) {
         String token = config.str("token");
         if (base() == null || token == null) {
             return null;
         }
         try {
-            HttpResponse<byte[]> r = http.send(HttpRequest.newBuilder(URI.create(base() + path))
-                    .timeout(Duration.ofSeconds(15)).header("Authorization", "Bearer " + token).GET().build(),
-                    HttpResponse.BodyHandlers.ofByteArray());
-            return r.statusCode() == 200 ? r : null;
+            Net.Response r = http.send("GET", base() + path, Map.of("Authorization", "Bearer " + token), null, 15_000);
+            return r.status() == 200 ? r : null;
         } catch (IOException e) {
-            return null;
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
             return null;
         }
     }
@@ -505,15 +488,9 @@ final class ServerLink {
             return false;
         }
         try {
-            HttpResponse<String> r = http.send(HttpRequest.newBuilder(URI.create(base() + path))
-                    .timeout(Duration.ofSeconds(30)).header("Authorization", "Bearer " + token)
-                    .header("Content-Type", "application/octet-stream")
-                    .POST(HttpRequest.BodyPublishers.ofByteArray(data)).build(), HttpResponse.BodyHandlers.ofString());
-            return r.statusCode() == 200;
+            return http.send("POST", base() + path, Map.of("Authorization", "Bearer " + token,
+                    "Content-Type", "application/octet-stream"), data, 30_000).status() == 200;
         } catch (IOException e) {
-            return false;
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
             return false;
         }
     }
@@ -558,7 +535,7 @@ final class ServerLink {
 
     synchronized void stopStream() {
         generation++;
-        InputStream in = current;
+        Net.Stream in = current;
         current = null;
         if (in != null) {
             try {
@@ -578,21 +555,19 @@ final class ServerLink {
         int failures = 0;
         while (gen == generation && loggedIn()) {
             try {
-                HttpResponse<InputStream> r = http.send(HttpRequest.newBuilder(URI.create(base() + "/api/stream"))
-                        .header("Authorization", "Bearer " + config.str("token")).GET().build(),
-                        HttpResponse.BodyHandlers.ofInputStream());
-                if (r.statusCode() == 401) {
-                    r.body().close();
+                Net.Stream r = http.open(base() + "/api/stream", Map.of("Authorization", "Bearer " + config.str("token")));
+                if (r.status() == 401) {
+                    r.close();
                     sessionLost();
                     return;
                 }
-                if (r.statusCode() != 200) {
-                    r.body().close();
-                    throw new IOException("statut " + r.statusCode());
+                if (r.status() != 200) {
+                    r.close();
+                    throw new IOException("statut " + r.status());
                 }
-                current = r.body();
+                current = r;
                 if (gen != generation) {
-                    current.close();
+                    r.close();
                     return;
                 }
                 connected = true;
@@ -602,7 +577,8 @@ final class ServerLink {
                 read(r.body(), gen);
             } catch (IOException e) {
                 // reconnect below
-            } catch (InterruptedException e) {
+            }
+            if (Thread.currentThread().isInterrupted()) {
                 return;
             }
             if (gen != generation) {
@@ -640,7 +616,7 @@ final class ServerLink {
             } else if (line.startsWith("event:")) {
                 event = line.substring(6).trim();
             } else if (line.startsWith("data:")) {
-                if (!data.isEmpty()) {
+                if (data.length() > 0) {
                     data.append('\n');
                 }
                 data.append(line.substring(5).trim());

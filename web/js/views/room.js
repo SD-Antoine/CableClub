@@ -13,6 +13,7 @@ import { stateChip } from './home.js';
 import { tradeBox, TRADES } from './trades.js';
 import { chatPanel } from './chat.js';
 import { battlesPanel } from './battle.js';
+import { mobile, device } from '../platform.js';
 
 const ZONE_STATUS = {
   open: ['Ouverte', ''], waiting: ['En attente', 'accent'], naming: ['Nommage', 'accent'], linked: ['Liée', 'ok'],
@@ -213,20 +214,20 @@ export async function renderRoom(container, roomId, { history = false } = {}) {
     const here = r && r.present;
     let status;
     if (building) status = h('div', { class: 'stack s' }, h('div', { class: 'row' }, h('span', { class: 'spinner' }), h('span', null, building)), h('div', { class: 'progress' }, h('i')));
-    else if (here && m.rom?.status === 'ready') status = h('p', { class: 'muted small' }, `Générée sur ce PC à partir de votre copie (${LANG[r.lang] || r.lang || '?'}) · CRC `, h('span', { class: 'mono' }, r.crc), r.notes?.length ? ` · ${r.notes.join(' · ')}` : '');
+    else if (here && m.rom?.status === 'ready') status = h('p', { class: 'muted small' }, `Générée sur ${device} à partir de votre copie (${LANG[r.lang] || r.lang || '?'}) · CRC `, h('span', { class: 'mono' }, r.crc), r.notes?.length ? ` · ${r.notes.join(' · ')}` : '');
     else if (m.rom?.status === 'error' || m.rom?.status === 'missing') status = h('p', { class: 'warn small' }, m.rom?.error || 'ROM non générée.');
-    else status = h('p', { class: 'muted small' }, 'ROM non générée sur ce PC.');
+    else status = h('p', { class: 'muted small' }, `ROM non générée sur ${device}.`);
     return h('div', { class: 'card' },
       h('h3', null, 'Ma ROM'),
       h('div', { class: 'mt-s' }, status),
       h('div', { class: 'row wrap mt-s' },
-        here ? h('a', { class: 'btn small', href: `/api/rooms/${roomId}/rom/file`, title: 'Télécharger une copie de la ROM de la salle' }, icon('download'), 'Télécharger') : null,
-        here ? btn('Dossier', () => local.post(`/api/rooms/${roomId}/rom/reveal`).catch(errorToast), { kind: 'small ghost', iconName: 'folder' }) : null,
+        here && !mobile ? h('a', { class: 'btn small', href: `/api/rooms/${roomId}/rom/file`, title: 'Télécharger une copie de la ROM de la salle' }, icon('download'), 'Télécharger') : null,
+        here && !mobile ? btn('Dossier', () => local.post(`/api/rooms/${roomId}/rom/reveal`).catch(errorToast), { kind: 'small ghost', iconName: 'folder' }) : null,
         !building && room.state !== 'finished' ? btn(here ? 'Régénérer' : 'Générer ma ROM', (e) => prepare(e.currentTarget), { kind: here ? 'small ghost' : 'small primary', iconName: 'refresh' }) : null),
-      room.state === 'running' && !here ? h('p', { class: 'tiny faint mt-s' }, 'Nouvel ordinateur ? Régénérez la ROM (identique grâce à la seed), puis récupérez votre sauvegarde depuis le serveur.') : null,
+      room.state === 'running' && !here ? h('p', { class: 'tiny faint mt-s' }, mobile ? 'Nouvel appareil ? Régénérez la ROM (identique grâce à la seed), puis récupérez votre sauvegarde depuis le serveur.' : 'Nouvel ordinateur ? Régénérez la ROM (identique grâce à la seed), puis récupérez votre sauvegarde depuis le serveur.') : null,
       room.state === 'running' ? h('div', { class: 'row mt-s' }, btn('Récupérer ma sauvegarde du serveur', async (e) => {
         const b = e.currentTarget;
-        if (await confirmDialog('Restaurer la sauvegarde', 'La sauvegarde de ce PC sera remplacée par la dernière copie envoyée au serveur (une copie de l’actuelle est gardée).')) {
+        if (await confirmDialog('Restaurer la sauvegarde', `La sauvegarde de ${device} sera remplacée par la dernière copie envoyée au serveur (une copie de l’actuelle est gardée).`)) {
           act(b, async () => { await local.post(`/api/rooms/${roomId}/save/restore`); toast('Sauvegarde restaurée.', 'ok'); });
         }
       }, { kind: 'small ghost', iconName: 'save' })) : null);

@@ -4,6 +4,7 @@ import { h, mount, icon, field, seg, act } from '../ui.js';
 import { local } from '../api.js';
 import { store, refreshState, on } from '../store.js';
 import { hostAddresses } from './parts.js';
+import { mobile } from '../platform.js';
 
 // the official Cable Club server: a real (Let's Encrypt) certificate, nothing to remember or paste
 const OFFICIAL = 'https://play.cableclub.app:443';
@@ -59,8 +60,8 @@ export function renderWelcome(container, onDone) {
           icon('server'), h('div', null, h('b', null, 'Serveur Cable Club (recommandé)'), h('small', null, 'Le serveur officiel : un seul compte, vos amis et vos salles où que vous soyez.'))),
         h('button', { type: 'button', class: ['choice', ui.mode === 'join' && 'selected'], onclick: () => { ui.mode = 'join'; draw(); } },
           icon('server'), h('div', null, h('b', null, 'Rejoindre un autre serveur'), h('small', null, 'Un ami héberge son propre serveur : collez le code d’invitation qu’il vous a envoyé.'))),
-        // hosting a server on this PC: an advanced choice, hidden until asked for
-        ui.advanced || ui.mode === 'host'
+        // hosting a server on this PC: an advanced choice, hidden until asked for (a phone does not host)
+        mobile ? null : ui.advanced || ui.mode === 'host'
           ? h('button', { type: 'button', class: ['choice', ui.mode === 'host' && 'selected'], onclick: () => { ui.mode = 'host'; draw(); } },
             icon('home'), h('div', null, h('b', null, 'Héberger un serveur sur ce PC'), h('small', null, 'Avancé : ce PC devient le serveur de votre groupe. Il doit rester allumé, Cable Club ouvert, pendant les parties.')))
           : h('a', { href: '#', class: 'small muted', onclick: (e) => { e.preventDefault(); ui.advanced = true; draw(); } }, 'Options avancées')),

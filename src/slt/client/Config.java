@@ -19,7 +19,7 @@ final class Config {
 
     /** Keys the interface may change directly. */
     static final Set<String> UI_KEYS = Set.of("theme", "keys", "liveFps", "volume", "padIndex", "fastSpeed", "scale",
-            "smooth", "sidePanel", "pauseHidden", "updateCheck", "dsLayout");
+            "smooth", "sidePanel", "pauseHidden", "updateCheck", "dsLayout", "touchControls", "haptics");
 
     private final Path file;
     private final Map<String, Object> data;

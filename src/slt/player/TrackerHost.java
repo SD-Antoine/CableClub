@@ -10,7 +10,7 @@ import slt.player.track.Readers;
 import slt.player.track.TrackerEngine;
 
 import java.io.IOException;
-import java.lang.foreign.MemorySegment;
+import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -23,8 +23,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
-
-import static java.lang.foreign.ValueLayout.JAVA_BYTE;
 
 /**
  * Connects the automatic tracker to the running game: every 30 frames the
@@ -70,8 +68,8 @@ final class TrackerHost implements Session.Tracker {
         this.live = new ShinyBoost.Live() {
             @Override
             public byte[] read(long address, int length) {
-                MemorySegment seg = segment(liveCore, address, length);
-                return seg == null ? null : seg.toArray(JAVA_BYTE);
+                ByteBuffer seg = segment(liveCore, address, length);
+                return seg == null ? null : Ram.bytes(seg);
             }
 
             @Override
@@ -247,21 +245,21 @@ final class TrackerHost implements Session.Tracker {
     private Mem capture(CoreHost core) {
         Mem m = new Mem();
         for (long[] area : areas) {
-            MemorySegment seg = segment(core, area[0], (int) area[1]);
+            ByteBuffer seg = segment(core, area[0], (int) area[1]);
             if (seg == null) {
                 continue;
             }
-            int len = (int) Math.min(area[1], seg.byteSize());
+            int len = (int) Math.min(area[1], seg.capacity());
             byte[] buf = new byte[len];
-            MemorySegment.copy(seg, JAVA_BYTE, 0, buf, 0, len);
+            Ram.copy(seg, 0, buf, 0, len);
             m.add(area[0], buf);
         }
         return m.blocks().isEmpty() ? null : m;
     }
 
     /** Live memory at a console address, or null if not available. */
-    private MemorySegment segment(CoreHost core, long addr, int len) {
-        MemorySegment base;
+    private ByteBuffer segment(CoreHost core, long addr, int len) {
+        ByteBuffer base;
         long start;
         switch (platform) {
             case "nds" -> {
@@ -281,10 +279,10 @@ final class TrackerHost implements Session.Tracker {
                 return core.bus(addr, len);
             }
         }
-        if (base == null || addr < start || addr - start + len > base.byteSize()) {
+        if (base == null || addr < start || addr - start + len > base.capacity()) {
             return null;
         }
-        return base.asSlice(addr - start, len);
+        return Ram.slice(base, addr - start, len);
     }
 
     /** Writes everything or nothing. */
@@ -295,8 +293,7 @@ final class TrackerHost implements Session.Tracker {
             }
         }
         for (GameReader.Write w : writes) {
-            MemorySegment seg = segment(core, w.address(), w.bytes().length);
-            MemorySegment.copy(w.bytes(), 0, seg, JAVA_BYTE, 0, w.bytes().length);
+            Ram.put(segment(core, w.address(), w.bytes().length), 0, w.bytes(), 0, w.bytes().length);
         }
         return true;
     }
@@ -311,16 +308,16 @@ final class TrackerHost implements Session.Tracker {
             if (!doomed.contains(mon.uid())) {
                 continue;
             }
-            MemorySegment seg = segment(core, mon.address(), reader.structSize());
+            ByteBuffer seg = segment(core, mon.address(), reader.structSize());
             if (seg == null) {
                 continue;
             }
-            byte[] live = seg.toArray(JAVA_BYTE);
+            byte[] live = Ram.bytes(seg);
             GameReader.Patch p = reader.zeroHp(live, mon);
             if (p == null) {
                 continue;
             }
-            MemorySegment.copy(p.bytes(), 0, seg, JAVA_BYTE, p.offset(), p.bytes().length);
+            Ram.put(seg, p.offset(), p.bytes(), 0, p.bytes().length);
             Log.info("Mort liée appliquée en jeu : " + (mon.nickname() != null ? mon.nickname() : "#" + mon.species()));
             toast.accept("☠ " + (mon.nickname() != null ? mon.nickname() : "Pokémon") + " : mort dans le Soul Link, mis K.O.");
         }

@@ -1,5 +1,17 @@
 # Nouveautés de Cable Club (anciennement SLT)
 
+## 0.8.0 — 2026-10-15
+
+- **Cable Club sur Android** : une application pour téléphone (`CableClub-0.8.0-android.apk`, Android 11 ou plus récent, avec un moteur web à jour : Android System WebView 111 ou plus récent, que le Play Store tient à jour), avec le même compte, les mêmes amis et les mêmes salles que sur PC. On y joue avec les joueurs sur PC, dans les mêmes règles, et les partenaires apparaissent dans le jeu comme sur PC (générations 1 à 5, Pokémon suiveur compris). L'interface est la même, allégée pour un petit écran : une barre en bas (Salles, Amis, Chat, ROMs, Moi), les réglages dans « Moi ».
+- **Le jeu sur téléphone** : boutons à l'écran (croix, A B, L R, et X Y pour la DS, Start, Select), petite vibration au toucher, manettes Bluetooth ou USB reconnues (les boutons à l'écran se cachent alors), écran tactile de la DS au doigt. Téléphone en hauteur : le jeu en haut, les boutons dessous et les onglets Joueurs, Chat et Journal en bas (un onglet ouvre le panneau). Téléphone en largeur : les boutons de chaque côté du jeu, le panneau à droite. L'écran reste allumé pendant la partie, et le jeu se met en pause quand on change d'application.
+- Sur téléphone, **pas d'écrans des partenaires en direct** (économie de données et de batterie) : on voit leur position dans le jeu, leur zone, leur état, leur équipe, le chat et le journal. Votre propre écran peut être partagé avec les joueurs sur PC (Réglages › Jeu).
+- **ROMs sur téléphone** : « Ajouter des ROMs » ouvre le sélecteur de fichiers d'Android ; Cable Club garde sa propre copie des fichiers choisis.
+- **DS sur téléphone avec melonDS DS** (bien plus rapide que DeSmuME sur un processeur de téléphone) ; Game Boy, Color et Advance avec mGBA, comme sur PC. Les sauvegardes d'état ne passent pas d'un émulateur à l'autre (PC ↔ téléphone pour la DS), les sauvegardes du jeu si.
+- **Sauvegardes DS d'un appareil à l'autre** : la sauvegarde d'un jeu DS est maintenant copiée sur le serveur quand on quitte le jeu, sur PC comme sur téléphone, et « Récupérer ma sauvegarde du serveur » la remet au format de l'émulateur de l'appareil. On peut ainsi commencer une partie DS sur PC et la continuer sur téléphone, ou l'inverse.
+- **Mises à jour sur téléphone** : Cable Club propose la nouvelle version comme sur PC, la télécharge, puis Android demande de confirmer l'installation (les données restent).
+- Un téléphone **n'héberge pas de serveur** (il se met en veille, et les réseaux mobiles n'acceptent pas les connexions entrantes) : on y utilise le serveur Cable Club ou celui d'un ami sur PC.
+- **Écran tactile DS** : une touche très brève (un clic rapide de souris) n'était parfois pas vue par le jeu ; elle compte maintenant toujours, comme un appui de touche bref.
+
 ## 0.7.1 — 2026-10-15
 
 - **Le Pokémon des partenaires apparaît pour tous les Pokémon, dans HeartGold et SoulSilver** : la 0.7.0 ne reconnaissait que le tiers des Pokémon suiveurs (ceux dont la fiche du jeu a certaines valeurs) ; ceux qui volent ou qui bougent autrement, comme Papilusion, restaient invisibles chez les autres joueurs. Ils apparaissent maintenant tous.

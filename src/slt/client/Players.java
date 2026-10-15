@@ -7,7 +7,6 @@ import slt.Json;
 import slt.Log;
 
 import java.io.IOException;
-import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -19,9 +18,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Runs the game of this player: a separate process without window (the
- * emulator core lives there), whose image and sound are shown inside the SLT
- * window. Relays what the game reports to the server and what the server
- * decides back to the game.
+ * emulator core lives there, see {@link GameProcess}), whose image and sound
+ * are shown inside the SLT window. Relays what the game reports to the server
+ * and what the server decides back to the game.
  */
 final class Players {
 
@@ -32,7 +31,7 @@ final class Players {
         return t;
     });
     private final AtomicBoolean screenBusy = new AtomicBoolean();
-    private volatile Process process;
+    private volatile GameProcess process;
     private volatile String roomId;
     private volatile Map<String, Object> state = Json.map("state", "stopped");
     private volatile String secret;
@@ -61,7 +60,7 @@ final class Players {
         if (d != null && "lobby".equals(Json.str(d, "state"))) {
             throw new Http.Fail(409, "L'aventure n'est pas encore lancée.");
         }
-        if (process != null && process.isAlive()) {
+        if (process != null && process.alive()) {
             if (room.equals(roomId)) {
                 return state;
             }
@@ -79,18 +78,10 @@ final class Players {
         }
         secret = Ids.token();
         List<String> cmd = new ArrayList<>();
-        String appPath = System.getProperty("jpackage.app-path");
-        if (appPath != null) {
-            cmd.add(appPath);
-        } else {
-            cmd.add(ProcessHandle.current().info().command().orElse("java"));
-            cmd.addAll(List.of("--enable-preview", "--enable-native-access=ALL-UNNAMED",
-                    "-cp", System.getProperty("java.class.path"), "slt.Main"));
-        }
         boolean states = d != null && Json.bool(d, "saveStates", false);
         cmd.addAll(List.of("--player",
                 "--rom", Json.str(rom, "path"),
-                "--cores", coresDir().toString(),
+                "--cores", GameProcess.coresDir().toString(),
                 "--data", app.dataDir.toString(),
                 "--saves", saves.toString(),
                 "--api", app.apiBase(),
@@ -106,19 +97,16 @@ final class Players {
         if (info != null) {
             cmd.addAll(List.of("--info", info.toString()));
         }
-        ProcessBuilder pb = new ProcessBuilder(cmd).redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.DISCARD);
-        // the secret travels by environment, not on the command line
-        pb.environment().put("SLT_PLAYER_SECRET", secret);
-        Process p = pb.start();
+        GameProcess p = GameProcess.start(cmd, secret);
         process = p;
         roomId = room;
         state = Json.map("state", "starting", "roomId", room, "gameId", gameId);
         app.hub.send("player", state);
-        p.onExit().thenRun(() -> {
+        p.onExit(code -> {
             synchronized (this) {
                 if (process == p) {
                     process = null;
-                    state = Json.map("state", "stopped", "roomId", room, "exitCode", (long) p.exitValue());
+                    state = Json.map("state", "stopped", "roomId", room, "exitCode", (long) code);
                     app.hub.send("player", state);
                 }
             }
@@ -134,29 +122,9 @@ final class Players {
     }
 
     synchronized void stop() {
-        Process p = process;
-        if (p != null && p.isAlive()) {
-            p.destroy();
-        }
-    }
-
-    /** Folder of the libretro cores (packaged in app/cores, build/cores in development). */
-    Path coresDir() {
-        String forced = System.getProperty("slt.cores");
-        if (forced != null) {
-            return Path.of(forced);
-        }
-        try {
-            Path code = Path.of(ClientApp.class.getProtectionDomain().getCodeSource().getLocation().toURI());
-            Path parent = code.getParent();
-            for (Path c : List.of(parent.resolve("cores"), code.resolve("cores"), parent.resolve("build").resolve("cores"))) {
-                if (Files.isDirectory(c)) {
-                    return c;
-                }
-            }
-            return parent.resolve("cores");
-        } catch (URISyntaxException e) {
-            return Path.of("cores");
+        GameProcess p = process;
+        if (p != null) {
+            p.stop();
         }
     }
 
@@ -230,7 +198,7 @@ final class Players {
         if (room == null || !app.link.loggedIn() || !screenBusy.compareAndSet(false, true)) {
             return;
         }
-        Thread.startVirtualThread(() -> {
+        slt.Jobs.background("slt-envoi", () -> {
             try {
                 app.link.postBytes("/api/rooms/" + room + "/screen", jpeg);
             } finally {
@@ -256,7 +224,7 @@ final class Players {
             }
             ghostBusy = true;
         }
-        Thread.startVirtualThread(() -> {
+        slt.Jobs.background("slt-envoi", () -> {
             Map<String, Object> next = g;
             while (next != null) {
                 try {
@@ -280,20 +248,30 @@ final class Players {
         savePending = true;
         String room = roomId;
         if (room != null && System.currentTimeMillis() - lastSaveUpload > 60_000) {
-            Thread.startVirtualThread(() -> uploadSave(room, false));
+            slt.Jobs.background("slt-sauvegarde", () -> uploadSave(room, false));
         }
+    }
+
+    /**
+     * The cartridge save of a room, as the emulator of this device keeps it: rom.srm, but rom.dsv for a DS game on
+     * the PC (DeSmuME's own file). The server keeps the raw save (see {@link DsSaves}).
+     */
+    Path saveFile(String room) {
+        Map<String, Object> rom = app.roms.status(room);
+        boolean ds = rom != null && String.valueOf(rom.get("path")).toLowerCase(java.util.Locale.ROOT).endsWith(".nds");
+        return app.roms.dir(room).resolve("sauvegardes").resolve(GameProcess.saveName(ds));
     }
 
     private void uploadSave(String room, boolean force) {
         if (!savePending && !force) {
             return;
         }
-        Path f = app.roms.dir(room).resolve("sauvegardes").resolve("rom.srm");
+        Path f = saveFile(room);
         if (!Files.isRegularFile(f)) {
             return;
         }
         try {
-            byte[] data = Files.readAllBytes(f);
+            byte[] data = DsSaves.raw(Files.readAllBytes(f));
             if (app.link.postBytes("/api/rooms/" + room + "/save?name=rom.srm", data)) {
                 savePending = false;
                 lastSaveUpload = System.currentTimeMillis();
@@ -305,20 +283,22 @@ final class Players {
 
     /** Puts the server's copy of the save back on this PC (game closed). */
     void restoreSave(String room) throws IOException {
-        if (process != null && process.isAlive() && room.equals(roomId)) {
+        if (process != null && process.alive() && room.equals(roomId)) {
             throw new Http.Fail(409, "Fermez d'abord le jeu.");
         }
         byte[] data = app.link.getBytes("/api/rooms/" + room + "/save");
         if (data == null) {
             throw new Http.Fail(404, "Aucune sauvegarde de cette salle sur le serveur.");
         }
-        Path dir = app.roms.dir(room).resolve("sauvegardes");
-        Files.createDirectories(dir);
-        Path f = dir.resolve("rom.srm");
+        Path f = saveFile(room);
+        Files.createDirectories(f.getParent());
+        byte[] previous = null;
         if (Files.isRegularFile(f)) {
-            Files.copy(f, dir.resolve("rom.srm.avant-restauration"), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            previous = Files.readAllBytes(f);
+            Files.copy(f, f.resolveSibling(f.getFileName() + ".avant-restauration"), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
         }
-        Files.write(f, data);
+        // the server keeps the raw save: DeSmuME's file gets its footer back
+        Files.write(f, f.getFileName().toString().endsWith(".dsv") ? DsSaves.dsv(DsSaves.raw(data), previous) : DsSaves.raw(data));
         Log.info("Sauvegarde restaurée depuis le serveur pour la salle " + room);
     }
 }

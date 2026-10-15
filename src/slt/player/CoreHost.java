@@ -7,6 +7,8 @@ import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -48,7 +50,7 @@ final class CoreHost implements AutoCloseable {
     }
 
     /** A block of emulated memory exposed by the core (SET_MEMORY_MAPS). */
-    record Region(long start, long length, MemorySegment data) {
+    record Region(long start, long length, ByteBuffer data) {
     }
 
     private final Arena arena = Arena.ofShared();
@@ -233,8 +235,13 @@ final class CoreHost implements AutoCloseable {
     // ------------------------------------------------------------ save data
 
     /** Cartridge RAM (battery save), or null. */
-    MemorySegment saveRam() {
-        return sram();
+    ByteBuffer saveRam() {
+        return buffer(sram());
+    }
+
+    /** The core's memory seen as a little-endian buffer (the readers are the same on Android). */
+    private static ByteBuffer buffer(MemorySegment s) {
+        return s == null ? null : s.asByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
     }
 
     private MemorySegment sram() {
@@ -326,7 +333,7 @@ final class CoreHost implements AutoCloseable {
     // --------------------------------------------------------------- memory
 
     /** Main RAM as exposed by retro_get_memory_data(SYSTEM_RAM), or null. */
-    MemorySegment systemRam() {
+    ByteBuffer systemRam() {
         long[] size = {0};
         invoke(() -> size[0] = (long) retro.getMemorySize.invokeExact(Retro.MEMORY_SYSTEM_RAM));
         if (size[0] <= 0) {
@@ -334,7 +341,7 @@ final class CoreHost implements AutoCloseable {
         }
         MemorySegment[] data = {MemorySegment.NULL};
         invoke(() -> data[0] = (MemorySegment) retro.getMemoryData.invokeExact(Retro.MEMORY_SYSTEM_RAM));
-        return data[0].address() == 0 ? null : data[0].reinterpret(size[0]);
+        return data[0].address() == 0 ? null : buffer(data[0].reinterpret(size[0]));
     }
 
     /** Memory regions declared by the core, addressed like the console bus. */
@@ -342,11 +349,11 @@ final class CoreHost implements AutoCloseable {
         return regions;
     }
 
-    /** Segment covering [address, address+len) of the emulated bus, or null. */
-    MemorySegment bus(long address, long len) {
+    /** Memory covering [address, address+len) of the emulated bus, or null. */
+    ByteBuffer bus(long address, long len) {
         for (Region r : regions) {
             if (address >= r.start() && address + len <= r.start() + r.length()) {
-                return r.data().asSlice(address - r.start(), len);
+                return Ram.slice(r.data(), address - r.start(), (int) len);
             }
         }
         return null;
@@ -576,7 +583,7 @@ final class CoreHost implements AutoCloseable {
             long start = all.get(JAVA_LONG, base + 24);
             long len = all.get(JAVA_LONG, base + 48);
             if (ptr.address() != 0 && len > 0) {
-                regions.add(new Region(start, len, MemorySegment.ofAddress(ptr.address() + offset).reinterpret(len)));
+                regions.add(new Region(start, len, buffer(MemorySegment.ofAddress(ptr.address() + offset).reinterpret(len))));
             }
         }
     }

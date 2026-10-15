@@ -2,15 +2,10 @@ package slt.player;
 
 import slt.player.track.GbReader;
 
-import javax.imageio.ImageIO;
-import java.awt.image.BufferedImage;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.lang.foreign.MemorySegment;
-import java.util.Base64;
-import java.util.zip.CRC32;
+import slt.Images;
 
-import static java.lang.foreign.ValueLayout.JAVA_BYTE;
+import java.nio.ByteBuffer;
+import java.util.zip.CRC32;
 
 /**
  * Where the player stands and what they are doing (generations 1 and 2).
@@ -78,12 +73,12 @@ final class GbPresence implements Presence {
      * Work RAM by the addresses of the reader: 0xC000 + offset in the 8 banks laid end to end
      * (0xD000-0xDFFF = bank 1, whichever bank the game has switched in).
      */
-    private static MemorySegment wram(CoreHost core, long addr, int len) {
-        MemorySegment ram = core.systemRam();
-        if (ram == null || addr < 0xC000L || addr - 0xC000L + len > ram.byteSize()) {
+    private static ByteBuffer wram(CoreHost core, long addr, int len) {
+        ByteBuffer ram = core.systemRam();
+        if (ram == null || addr < 0xC000L || addr - 0xC000L + len > ram.capacity()) {
             return null;
         }
-        return ram.asSlice(addr - 0xC000L, len);
+        return Ram.slice(ram, addr - 0xC000L, len);
     }
 
     @Override
@@ -93,37 +88,37 @@ final class GbPresence implements Presence {
         if (xa < 0 || ma < 0) {
             return null;
         }
-        MemorySegment pos = wram(core, xa - 1, 2);
-        MemorySegment mapSeg = wram(core, ma, 2);
-        MemorySegment scroll = core.bus(SCY, 2);
+        ByteBuffer pos = wram(core, xa - 1, 2);
+        ByteBuffer mapSeg = wram(core, ma, 2);
+        ByteBuffer scroll = core.bus(SCY, 2);
         if (pos == null || mapSeg == null || scroll == null) {
             return null;
         }
-        int posY = pos.get(JAVA_BYTE, 0) & 0xFF;
-        int posX = pos.get(JAVA_BYTE, 1) & 0xFF;
-        int map = reader.gen() == 1 ? mapSeg.get(JAVA_BYTE, 0) & 0xFF
-                : (mapSeg.get(JAVA_BYTE, 0) & 0xFF) * 256 + (mapSeg.get(JAVA_BYTE, 1) & 0xFF);
-        int scrollY = scroll.get(JAVA_BYTE, 0) & 0xFF;
-        int scrollX = scroll.get(JAVA_BYTE, 1) & 0xFF;
+        int posY = pos.get(0) & 0xFF;
+        int posX = pos.get(1) & 0xFF;
+        int map = reader.gen() == 1 ? mapSeg.get(0) & 0xFF
+                : (mapSeg.get(0) & 0xFF) * 256 + (mapSeg.get(1) & 0xFF);
+        int scrollY = scroll.get(0) & 0xFF;
+        int scrollX = scroll.get(1) & 0xFF;
         boolean battle = false;
         long ba = reader.battleAddress();
         if (ba >= 0) {
-            MemorySegment b = wram(core, ba, 1);
-            battle = b != null && b.get(JAVA_BYTE, 0) != 0;
+            ByteBuffer b = wram(core, ba, 1);
+            battle = b != null && b.get(0) != 0;
         }
         boolean fading = false;
         if (reader.gen() == 1) {
-            MemorySegment bgp = core.bus(BGP, 1);
-            fading = bgp != null && (bgp.get(JAVA_BYTE, 0) & 0xFF) != 0xE4;
+            ByteBuffer bgp = core.bus(BGP, 1);
+            fading = bgp != null && (bgp.get(0) & 0xFF) != 0xE4;
         }
         boolean frames;
         boolean textBox;
         if (reader.gen() == 1) {
-            MemorySegment tiles = wram(core, reader.tilemapAddress(), 20 * 18);
+            ByteBuffer tiles = wram(core, reader.tilemapAddress(), 20 * 18);
             if (tiles == null) {
                 return null;
             }
-            byte[] screen = tiles.toArray(JAVA_BYTE);
+            byte[] screen = Ram.bytes(tiles);
             boolean any = false;
             for (byte b : screen) {
                 int t = b & 0xFF;
@@ -278,13 +273,13 @@ final class GbPresence implements Presence {
     /** Colours 1-3 of object palette {@code pal}, as the image shows them, or null when unknown. */
     private int[] objectColours(CoreHost core, int pal) {
         long a = reader.objectPalettesAddress();
-        MemorySegment seg = a < 0 ? null : wram(core, a + pal * 8L, 8);
+        ByteBuffer seg = a < 0 ? null : wram(core, a + pal * 8L, 8);
         if (seg == null) {
             return null;
         }
         int[] out = new int[3];
         for (int i = 1; i <= 3; i++) {
-            int v = (seg.get(JAVA_BYTE, 2 * i) & 0xFF) | ((seg.get(JAVA_BYTE, 2 * i + 1) & 0xFF) << 8);
+            int v = (seg.get(2 * i) & 0xFF) | ((seg.get(2 * i + 1) & 0xFF) << 8);
             int r = v & 31;
             int g = (v >> 5) & 31;
             int b = (v >> 10) & 31;
@@ -314,11 +309,11 @@ final class GbPresence implements Presence {
      * bottom at y 76). With {@code capture}, the sprite image is taken. @return true if found
      */
     private boolean findPlayer(CoreHost core, boolean capture) {
-        MemorySegment oamSeg = core.bus(OAM, 160);
+        ByteBuffer oamSeg = core.bus(OAM, 160);
         if (oamSeg == null) {
             return false;
         }
-        byte[] oam = oamSeg.toArray(JAVA_BYTE);
+        byte[] oam = Ram.bytes(oamSeg);
         // the top-left object of a complete 2 x 2 block where the player stands (left 64, top 60)
         int[] slot = null;
         int left = 0;
@@ -361,7 +356,7 @@ final class GbPresence implements Presence {
         if (w != 160 || h != 144 || px.length < w * h) {
             return true;
         }
-        BufferedImage img = new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB);
+        int[] img = new int[16 * 16];
         CRC32 crc = new CRC32();
         for (int k = 0; k < 4; k++) {
             int o = slot[k] * 4;
@@ -374,11 +369,11 @@ final class GbPresence implements Presence {
             byte[] td = null;
             int[] colours = null;
             if ((attr & 0x08) == 0) {
-                MemorySegment t = core.bus(VRAM + tile * 16L, 16);
+                ByteBuffer t = core.bus(VRAM + tile * 16L, 16);
                 if (t == null) {
                     return true;
                 }
-                td = t.toArray(JAVA_BYTE);
+                td = Ram.bytes(t);
             } else {
                 colours = objectColours(core, attr & 7);
                 if (colours == null) {
@@ -404,7 +399,7 @@ final class GbPresence implements Presence {
                     } else if (!near(c, colours)) {
                         continue; // not one of the sprite's colours: the floor behind it
                     }
-                    img.setRGB(x - left, y - top, c);
+                    img[(y - top) * 16 + x - left] = c;
                     crc.update(c);
                     crc.update(x - left);
                     crc.update(y - top);
@@ -415,14 +410,8 @@ final class GbPresence implements Presence {
         if (id.equals(spriteId)) {
             return true;
         }
-        try {
-            ByteArrayOutputStream out = new ByteArrayOutputStream(256);
-            ImageIO.write(img, "png", out);
-            spritePng = Base64.getEncoder().encodeToString(out.toByteArray());
-            spriteId = id;
-        } catch (IOException e) {
-            // keep the previous sprite
-        }
+        spritePng = Images.pngBase64(img, 16, 16);
+        spriteId = id;
         return true;
     }
 }

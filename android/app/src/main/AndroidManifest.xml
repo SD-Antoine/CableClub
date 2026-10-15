@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- updates: the new APK is handed to Android's installer (the player confirms) -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+    <uses-feature android:name="android.hardware.gamepad" android:required="false" />
+
+    <application
+        android:name="app.cableclub.CableClubApp"
+        android:allowBackup="false"
+        android:extractNativeLibs="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="Cable Club"
+        android:largeHeap="true"
+        android:networkSecurityConfig="@xml/network_security_config"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:theme="@style/CableClub">
+
+        <activity
+            android:name="app.cableclub.MainActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode|density|fontScale"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- the game, in a process of its own (the emulator core keeps global state) -->
+        <service
+            android:name="app.cableclub.GameService"
+            android:exported="false"
+            android:process=":jeu" />
+
+        <receiver
+            android:name="app.cableclub.InstallReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="app.cableclub.INSTALLATION" />
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>

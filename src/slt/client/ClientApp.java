@@ -332,6 +332,11 @@ public final class ClientApp {
         System.exit(0);
     }
 
+    /** What the interface needs to know about this computer (the Android app says "android"). */
+    static Map<String, Object> platform() {
+        return Json.map("os", "windows");
+    }
+
     private static HttpServer tryBind(int port) {
         try {
             return HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), port), 64);

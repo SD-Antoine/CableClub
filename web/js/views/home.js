@@ -6,6 +6,7 @@ import { store, on, refreshRooms, loadRoom } from '../store.js';
 import { gameName } from '../data/games.js';
 import { openCreateRoom } from './create-room.js';
 import { MODE_PLAYERS } from '../data/rules.js';
+import { mobile } from '../platform.js';
 
 export function stateChip(room) {
   if (room.state === 'lobby') return chip('Salon', '', true);
@@ -27,7 +28,10 @@ export function renderHome(container, { mode = 'soullink' } = {}) {
     const invites = rooms.filter((r) => r.invited);
     const mine = rooms.filter((r) => !r.invited);
     mount(page,
-      h('div', { class: 'row between mb' },
+      // the phone: the two buttons alone (the mode is named by its tab above)
+      mobile ? h('div', { class: 'row mb' },
+        btn('Nouvelle salle', () => openCreateRoom(mode), { kind: 'primary grow', iconName: 'plus' }),
+        btn('Code', joinWithCode, { iconName: 'door', title: 'Rejoindre avec un code' })) : h('div', { class: 'row between mb' },
         h('p', { class: 'muted' }, `Créez une salle (${MODE_PLAYERS[mode].min === 1 ? 'solo ou ' : ''}de ${Math.max(2, MODE_PLAYERS[mode].min)} à ${MODE_PLAYERS[mode].max} joueurs), rejoignez celle d’un ami ou une salle publique.`),
         h('div', { class: 'row' },
           btn('Rejoindre avec un code', joinWithCode, { iconName: 'door' }),

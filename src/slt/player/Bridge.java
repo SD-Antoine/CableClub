@@ -3,17 +3,18 @@ package slt.player;
 import slt.Ghosts;
 import slt.Json;
 import slt.Log;
+import slt.Net;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -23,14 +24,19 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 final class Bridge {
 
-    private final HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build();
+    private final Net client = Net.client(null, null, 2000);
     private final String base;
     private final String secret;
     private final String wsToken;
     private final AtomicBoolean screenBusy = new AtomicBoolean();
     private final List<Object> batch = new ArrayList<>();
-    private CompletableFuture<?> last = CompletableFuture.completedFuture(null);
     private boolean flushScheduled;
+    // messages one after the other, in order; images and positions each on their own, never waiting for the others
+    private final ExecutorService ordered = executor("slt-pont");
+    private final ExecutorService images = executor("slt-pont-images");
+    private final ExecutorService positions = executor("slt-pont-position");
+    private final ScheduledExecutorService timer = Executors.newSingleThreadScheduledExecutor(r -> daemon(r, "slt-pont-minuterie"));
+    private Future<?> last;
 
     Bridge(String base, String secret, String wsToken) {
         this.base = base;
@@ -38,9 +44,18 @@ final class Bridge {
         this.wsToken = wsToken;
     }
 
+    private static ExecutorService executor(String name) {
+        return Executors.newSingleThreadExecutor(r -> daemon(r, name));
+    }
+
+    private static Thread daemon(Runnable r, String name) {
+        Thread t = new Thread(r, name);
+        t.setDaemon(true);
+        return t;
+    }
+
     void status(String state, String core, int wsPort) {
-        post("/api/player/status", Json.map("state", state, "core", core, "wsPort", (long) wsPort, "wsToken", wsToken,
-                "pid", ProcessHandle.current().pid()));
+        post("/api/player/status", Json.map("state", state, "core", core, "wsPort", (long) wsPort, "wsToken", wsToken));
     }
 
     /** Tracker event: grouped for 150 ms, then sent after the previous group. */
@@ -52,7 +67,7 @@ final class Bridge {
             }
             flushScheduled = true;
         }
-        CompletableFuture.delayedExecutor(150, java.util.concurrent.TimeUnit.MILLISECONDS).execute(this::sendBatch);
+        timer.schedule(this::sendBatch, 150, TimeUnit.MILLISECONDS);
     }
 
     private void sendBatch() {
@@ -86,18 +101,10 @@ final class Bridge {
 
     /** What the room says this game must apply, or null when SLT cannot be reached. */
     Map<String, Object> directives() {
-        HttpRequest r = HttpRequest.newBuilder(URI.create(base + "/api/player/directives"))
-                .timeout(Duration.ofSeconds(4))
-                .header("X-SLT-Player", secret)
-                .GET()
-                .build();
         try {
-            HttpResponse<String> res = client.send(r, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-            return res.statusCode() == 200 ? Json.parseObject(res.body()) : null;
-        } catch (java.io.IOException | RuntimeException e) {
-            return null;
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
+            Net.Response res = client.send("GET", base + "/api/player/directives", Map.of("X-SLT-Player", secret), null, 4000);
+            return res.status() == 200 ? Json.parseObject(res.text()) : null;
+        } catch (IOException | RuntimeException e) {
             return null;
         }
     }
@@ -107,13 +114,15 @@ final class Bridge {
         if (!screenBusy.compareAndSet(false, true)) {
             return;
         }
-        HttpRequest r = HttpRequest.newBuilder(URI.create(base + "/api/player/screen"))
-                .timeout(Duration.ofSeconds(5))
-                .header("X-SLT-Player", secret)
-                .header("Content-Type", "image/jpeg")
-                .POST(HttpRequest.BodyPublishers.ofByteArray(jpeg))
-                .build();
-        client.sendAsync(r, HttpResponse.BodyHandlers.discarding()).whenComplete((x, e) -> screenBusy.set(false));
+        images.execute(() -> {
+            try {
+                client.send("POST", base + "/api/player/screen", Map.of("X-SLT-Player", secret, "Content-Type", "image/jpeg"), jpeg, 5000);
+            } catch (IOException | RuntimeException e) {
+                // the next image will try again
+            } finally {
+                screenBusy.set(false);
+            }
+        });
     }
 
     private final Object ghostLock = new Object();
@@ -133,49 +142,49 @@ final class Bridge {
             }
             ghostBusy = true;
         }
-        sendGhost(g);
-    }
-
-    private void sendGhost(Map<String, Object> g) {
-        HttpRequest r = HttpRequest.newBuilder(URI.create(base + "/api/player/ghost"))
-                .timeout(Duration.ofSeconds(4))
-                .header("Content-Type", "application/json")
-                .header("X-SLT-Player", secret)
-                .POST(HttpRequest.BodyPublishers.ofString(Json.stringify(g), StandardCharsets.UTF_8))
-                .build();
-        client.sendAsync(r, HttpResponse.BodyHandlers.discarding()).whenComplete((x, e) -> {
-            Map<String, Object> next;
-            synchronized (ghostLock) {
-                next = ghostPending;
-                ghostPending = null;
-                if (next == null) {
-                    ghostBusy = false;
-                    return;
+        positions.execute(() -> {
+            Map<String, Object> next = g;
+            while (next != null) {
+                try {
+                    client.send("POST", base + "/api/player/ghost", Map.of("Content-Type", "application/json", "X-SLT-Player", secret),
+                            Json.stringify(next).getBytes(StandardCharsets.UTF_8), 4000);
+                } catch (IOException | RuntimeException e) {
+                    // the next reading will try again
+                }
+                synchronized (ghostLock) {
+                    next = ghostPending;
+                    ghostPending = null;
+                    if (next == null) {
+                        ghostBusy = false;
+                    }
                 }
             }
-            sendGhost(next);
         });
     }
 
     private synchronized void post(String path, Map<String, Object> body) {
-        HttpRequest r = HttpRequest.newBuilder(URI.create(base + path))
-                .timeout(Duration.ofSeconds(5))
-                .header("Content-Type", "application/json")
-                .header("X-SLT-Player", secret)
-                .POST(HttpRequest.BodyPublishers.ofString(Json.stringify(body), StandardCharsets.UTF_8))
-                .build();
+        byte[] json = Json.stringify(body).getBytes(StandardCharsets.UTF_8);
         // keep messages ordered: each request waits for the previous one
-        last = last.handle((x, e) -> null).thenCompose(x -> client.sendAsync(r, HttpResponse.BodyHandlers.discarding()))
-                .exceptionally(e -> {
-                    Log.warn("SLT injoignable depuis le lecteur : " + e.getMessage());
-                    return null;
-                });
+        last = ordered.submit(() -> {
+            try {
+                client.send("POST", base + path, Map.of("Content-Type", "application/json", "X-SLT-Player", secret), json, 5000);
+            } catch (IOException | RuntimeException e) {
+                Log.warn("SLT injoignable depuis le lecteur : " + e.getMessage());
+            }
+        });
     }
 
     void flush() {
         sendBatch();
+        Future<?> f;
+        synchronized (this) {
+            f = last;
+        }
+        if (f == null) {
+            return;
+        }
         try {
-            last.get(3, java.util.concurrent.TimeUnit.SECONDS);
+            f.get(3, TimeUnit.SECONDS);
         } catch (Exception ignored) {
             // the application may already be closed
         }

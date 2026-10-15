@@ -159,6 +159,8 @@ export function connectStream() {
   handle('update', (u) => { if (store.state) store.state.update = u; emit('update', u); emit('state', store.state); });
   handle('player', (p) => { if (store.state) store.state.player = p; emit('player', p); });
   handle('rom', (r) => emit('rom', r));
+  // the phone: ROM files picked in Android's file picker, being copied and added (a job to follow)
+  handle('rom-import', (d) => emit('rom-import', d));
   handle('room', (room) => {
     const known = store.rooms.get(room.id);
     store.rooms.set(room.id, known && !room.zones && known.zones ? { ...known, ...room } : room);

@@ -41,6 +41,13 @@ public final class Jobs {
         return t;
     });
 
+    /** Runs a short task on a thread of its own (requests sent in parallel, uploads). */
+    public static void background(String name, Runnable task) {
+        Thread t = new Thread(task, name);
+        t.setDaemon(true);
+        t.start();
+    }
+
     public String start(String label, Task task) {
         String id = Ids.id(12);
         Job job = new Job(id, label);

@@ -3,6 +3,7 @@
 import { h, mount, btn, avatar, act, toast, modal } from '../ui.js';
 import { srv } from '../api.js';
 import { store, on, refreshFriends } from '../store.js';
+import { mobile } from '../platform.js';
 
 export function renderFriends(container) {
   const page = h('div', { class: 'page narrow' });
@@ -56,7 +57,7 @@ export function renderFriends(container) {
     mount(page,
       h('div', { class: 'page-head' }, h('div', null, h('h1', null, 'Amis'), h('p', null, 'Ajoutez vos amis pour les inviter en un clic.'))),
       h('form', { class: 'card', onsubmit: (e) => { e.preventDefault(); if (input.value.trim()) send(e.submitter, input.value.trim()); } },
-        h('div', { class: 'row' }, h('div', { class: 'grow' }, input), btn('Envoyer une demande', null, { kind: 'primary', type: 'submit' })),
+        h('div', { class: 'row' }, h('div', { class: 'grow' }, input), btn(mobile ? 'Ajouter' : 'Envoyer une demande', null, { kind: 'primary', type: 'submit' })),
         suggestions),
       f.incoming.length ? [h('div', { class: 'section-title' }, h('h2', null, 'Demandes reçues')),
         h('div', { class: 'card', style: { padding: '4px 16px' } }, h('div', { class: 'list' }, f.incoming.map((u) => h('div', { class: 'list-item' },

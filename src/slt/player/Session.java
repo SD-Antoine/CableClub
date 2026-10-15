@@ -1,16 +1,10 @@
 package slt.player;
 
 import slt.Ghosts;
+import slt.Images;
 import slt.Json;
 import slt.Log;
 
-import javax.imageio.IIOImage;
-import javax.imageio.ImageIO;
-import javax.imageio.ImageWriteParam;
-import javax.imageio.ImageWriter;
-import javax.imageio.stream.MemoryCacheImageOutputStream;
-import java.awt.image.BufferedImage;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -140,6 +134,11 @@ final class Session {
             statesAllowed = allowed;
             sendInfo();
         }
+    }
+
+    /** Ends the game as the window's "quit" does: the save is written, then the player stops. */
+    void quit() {
+        running = false;
     }
 
     void start() {
@@ -462,21 +461,8 @@ final class Session {
         int[] copy = java.util.Arrays.copyOf(px, w * h);
         encoder.execute(() -> {
             try {
-                BufferedImage img = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
-                img.setRGB(0, 0, w, h, copy, 0, w);
-                ImageWriter writer = ImageIO.getImageWritersByFormatName("jpeg").next();
-                ByteArrayOutputStream bytes = new ByteArrayOutputStream(16384);
-                try (MemoryCacheImageOutputStream out = new MemoryCacheImageOutputStream(bytes)) {
-                    writer.setOutput(out);
-                    ImageWriteParam p = writer.getDefaultWriteParam();
-                    p.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
-                    p.setCompressionQuality(0.7f);
-                    writer.write(null, new IIOImage(img, null, null), p);
-                } finally {
-                    writer.dispose();
-                }
-                bridge.screen(bytes.toByteArray());
-            } catch (IOException | RuntimeException e) {
+                bridge.screen(Images.jpeg(copy, w, h, 0.7f));
+            } catch (RuntimeException e) {
                 // a missed image is not a problem
             } finally {
                 encoding.set(false);
@@ -587,7 +573,7 @@ final class Session {
             case "save-state" -> saveState((int) Json.num(m, "slot", 1));
             case "load-state" -> loadState((int) Json.num(m, "slot", 1));
             case "screenshot" -> screenshot();
-            case "quit" -> running = false;
+            case "quit" -> quit();
             default -> {
                 // unknown command
             }
@@ -646,12 +632,11 @@ final class Session {
             if (w <= 0 || h <= 0) {
                 return;
             }
-            BufferedImage img = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
-            img.setRGB(0, 0, w, h, core.pixels(), 0, w);
+            byte[] png = Images.pngOpaque(core.pixels(), w, h);
             try {
                 Files.createDirectories(captureDir);
                 Path f = captureDir.resolve("capture-" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")) + ".png");
-                ImageIO.write(img, "png", f.toFile());
+                Files.write(f, png);
                 message("Capture enregistrée");
             } catch (IOException e) {
                 message("Erreur : " + e.getMessage());

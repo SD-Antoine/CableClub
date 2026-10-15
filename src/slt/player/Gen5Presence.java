@@ -2,9 +2,7 @@ package slt.player;
 
 import slt.player.track.NdsReader;
 
-import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
-import java.nio.ByteOrder;
+import java.nio.ByteBuffer;
 
 /**
  * Where the player stands in generation 5 (Black / White, Black 2 / White 2), read on
@@ -33,8 +31,6 @@ import java.nio.ByteOrder;
 final class Gen5Presence implements Presence {
 
     private static final long RAM = 0x02000000L;
-    private static final ValueLayout.OfInt I32 = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-    private static final ValueLayout.OfShort U16 = ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
     private static final int FX = 4096;
     /** Searches of a lost structure in the whole 4 MB (a few milliseconds) are spaced out. */
     private static final long SEARCH_MS = 250;
@@ -47,7 +43,7 @@ final class Gen5Presence implements Presence {
     private final NdsReader reader;
     private final Gen5Sprites sprites;
     private final Gen5Sprites.Set set;
-    private MemorySegment ram;
+    private ByteBuffer ram;
     private int glb = -1;
     private int player = -1;
     private int billboard = -1;
@@ -137,7 +133,7 @@ final class Gen5Presence implements Presence {
     public Sample sample(CoreHost core) {
         if (ram == null) {
             ram = core.systemRam();
-            if (ram == null || ram.byteSize() < 4 << 20) {
+            if (ram == null || ram.capacity() < 4 << 20) {
                 ram = null;
                 return null;
             }
@@ -151,7 +147,7 @@ final class Gen5Presence implements Presence {
         int bx = i32(billboard);
         int by = i32(billboard + 4);
         int bz = i32(billboard + 8);
-        int image = ram.get(ValueLayout.JAVA_BYTE, billboard + 12) & 0xFF;
+        int image = ram.get(billboard + 12) & 0xFF;
         int map = map();
         if (map < 0) {
             return null;
@@ -229,7 +225,7 @@ final class Gen5Presence implements Presence {
         }
         float[] buffer = new float[4 * MAX_OTHERS];
         int n = 0;
-        long limit = ram.byteSize() - 0x300;
+        long limit = ram.capacity() - 0x300;
         for (int k = -63; k <= 63 && n < MAX_OTHERS; k++) {
             int o = player + k * 0x100;
             // in use (bit 0), and placed on the map (bit 14 of the second word: the ones of other maps keep a ground height of 1)
@@ -306,7 +302,7 @@ final class Gen5Presence implements Presence {
             return false;
         }
         nextSearch = now + SEARCH_MS;
-        int size = (int) ram.byteSize() - 0x300;
+        int size = ram.capacity() - 0x300;
         for (int o = 0; o < size && glb < 0; o += 4) {
             if (isGlb(o)) {
                 glb = o;
@@ -331,7 +327,7 @@ final class Gen5Presence implements Presence {
     }
 
     private boolean inside(int o) {
-        return o >= 0 && o < ram.byteSize() - 0x300;
+        return o >= 0 && o < ram.capacity() - 0x300;
     }
 
     private boolean isGlb(int o) {
@@ -421,7 +417,7 @@ final class Gen5Presence implements Presence {
      */
     private void readSprite(int image) {
         long g = reader.genderAddress();
-        int girl = g < RAM ? 0 : ram.get(ValueLayout.JAVA_BYTE, g - RAM) & 1;
+        int girl = g < RAM ? 0 : ram.get((int) (g - RAM)) & 1;
         int file = girl == 1 ? set.girl() : set.boy();
         int code = u16(player + 0x0C);
         int count = sprites.frames(file);
@@ -504,10 +500,10 @@ final class Gen5Presence implements Presence {
     }
 
     private int i32(int o) {
-        return ram.get(I32, o);
+        return ram.getInt(o);
     }
 
     private int u16(int o) {
-        return ram.get(U16, o) & 0xFFFF;
+        return ram.getShort(o) & 0xFFFF;
     }
 }

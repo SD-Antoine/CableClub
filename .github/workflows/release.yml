@@ -1,6 +1,11 @@
 # Pushing a tag vX.Y.Z builds Cable Club on Windows and publishes the GitHub release
-# (zip + SHA-256). The notes are the "## X.Y.Z" section of CHANGELOG.md.
+# (zip + SHA-256, and the Android APK + SHA-256). The notes are the "## X.Y.Z" section of CHANGELOG.md.
 # Cable Club checks the latest release to offer the update to its users.
+#
+# The APK is signed with the release key, given by four secrets of the repository:
+# ANDROID_KEYSTORE_BASE64 (the .jks file in base64), ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS,
+# ANDROID_KEY_PASSWORD. Without them the release has no APK (never one signed with another key:
+# Android would refuse it as an update).
 name: Release
 
 on:
@@ -38,6 +43,35 @@ jobs:
         shell: powershell
         run: .\.github\smoke-test.ps1 -Image dist\CableClub -Version $env:VERSION
 
+      - name: Android signing key
+        id: signing
+        shell: powershell
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if (-not $env:KEYSTORE) { Write-Host '::warning::Pas de cle de signature Android (secrets) : pas d APK'; exit 0 }
+          $jks = Join-Path $env:RUNNER_TEMP 'android-release.jks'
+          [IO.File]::WriteAllBytes($jks, [Convert]::FromBase64String($env:KEYSTORE))
+          $props = Join-Path $env:RUNNER_TEMP 'android-signing.properties'
+          function Prop($v) { $v.Replace('\', '\\') }   # a .properties file reads \ as an escape
+          $lines = @("storeFile=$($jks.Replace('\', '/'))", "storePassword=$(Prop $env:STORE_PASSWORD)", "keyAlias=$(Prop $env:KEY_ALIAS)", "keyPassword=$(Prop $env:KEY_PASSWORD)")
+          [IO.File]::WriteAllLines($props, $lines)
+          "CABLECLUB_SIGNING=$props" | Out-File -Append -Encoding ascii $env:GITHUB_ENV
+          "ok=true" | Out-File -Append -Encoding ascii $env:GITHUB_OUTPUT
+
+      - name: Build Android
+        if: steps.signing.outputs.ok == 'true'
+        shell: powershell
+        run: |
+          $sdkmanager = Join-Path $env:ANDROID_HOME 'cmdline-tools\latest\bin\sdkmanager.bat'
+          "y`ny`ny`ny`ny`ny`ny`ny`n" | & $sdkmanager --licenses | Out-Null
+          & $sdkmanager 'platforms;android-36.1' 'ndk;29.0.14206865' 'build-tools;36.0.0' | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'sdkmanager a echoue' }
+          .\build-android.ps1
+
       - name: Notes
         shell: powershell
         run: |
@@ -61,5 +95,8 @@ jobs:
           $zip = Get-Item "dist\CableClub-$env:VERSION-windows-x64.zip"
           $hash = (Get-FileHash -Algorithm SHA256 $zip.FullName).Hash.ToLower()
           [IO.File]::WriteAllText("$($zip.FullName).sha256", "$hash  $($zip.Name)`n")
-          gh release create '${{ github.ref_name }}' $zip.FullName "$($zip.FullName).sha256" --title "Cable Club $env:VERSION" --notes-file notes.md
+          $files = @($zip.FullName, "$($zip.FullName).sha256")
+          $apk = "dist\CableClub-$env:VERSION-android.apk"
+          if (Test-Path $apk) { $files += @($apk, "$apk.sha256") }
+          gh release create '${{ github.ref_name }}' @files --title "Cable Club $env:VERSION" --notes-file notes.md
           if ($LASTEXITCODE -ne 0) { throw 'gh release create a echoue' }

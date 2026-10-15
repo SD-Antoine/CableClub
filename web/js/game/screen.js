@@ -1,5 +1,5 @@
 // The game inside the SLT window: images from the player (WebSocket, RGBA),
-// keyboard and mouse back to it.
+// keyboard, mouse or finger (and on the phone the touch buttons and gamepads) back to it.
 
 import { BUTTONS, keyName } from './keys.js';
 
@@ -17,6 +17,8 @@ export class GameScreen {
     this.ws = null;
     this.pending = null;
     this.mask = 0;
+    // buttons held elsewhere than on the keyboard (the phone's touch buttons, a gamepad), by source
+    this.extra = new Map();
     this.held = new Set();
     this.w = 0;
     this.h = 0;
@@ -26,7 +28,7 @@ export class GameScreen {
     this.onKeyUp = (e) => this.key(e, false);
     this.onBlur = () => this.releaseAll();
     this.pointerDown = false;
-    this.onMouse = (e) => this.mouse(e);
+    this.onPointer = (e) => this.pointer(e);
     // DS: 'v' = top screen above the touch screen (as the console), 'h' = side by side (touch screen on the right)
     this.layout = 'v';
     this.split = false;
@@ -44,7 +46,7 @@ export class GameScreen {
     this.closedOnPurpose = false;
     const ws = new WebSocket(`ws://127.0.0.1:${port}/?t=${encodeURIComponent(token)}`);
     ws.binaryType = 'arraybuffer';
-    ws.onopen = () => { this.handlers.onOpen?.(); this.send({ t: 'keys', m: this.mask }); };
+    ws.onopen = () => { this.handlers.onOpen?.(); this.sendKeys(); };
     ws.onmessage = (e) => {
       if (typeof e.data === 'string') {
         let m;
@@ -63,18 +65,14 @@ export class GameScreen {
     window.addEventListener('keydown', this.onKeyDown, true);
     window.addEventListener('keyup', this.onKeyUp, true);
     window.addEventListener('blur', this.onBlur);
-    this.canvas.addEventListener('mousedown', this.onMouse);
-    window.addEventListener('mousemove', this.onMouse);
-    window.addEventListener('mouseup', this.onMouse);
+    for (const t of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel']) this.canvas.addEventListener(t, this.onPointer);
   }
 
   close() {
     window.removeEventListener('keydown', this.onKeyDown, true);
     window.removeEventListener('keyup', this.onKeyUp, true);
     window.removeEventListener('blur', this.onBlur);
-    this.canvas.removeEventListener('mousedown', this.onMouse);
-    window.removeEventListener('mousemove', this.onMouse);
-    window.removeEventListener('mouseup', this.onMouse);
+    for (const t of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel']) this.canvas.removeEventListener(t, this.onPointer);
     if (this.ws) {
       const ws = this.ws;
       this.ws = null;
@@ -94,6 +92,20 @@ export class GameScreen {
 
   cmd(c, extra = {}) {
     this.send({ t: 'cmd', c, ...extra });
+  }
+
+  /** The buttons held: the keyboard's and every other source's. */
+  sendKeys() {
+    let m = this.mask;
+    for (const x of this.extra.values()) m |= x;
+    this.send({ t: 'keys', m });
+  }
+
+  /** Buttons held by another source than the keyboard ('touch', 'pad'). */
+  setMask(source, mask) {
+    if ((this.extra.get(source) || 0) === mask) return;
+    this.extra.set(source, mask);
+    this.sendKeys();
   }
 
   /** Draws the latest image only (older ones were replaced before the screen refreshed). */
@@ -180,7 +192,7 @@ export class GameScreen {
     }
     if (used) {
       e.preventDefault();
-      this.send({ t: 'keys', m: this.mask });
+      this.sendKeys();
       return;
     }
     if (k === this.keys.FAST_HOLD) {
@@ -199,16 +211,22 @@ export class GameScreen {
 
   releaseAll() {
     this.mask = 0;
+    this.extra.clear();
     this.send({ t: 'keys', m: 0 });
     if (this.held.has('ff')) { this.held.delete('ff'); this.cmd('ff-hold', { on: false }); }
   }
 
-  /** Mouse = stylus on the DS touch screen (libretro pointer coordinates over the whole image). */
-  mouse(e) {
+  /** Mouse or finger = stylus on the DS touch screen (libretro pointer coordinates over the whole image). */
+  pointer(e) {
     if (!this.w) return;
-    if (e.type === 'mousedown') this.pointerDown = true;
-    if (e.type === 'mouseup') { if (!this.pointerDown) return; this.pointerDown = false; }
-    if (e.type === 'mousemove' && !this.pointerDown) return;
+    if (e.type === 'pointerdown') {
+      this.pointerDown = true;
+      // the moves outside the image still belong to this stroke
+      try { this.canvas.setPointerCapture(e.pointerId); } catch { /* already released */ }
+      e.preventDefault();
+    }
+    if (e.type === 'pointerup' || e.type === 'pointercancel') { if (!this.pointerDown) return; this.pointerDown = false; }
+    if (e.type === 'pointermove' && !this.pointerDown) return;
     const r = this.canvas.getBoundingClientRect();
     let fx = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
     let fy = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));

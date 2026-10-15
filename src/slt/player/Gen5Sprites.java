@@ -1,10 +1,8 @@
 package slt.player;
 
+import slt.Images;
 import slt.Log;
 
-import javax.imageio.ImageIO;
-import java.awt.image.BufferedImage;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
@@ -12,7 +10,6 @@ import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -85,7 +82,7 @@ final class Gen5Sprites {
         if (btx != null) {
             List<Texture> t = textures(btx, byNumber);
             if (frame >= 0 && frame < t.size()) {
-                png = encode(t.get(frame).image);
+                png = Images.pngBase64(t.get(frame).argb, t.get(frame).w, t.get(frame).h);
             }
         }
         cache.put(key, png);
@@ -99,7 +96,7 @@ final class Gen5Sprites {
             if (btx != null) {
                 List<Texture> t = textures(btx, byNumber);
                 if (frame >= 0 && frame < t.size()) {
-                    return new int[]{t.get(frame).image.getWidth(), t.get(frame).image.getHeight()};
+                    return new int[]{t.get(frame).w, t.get(frame).h};
                 }
             }
             return new int[]{32, 32};
@@ -152,7 +149,7 @@ final class Gen5Sprites {
             List<byte[]> out = new ArrayList<>(n);
             for (int[] e : entries) {
                 byte[] b = new byte[e[1] - e[0]];
-                d.get(base + e[0], b);
+                copy(d, base + e[0], b);
                 out.add(b);
             }
             return out;
@@ -181,7 +178,7 @@ final class Gen5Sprites {
             }
             int len = t & 0x7F;
             byte[] name = new byte[len];
-            fnt.get(p, name);
+            copy(fnt, p, name);
             p += len;
             boolean match = new String(name, StandardCharsets.ISO_8859_1).equals(path[depth]);
             if ((t & 0x80) != 0) {
@@ -201,7 +198,8 @@ final class Gen5Sprites {
 
     // ------------------------------------------------------------- NSBTX textures
 
-    private record Texture(BufferedImage image, String name) {
+    /** A texture drawn as ARGB pixels. */
+    private record Texture(int[] argb, int w, int h, String name) {
     }
 
     /** Every texture of an NSBTX file, drawn with its first palette (in the order of their numbers if asked). */
@@ -232,7 +230,7 @@ final class Gen5Sprites {
             int h = 8 << ((params >> 7) & 7);
             int format = (params >> 10) & 7;
             boolean color0 = ((params >> 13) & 1) != 0;
-            out.add(new Texture(draw(d, offset, w, h, format, color0, palette), i < names.size() ? names.get(i) : ""));
+            out.add(new Texture(draw(d, offset, w, h, format, color0, palette), w, h, i < names.size() ? names.get(i) : ""));
         }
         if (byNumber && out.stream().allMatch(t -> number(t.name()) >= 0)) {
             out.sort(java.util.Comparator.comparingInt(t -> number(t.name())));
@@ -259,7 +257,7 @@ final class Gen5Sprites {
         List<String> out = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
             byte[] n = new byte[16];
-            d.get(q + 16 * i, n);
+            copy(d, q + 16 * i, n);
             int len = 0;
             while (len < 16 && n[len] != 0) {
                 len++;
@@ -278,14 +276,21 @@ final class Gen5Sprites {
         List<byte[]> out = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
             byte[] e = new byte[size];
-            d.get(q + i * size, e);
+            copy(d, q + i * size, e);
             out.add(e);
         }
         return out;
     }
 
-    private static BufferedImage draw(ByteBuffer d, int o, int w, int h, int format, boolean color0, int palette) {
-        BufferedImage img = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+    /** The bytes at an offset of a buffer (ByteBuffer.get(int, byte[]) is missing before Android 15). */
+    private static void copy(ByteBuffer from, int at, byte[] to) {
+        ByteBuffer d = from.duplicate();
+        d.position(at);
+        d.get(to);
+    }
+
+    private static int[] draw(ByteBuffer d, int o, int w, int h, int format, boolean color0, int palette) {
+        int[] img = new int[w * h];
         for (int y = 0; y < h; y++) {
             for (int x = 0; x < w; x++) {
                 int n = y * w + x;
@@ -319,19 +324,9 @@ final class Gen5Sprites {
                 int r = (c & 31) << 3;
                 int g = ((c >> 5) & 31) << 3;
                 int bl = ((c >> 10) & 31) << 3;
-                img.setRGB(x, y, (alpha << 24) | (r << 16) | (g << 8) | bl);
+                img[y * w + x] = (alpha << 24) | (r << 16) | (g << 8) | bl;
             }
         }
         return img;
-    }
-
-    private static String encode(BufferedImage img) {
-        try {
-            ByteArrayOutputStream out = new ByteArrayOutputStream(1024);
-            ImageIO.write(img, "png", out);
-            return Base64.getEncoder().encodeToString(out.toByteArray());
-        } catch (IOException e) {
-            return null;
-        }
     }
 }

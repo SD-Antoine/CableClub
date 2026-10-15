@@ -2,9 +2,7 @@ package slt.player;
 
 import slt.player.track.NdsReader;
 
-import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
-import java.nio.ByteOrder;
+import java.nio.ByteBuffer;
 
 /**
  * Where the player stands in generation 4 (Diamond / Pearl, Platinum, HeartGold / SoulSilver),
@@ -51,8 +49,6 @@ final class Gen4Presence implements Presence {
     }
 
     private static final long RAM = 0x02000000L;
-    private static final ValueLayout.OfInt I32 = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-    private static final ValueLayout.OfShort U16 = ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
     private static final int FX = 4096;
     private static final int TILE = 16 * FX;
     private static final long SEARCH_MS = 250;
@@ -74,7 +70,7 @@ final class Gen4Presence implements Presence {
     private final Gen5Sprites.Set set;
     private final int stride;
     private final Gen4Followers followers;
-    private MemorySegment ram;
+    private ByteBuffer ram;
     private int glb = -1;
     private int player = -1;
     private long nextSearch;
@@ -179,7 +175,7 @@ final class Gen4Presence implements Presence {
     public Sample sample(CoreHost core) {
         if (ram == null) {
             ram = core.systemRam();
-            if (ram == null || ram.byteSize() < 4 << 20) {
+            if (ram == null || ram.capacity() < 4 << 20) {
                 ram = null;
                 return null;
             }
@@ -280,7 +276,7 @@ final class Gen4Presence implements Presence {
             return false;
         }
         nextSearch = now + SEARCH_MS;
-        int size = (int) ram.byteSize() - 0x300;
+        int size = ram.capacity() - 0x300;
         for (int o = 0; o < size && glb < 0; o += 4) {
             if (isGlb(o)) {
                 glb = o;
@@ -295,7 +291,7 @@ final class Gen4Presence implements Presence {
     }
 
     private boolean inside(int o) {
-        return o >= 0 && o < ram.byteSize() - 0x300;
+        return o >= 0 && o < ram.capacity() - 0x300;
     }
 
     private boolean isGlb(int o) {
@@ -397,7 +393,7 @@ final class Gen4Presence implements Presence {
         float[] buffer = new float[4 * MAX_OTHERS];
         int n = 0;
         Pet pet = null;
-        long limit = ram.byteSize() - 0x300;
+        long limit = ram.capacity() - 0x300;
         for (int k = 1; k < 64; k++) {
             int o = player + k * stride;
             if (o + stride > limit) {
@@ -479,7 +475,7 @@ final class Gen4Presence implements Presence {
      */
     private void readSprite(int px, int pz) {
         long g = reader.genderAddress();
-        int girl = g < RAM ? 0 : ram.get(ValueLayout.JAVA_BYTE, g - RAM) & 1;
+        int girl = g < RAM ? 0 : ram.get((int) (g - RAM)) & 1;
         int file = girl == 1 ? set.girl() : set.boy();
         int count = sprites.frames(file);
         if (count < 16) {
@@ -518,10 +514,10 @@ final class Gen4Presence implements Presence {
     }
 
     private int i32(int o) {
-        return ram.get(I32, o);
+        return ram.getInt(o);
     }
 
     private int u16(int o) {
-        return ram.get(U16, o) & 0xFFFF;
+        return ram.getShort(o) & 0xFFFF;
     }
 }

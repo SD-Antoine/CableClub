@@ -16,6 +16,8 @@ import { renderLibrary } from './views/library.js';
 import { renderSettings, settingsPage, SETTINGS_MENU } from './views/settings.js';
 import { openUpdate, updateLink } from './views/update.js';
 import { watchBattles } from './views/battle.js';
+import { renderMe } from './views/me.js';
+import { mobile } from './platform.js';
 
 const root = document.getElementById('root');
 let cleanup = null;
@@ -51,8 +53,10 @@ function parse() {
     case 'salle': return { id: 'room', roomId: parts[1] };
     case 'jouer': return { id: 'play', roomId: parts[1] };
     case 'amis': return { id: 'friends' };
-    case 'chat': return { id: 'chat', ch: parts[1] || 'global' };
+    // the phone shows the list of the conversations first, then the one opened
+    case 'chat': return { id: 'chat', ch: parts[1] || (mobile ? null : 'global') };
     case 'profil': return { id: 'profile' };
+    case 'moi': return { id: 'me' };
     // older links of the history (before the tabs of the modes)
     case 'historique': return parts[1] ? { id: 'room', roomId: parts[1], history: true } : { id: 'mode', mode: 'soullink', tab: 'historique' };
     case 'roms': return { id: 'library' };
@@ -113,6 +117,33 @@ function settingsMenu(route) {
     settingsOpen ? h('div', { class: 'nav-sub' }, SETTINGS_MENU.map((m) => entry(m, 1))) : null);
 }
 
+/**
+ * The phone's bottom bar (on the side when the phone is held sideways): the rooms of the game modes, the friends,
+ * the chat, the ROMs and « Moi » (profile and settings).
+ */
+function tabBar(active) {
+  const user = me();
+  const friendsCount = store.friends.incoming.length;
+  const unread = chatUnread();
+  const invites = pendingInvites().length;
+  const upd = store.state?.update?.state === 'available';
+  const tab = (id, hash, label, iconName, count) => h('a', { class: ['tab-item', active === id && 'active'], href: hash },
+    iconName === 'me' ? avatar(user?.name, 1, { size: 's', id: user?.avatar ? user.id : null, pic: user?.avatar || 0 }) : icon(iconName),
+    h('span', null, label), count ? h('span', { class: 'count' }, count > 99 ? '99+' : count) : null);
+  return h('nav', { class: 'tabbar' },
+    tab('rooms', '#/', 'Salles', 'rooms', invites),
+    tab('friends', '#/amis', 'Amis', 'friends', friendsCount),
+    tab('chat', '#/chat', 'Chat', 'chat', unread),
+    tab('library', '#/roms', 'ROMs', 'rom', 0),
+    tab('me', '#/moi', 'Moi', 'me', upd ? '1' : 0));
+}
+
+function activeTab(r) {
+  if (r.id === 'room' || r.id === 'play' || r.id === 'mode') return 'rooms';
+  if (r.id === 'profile' || r.id === 'settings' || r.id === 'me') return 'me';
+  return r.id;
+}
+
 function activeNav(r) {
   if (r.id === 'room' || r.id === 'play') return `mode:${store.rooms.get(r.roomId)?.mode || 'soullink'}`;
   if (r.id === 'mode') return `mode:${r.mode}`;
@@ -121,6 +152,11 @@ function activeNav(r) {
 
 function layout(r) {
   const main = h('main', { class: 'main', id: 'main' });
+  if (mobile) {
+    // the game takes the whole screen of the phone
+    mount(root, h('div', { class: ['app', 'phone', r.id === 'play' && 'playing'] }, main, r.id === 'play' ? null : tabBar(activeTab(r))));
+    return main;
+  }
   mount(root, h('div', { class: ['app', r.id === 'play' && 'compact'] }, rail(activeNav(r), r), main));
   return main;
 }
@@ -146,6 +182,7 @@ async function route() {
       case 'friends': cleanup = renderFriends(main); break;
       case 'chat': cleanup = renderChat(main, r.ch); break;
       case 'profile': cleanup = renderProfile(main); break;
+      case 'me': cleanup = renderMe(main); break;
       case 'library': cleanup = renderLibrary(main); break;
       case 'settings': cleanup = renderSettings(main, { applyTheme, tab: r.tab }); break;
       default: cleanup = renderMode(main, r.mode, r.tab); break;
@@ -159,6 +196,11 @@ async function route() {
 /** Re-draws the rail (badges, connection) without touching the page. */
 function refreshRail() {
   if (!loggedIn() || !currentRoute) return;
+  if (mobile) {
+    const bar = root.querySelector('.app > .tabbar');
+    if (bar) bar.replaceWith(tabBar(activeTab(currentRoute)));
+    return;
+  }
   const old = root.querySelector('.app > .rail');
   if (old) old.replaceWith(rail(activeNav(currentRoute), currentRoute));
 }
@@ -212,6 +254,7 @@ async function refreshAll() {
 }
 
 async function boot() {
+  document.documentElement.classList.toggle('mobile', mobile);
   try {
     await refreshState();
   } catch (e) {
@@ -259,7 +302,8 @@ async function boot() {
   on('update', tellUpdate);
   window.addEventListener('hashchange', route);
   // the window closes (or reloads): the application closes too unless a window comes back
-  let saidBye = false;
+  // (on the phone, the app's own window never closes without the app)
+  let saidBye = mobile;
   const bye = () => {
     if (saidBye) return;
     saidBye = true;

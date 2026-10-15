@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The interface talks to the app on 127.0.0.1 (plain HTTP, never leaves the phone); a server typed as http://
+     (a PC of the same Wi-Fi without encryption, tests) is allowed as on the PC. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

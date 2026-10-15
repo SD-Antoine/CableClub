@@ -250,7 +250,7 @@ public final class Http {
         } else {
             try (InputStream in = Http.class.getResourceAsStream("/web" + path)) {
                 if (in != null) {
-                    data = in.readAllBytes();
+                    data = Io.readAll(in);
                 }
             }
         }

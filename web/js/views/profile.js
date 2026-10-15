@@ -1,10 +1,11 @@
 // Profiles: a player's card (any name or picture opens it) and the page where
 // the player edits theirs (picture, name, bio, favourite game and Pokémon).
 
-import { h, mount, btn, avatar, modal, act, toast, errorToast, field, confirmDialog, dateTime, keepScroll } from '../ui.js';
+import { h, mount, btn, avatar, modal, act, toast, errorToast, field, confirmDialog, dateTime, keepScroll, icon } from '../ui.js';
 import { local, srv } from '../api.js';
 import { store, refreshState, refreshFriends, me } from '../store.js';
 import { GAMES, gameName } from '../data/games.js';
+import { mobile } from '../platform.js';
 
 const BIO_MAX = 160;
 
@@ -135,7 +136,9 @@ export function renderProfile(container) {
 
     const restore = keepScroll(page);
     mount(page,
-      h('div', { class: 'page-head' }, h('div', null, h('h1', null, 'Mon profil'), h('p', null, 'Ce que les autres joueurs voient en cliquant sur votre nom ou votre photo.'))),
+      h('div', { class: 'page-head' }, h('div', { class: mobile ? 'row top' : null },
+        mobile ? h('a', { class: 'btn ghost icon-only', href: '#/moi', title: 'Retour' }, icon('back')) : null,
+        h('div', null, h('h1', null, 'Mon profil'), h('p', null, 'Ce que les autres joueurs voient en cliquant sur votre nom ou votre photo.')))),
       h('div', { class: 'card' }, h('div', { class: 'row' },
         avatar(u.name, 1, { size: 'xl', id: u.id, pic: u.avatar }),
         h('div', { class: 'grow stack s' }, h('b', null, 'Photo de profil'),

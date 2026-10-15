@@ -4,6 +4,8 @@ import slt.server.Certificates;
 
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLEngine;
+import javax.net.ssl.SSLPeerUnverifiedException;
+import javax.net.ssl.SSLSession;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.X509ExtendedTrustManager;
@@ -14,6 +16,7 @@ import java.security.KeyStore;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 /**
@@ -58,6 +61,29 @@ final class PinnedTls {
         } catch (GeneralSecurityException e) {
             throw new IllegalStateException(e);
         }
+    }
+
+    /**
+     * Whether a connection was accepted by its certificate's fingerprint (or by "accept any"): the fingerprint then
+     * stands for the check of the server's name, which the system would refuse (a server of its own has no
+     * certificate for the address typed). See {@link slt.Net#client}.
+     */
+    static Predicate<SSLSession> pinnedBy(Supplier<String> pin, boolean acceptAny) {
+        return session -> {
+            if (acceptAny) {
+                return true;
+            }
+            String expected = pin.get();
+            if (expected == null) {
+                return false;
+            }
+            try {
+                java.security.cert.Certificate[] chain = session.getPeerCertificates();
+                return chain.length > 0 && expected.equalsIgnoreCase(Certificates.sha256(chain[0].getEncoded()));
+            } catch (SSLPeerUnverifiedException | java.security.cert.CertificateEncodingException e) {
+                return false;
+            }
+        };
     }
 
     /** Another server answered (not the certificate of the invitation code). */

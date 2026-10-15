@@ -1,7 +1,5 @@
 package slt.player;
 
-import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
@@ -29,14 +27,12 @@ final class Gen4Followers {
     private static final int BEFORE = 12 * 700;
     private static final int AFTER = 12 * 700;
     private static final long RETRY_MS = 3000;
-    private static final ValueLayout.OfInt I32 = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
-    private static final ValueLayout.OfShort U16 = ValueLayout.JAVA_SHORT_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN);
 
     private ByteBuffer table; // the entries around the reference, the entry of graphics id GFX_REF - 700 first
     private long nextSearch;
 
     /** Member of the overworld archive drawn for a follower graphics id, -1 if it is not a follower (or the table is not found yet). */
-    int member(MemorySegment ram, int gfx) {
+    int member(ByteBuffer ram, int gfx) {
         if (table == null) {
             long now = System.currentTimeMillis();
             if (now < nextSearch) {
@@ -57,33 +53,33 @@ final class Gen4Followers {
     }
 
     /** Offset in the RAM of the entry of the reference member, -1 if the table is not there. */
-    static long locate(MemorySegment ram) {
-        long size = ram.byteSize();
-        for (long o = 0; o + 48 <= size; o += 4) {
-            if (ram.get(I32, o) == MEMBER_REF - 1 && entry(ram, o) && entry(ram, o + 12) && entry(ram, o + 24) && entry(ram, o + 36)
-                    && ram.get(I32, o + 12) == MEMBER_REF && ram.get(I32, o + 24) == MEMBER_REF + 1 && ram.get(I32, o + 36) == MEMBER_REF + 2) {
+    static long locate(ByteBuffer ram) {
+        int size = ram.capacity();
+        for (int o = 0; o + 48 <= size; o += 4) {
+            if (ram.getInt(o) == MEMBER_REF - 1 && entry(ram, o) && entry(ram, o + 12) && entry(ram, o + 24) && entry(ram, o + 36)
+                    && ram.getInt(o + 12) == MEMBER_REF && ram.getInt(o + 24) == MEMBER_REF + 1 && ram.getInt(o + 36) == MEMBER_REF + 2) {
                 return o + 12;
             }
         }
         return -1;
     }
 
-    private static ByteBuffer find(MemorySegment ram) {
+    private static ByteBuffer find(ByteBuffer ram) {
         long ref = locate(ram);
         long from = ref - BEFORE;
         if (ref < 0 || from < 0) {
             return null;
         }
-        long to = Math.min(ram.byteSize(), ref + AFTER + 12);
+        long to = Math.min(ram.capacity(), ref + AFTER + 12);
         byte[] t = new byte[BEFORE + AFTER + 12];
-        MemorySegment.copy(ram, ValueLayout.JAVA_BYTE, from, t, 0, (int) (to - from));
+        Ram.copy(ram, from, t, 0, (int) (to - from));
         return ByteBuffer.wrap(t).order(ByteOrder.LITTLE_ENDIAN);
     }
 
     /** An entry of the table: the last word is 0 and the animation and the size are in the ranges seen. */
-    private static boolean entry(MemorySegment ram, long o) {
-        int animation = ram.get(U16, o + 4) & 0xFFFF;
-        int size = ram.get(U16, o + 8) & 0xFFFF;
-        return animation >= 700 && animation <= 770 && size >= 800 && size <= 1900 && ram.get(U16, o + 10) == 0;
+    private static boolean entry(ByteBuffer ram, int o) {
+        int animation = ram.getShort(o + 4) & 0xFFFF;
+        int size = ram.getShort(o + 8) & 0xFFFF;
+        return animation >= 700 && animation <= 770 && size >= 800 && size <= 1900 && ram.getShort(o + 10) == 0;
     }
 }

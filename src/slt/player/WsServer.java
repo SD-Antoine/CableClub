@@ -35,7 +35,8 @@ final class WsServer {
     private final List<Client> clients = new CopyOnWriteArrayList<>();
 
     WsServer(String token, Consumer<String> onText, Runnable onConnect) throws IOException {
-        this.socket = new ServerSocket(0, 8, InetAddress.getLoopbackAddress());
+        // 127.0.0.1, where the window connects (Android's default loopback address is ::1)
+        this.socket = new ServerSocket(0, 8, InetAddress.getByAddress(new byte[]{127, 0, 0, 1}));
         this.token = token;
         this.onText = onText;
         this.onConnect = onConnect;
@@ -186,7 +187,7 @@ final class WsServer {
                     message.write(payload);
                     if (fin && messageOp == 0x1) {
                         try {
-                            onText.accept(message.toString(StandardCharsets.UTF_8));
+                            onText.accept(new String(message.toByteArray(), StandardCharsets.UTF_8));
                         } catch (RuntimeException e) {
                             Log.warn("Commande du jeu ignorée : " + e.getMessage());
                         }

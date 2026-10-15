@@ -25,6 +25,25 @@ DeSmuME (cœur libretro) — Nintendo DS
   Binaire : app\cores\desmume_libretro.dll, compilé par le projet libretro
             (https://buildbot.libretro.com).
 
+melonDS DS (cœur libretro) — Nintendo DS, version Android
+  Auteurs : Jesse Talavera et les contributeurs de melonDS DS, d'après
+            melonDS (Arisotura et les contributeurs).
+  Licence : GNU General Public License v3
+  Source  : https://github.com/JesseTG/melonds-ds
+  Binaire : lib/*/libmelondsds_libretro_android.so de l'APK, compilé par le
+            projet libretro (https://buildbot.libretro.com).
+
+mGBA (cœur libretro), version Android
+  Comme ci-dessus (Mozilla Public License 2.0) ; binaire
+  lib/*/libmgba_libretro_android.so de l'APK, compilé par le projet libretro.
+
+desugar_jdk_libs (Android)
+  Auteurs : Google et les contributeurs d'OpenJDK.
+  Licence : GNU General Public License v2 avec « Classpath Exception ».
+  Source  : https://github.com/google/desugar_jdk_libs
+  Usage   : les classes Java récentes (java.nio.file…) sur les anciennes
+            versions d'Android, ajoutées par la compilation de l'APK.
+
 @pkmn/sim 0.10.11 — simulateur de combat de Pokémon Showdown
   Auteurs : Guangcong Luo et les contributeurs de Pokémon Showdown ;
             modifications @pkmn par les contributeurs du projet pkmn.

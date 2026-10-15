@@ -2,7 +2,7 @@ Cable Club (anciennement SLT — Soul Link Together)
 ==================================================
 
 Pokémon à plusieurs, de la 1re à la 5e génération. Premier mode de jeu : le
-Soul Link (1 à 4 joueurs) : chacun joue sa partie dans la fenêtre de Cable
+Soul Link (2 à 5 joueurs) : chacun joue sa partie dans la fenêtre de Cable
 Club, voit ses partenaires en direct, et les règles du Soul Link
 s'appliquent toutes seules dans les jeux.
 
@@ -75,6 +75,28 @@ Contrôles (AZERTY, modifiables dans Réglages > Contrôles) :
   Manettes Xbox et compatibles : reconnues automatiquement.
 
 
+SUR TÉLÉPHONE (ANDROID)
+-----------------------
+Cable Club existe aussi pour Android 11 ou plus récent : le fichier
+CableClub-x.y.z-android.apk de la page des versions (ouvrez-la sur le
+téléphone, téléchargez l'APK et ouvrez-le ; Android demande d'autoriser
+l'installation, une fois). Même compte, mêmes amis, mêmes salles : on joue
+avec les joueurs sur PC.
+- Ajoutez vos ROMs avec « ROMs » > « Ajouter des ROMs » (sélecteur de
+  fichiers d'Android ; Cable Club en garde une copie).
+- En jeu : boutons à l'écran, manette Bluetooth ou USB, écran tactile de la
+  DS au doigt. Téléphone en hauteur : les onglets Joueurs, Chat et Journal
+  en bas. En largeur : le panneau à droite (bouton de la barre du jeu).
+- Les écrans des partenaires ne s'affichent pas sur téléphone (données et
+  batterie) ; leur position dans le jeu, leur zone, le chat et le journal oui.
+- La DS est émulée par melonDS DS sur téléphone (DeSmuME sur PC) : les
+  sauvegardes du jeu passent d'un appareil à l'autre par le serveur
+  (« Récupérer ma sauvegarde du serveur »), pas les sauvegardes d'état.
+- Un téléphone n'héberge pas de serveur.
+- Il faut un « Android System WebView » à jour (version 111 ou plus
+  récente, mis à jour par le Play Store) ; sinon Cable Club l'indique.
+
+
 MISES À JOUR
 ------------
 Quand une nouvelle version sort, Cable Club l'annonce (lien « Mise à jour »
@@ -134,6 +156,7 @@ LÉGAL
 Cable Club est un projet de fans gratuit et non officiel, sous licence
 GPLv3. Il ne contient aucun jeu ni aucune ROM : utilisez uniquement des
 copies de jeux que vous possédez. Composants : Universal Pokemon Randomizer
-ZX (GPLv3), mGBA (MPL 2.0), DeSmuME (GPLv2+), Pokémon Showdown (MIT) — voir
+ZX (GPLv3), mGBA (MPL 2.0), DeSmuME (GPLv2+), melonDS DS (GPLv3, Android),
+Pokémon Showdown (MIT) — voir
 THIRD-PARTY.txt.
 Pokémon © Nintendo, Creatures, GAME FREAK.

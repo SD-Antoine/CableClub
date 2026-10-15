@@ -55,7 +55,7 @@ public final class NdsPkm {
         t = new java.util.HashMap<>();
         try (java.io.InputStream in = NdsPkm.class.getResourceAsStream("/com/dabomstew/pkrandom/config/Generation4.tbl")) {
             if (in != null) {
-                for (String line : new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8).split("\\R")) {
+                for (String line : new String(slt.Io.readAll(in), java.nio.charset.StandardCharsets.UTF_8).split("\\R")) {
                     int eq = line.indexOf('=');
                     if (eq == 4) {
                         try {

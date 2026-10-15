@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="CableClub" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/fond</item>
+        <item name="android:colorBackground">@color/fond</item>
+        <item name="android:colorAccent">@color/accent</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+    </style>
+    <color name="fond">#161616</color>
+    <color name="accent">#8AA4FF</color>
+    <color name="icone_fond">#16171B</color>
+</resources>
+

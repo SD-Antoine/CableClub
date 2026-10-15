@@ -4,21 +4,17 @@ import slt.Json;
 import slt.Log;
 import slt.player.track.Gen3Reader;
 
-import javax.imageio.ImageIO;
-import java.awt.image.BufferedImage;
-import java.io.ByteArrayOutputStream;
+import slt.Images;
+
 import java.io.IOException;
-import java.lang.foreign.MemorySegment;
+import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
-import java.util.Base64;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.zip.CRC32;
-
-import static java.lang.foreign.ValueLayout.JAVA_BYTE;
 
 /**
  * Where the player stands and what they are doing (generation 3), read on
@@ -146,15 +142,15 @@ final class Gen3Presence implements Presence {
         if (sb1 < 0 || main < 0) {
             return null;
         }
-        MemorySegment pos = core.bus(sb1, 6);
-        MemorySegment io = core.bus(IO + 0x14, 4);
-        MemorySegment gm = core.bus(main, 0x440);
+        ByteBuffer pos = core.bus(sb1, 6);
+        ByteBuffer io = core.bus(IO + 0x14, 4);
+        ByteBuffer gm = core.bus(main, 0x440);
         if (pos == null || io == null || gm == null) {
             return null;
         }
-        byte[] p = pos.toArray(JAVA_BYTE);
-        byte[] s = io.toArray(JAVA_BYTE);
-        byte[] g = gm.toArray(JAVA_BYTE);
+        byte[] p = Ram.bytes(pos);
+        byte[] s = Ram.bytes(io);
+        byte[] g = Ram.bytes(gm);
         int posX = (short) ((p[0] & 0xFF) | (p[1] << 8));
         int posY = (short) ((p[2] & 0xFF) | (p[3] << 8));
         int map = (p[4] & 0xFF) * 256 + (p[5] & 0xFF);
@@ -256,11 +252,11 @@ final class Gen3Presence implements Presence {
         if (!lockTrusted) {
             return -1;
         }
-        MemorySegment seg = core.bus(reader.fieldLockAddress(), 1);
+        ByteBuffer seg = core.bus(reader.fieldLockAddress(), 1);
         if (seg == null) {
             return -1;
         }
-        int v = seg.get(JAVA_BYTE, 0) & 0xFF;
+        int v = seg.get(0) & 0xFF;
         if (v > 1) {
             lockTrusted = false;
             Log.warn("Présence : indicateur « commandes bloquées » inattendu (" + v + "), ignoré pour cette partie.");
@@ -270,8 +266,8 @@ final class Gen3Presence implements Presence {
     }
 
     private boolean fading(CoreHost core) {
-        MemorySegment seg = core.bus(reader.paletteFadeAddress() + 7, 1);
-        return seg != null && (seg.get(JAVA_BYTE, 0) & 0x80) != 0;
+        ByteBuffer seg = core.bus(reader.paletteFadeAddress() + 7, 1);
+        return seg != null && (seg.get(0) & 0x80) != 0;
     }
 
     private static int wrap(int v) {
@@ -307,11 +303,11 @@ final class Gen3Presence implements Presence {
 
     /** The player's object: the 16x32 (or 32x32) sprite centred on the screen. @return true if found */
     private boolean readSprite(CoreHost core) {
-        MemorySegment oamSeg = core.bus(OAM, 1024);
+        ByteBuffer oamSeg = core.bus(OAM, 1024);
         if (oamSeg == null) {
             return false;
         }
-        byte[] oam = oamSeg.toArray(JAVA_BYTE);
+        byte[] oam = Ram.bytes(oamSeg);
         int best = -1;
         int bestDist = 3;
         int bw = 0;
@@ -367,13 +363,13 @@ final class Gen3Presence implements Presence {
         boolean hflip = ((a1 >> 12) & 1) != 0;
         int tile = a2 & 0x3FF;
         int bank = a2 >> 12;
-        MemorySegment tiles = core.bus(VRAM_OBJ + tile * 32L, bw * bh / 2);
-        MemorySegment pal = core.bus(PAL_OBJ + bank * 32L, 32);
+        ByteBuffer tiles = core.bus(VRAM_OBJ + tile * 32L, bw * bh / 2);
+        ByteBuffer pal = core.bus(PAL_OBJ + bank * 32L, 32);
         if (tiles == null || pal == null) {
             return false;
         }
-        byte[] t = tiles.toArray(JAVA_BYTE);
-        byte[] c = pal.toArray(JAVA_BYTE);
+        byte[] t = Ram.bytes(tiles);
+        byte[] c = Ram.bytes(pal);
         int opaque = 0;
         for (byte b : t) {
             if ((b & 0x0F) != 0) {
@@ -396,7 +392,7 @@ final class Gen3Presence implements Presence {
         if (id.equals(spriteId)) {
             return true;
         }
-        BufferedImage img = new BufferedImage(bw, bh, BufferedImage.TYPE_INT_ARGB);
+        int[] img = new int[bw * bh];
         int tilesPerRow = bw / 8;
         for (int ty = 0; ty < bh / 8; ty++) {
             for (int tx = 0; tx < tilesPerRow; tx++) {
@@ -413,21 +409,15 @@ final class Gen3Presence implements Presence {
                         int gg = ((col >> 5) & 31) << 3;
                         int bb = ((col >> 10) & 31) << 3;
                         int x = tx * 8 + pxl;
-                        img.setRGB(hflip ? bw - 1 - x : x, ty * 8 + py, 0xFF000000 | (r << 16) | (gg << 8) | bb);
+                        img[(ty * 8 + py) * bw + (hflip ? bw - 1 - x : x)] = 0xFF000000 | (r << 16) | (gg << 8) | bb;
                     }
                 }
             }
         }
-        try {
-            ByteArrayOutputStream out = new ByteArrayOutputStream(512);
-            ImageIO.write(img, "png", out);
-            spritePng = Base64.getEncoder().encodeToString(out.toByteArray());
-            spriteId = id;
-            spriteW = bw;
-            spriteH = bh;
-        } catch (IOException e) {
-            // keep the previous sprite
-        }
+        spritePng = Images.pngBase64(img, bw, bh);
+        spriteId = id;
+        spriteW = bw;
+        spriteH = bh;
         return true;
     }
 }

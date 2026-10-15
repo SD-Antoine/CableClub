@@ -63,7 +63,8 @@ final class LocalApi {
     private Map<String, Object> state() {
         return Json.map("app", "SLT", "version", Version.VERSION, "config", app.config.publicView(),
                 "link", app.link.status(), "host", app.hosting.status(), "player", app.players.state(),
-                "dataDir", app.dataDir.toString(), "update", app.updates.status(), "uiToken", app.uiToken);
+                "dataDir", app.dataDir.toString(), "update", app.updates.status(), "uiToken", app.uiToken,
+                "platform", ClientApp.platform());
     }
 
     private void routes() {
@@ -198,7 +199,8 @@ final class LocalApi {
                 ex.close();
                 return;
             }
-            ex.getResponseHeaders().set("X-Seq", res.headers().firstValue("X-Seq").orElse("0"));
+            String seq = res.header("X-Seq");
+            ex.getResponseHeaders().set("X-Seq", seq == null ? "0" : seq);
             Http.bytes(ex, 200, "image/jpeg", res.body());
         });
 
@@ -228,7 +230,7 @@ final class LocalApi {
             Map<String, Object> rom = app.roms.status(id);
             Map<String, Object> st = app.players.state();
             Http.json(ex, 200, Json.map("rom", rom, "player", id.equals(Json.str(st, "roomId")) ? st : null,
-                    "save", Files.isRegularFile(app.roms.dir(id).resolve("sauvegardes").resolve("rom.srm"))));
+                    "save", Files.isRegularFile(app.players.saveFile(id))));
         });
         r.on("POST", "/api/rooms/{id}/prepare", (ex, p) -> {
             String id = p.get("id");

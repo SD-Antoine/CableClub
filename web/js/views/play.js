@@ -1,14 +1,27 @@
 // The game, inside the SLT window: emulator image in the centre, the other
 // players live on the side, the room's pauses over the game.
+// On the phone: touch buttons (or a gamepad), the partners without their screens, and the side panel on the
+// right when the phone is held sideways, at the bottom when it is upright.
 
-import { h, mount, btn, avatar, confirmDialog, clock, colorFor, toast } from '../ui.js';
+import { h, mount, btn, avatar, confirmDialog, clock, colorFor, toast, modal, seg } from '../ui.js';
 import { local, srv } from '../api.js';
 import { store, on, loadRoom, loadLogs, me } from '../store.js';
 import { GameScreen } from '../game/screen.js';
 import { GhostLayer } from '../game/ghosts.js';
 import { keymap } from '../game/keys.js';
+import { TouchPad } from '../game/touch.js';
+import { Gamepads } from '../game/gamepad.js';
+import { GAMES } from '../data/games.js';
+import { mobile, setPlaying, haptic, onBack, onHidden } from '../platform.js';
 import { tradeBox } from './trades.js';
 import { chatPanel } from './chat.js';
+
+/** The console of a game, for the touch buttons. */
+function consoleOf(room) {
+  const gen = GAMES[room.game?.gameId]?.gen;
+  if (room.game?.platform === 'nds' || gen >= 4) return 'nds';
+  return gen === 3 || room.game?.platform === 'gba' ? 'gba' : 'gb';
+}
 
 export async function renderPlay(container, roomId) {
   let room = store.rooms.get(roomId) || await loadRoom(roomId);
@@ -16,8 +29,10 @@ export async function renderPlay(container, roomId) {
   const user = me();
   const cfg = store.state?.config || {};
   const ui = {
-    info: null, side: cfg.sidePanel !== false, sideTab: 'partners', closed: false, connecting: true,
+    info: null, side: mobile ? false : cfg.sidePanel !== false, sideTab: 'partners', closed: false, connecting: true,
     big: null, autoPaused: false, userPaused: false,
+    // phone held upright: the side panel is a sheet at the bottom, open or reduced to its tabs
+    sheet: false, gamepad: false,
     // whose game the side panel shows: '' = every partner
     stream: (() => { try { return sessionStorage.getItem(`slt.stream.${roomId}`) || ''; } catch { return ''; } })(),
   };
@@ -30,8 +45,8 @@ export async function renderPlay(container, roomId) {
   const screenBox = h('div', { class: 'screen-box' }, canvas, ghostLayer);
   const stage = h('div', { class: 'stage', tabindex: 0 }, screenBox, osd, veil);
   const bar = h('div', { class: 'play-bar' });
-  const side = h('aside', { class: ['side', !ui.side && 'hidden'] });
-  const root = h('div', { class: 'play' }, bar, h('div', { class: 'play-body' }, stage, side));
+  const side = h('aside', { class: ['side', !ui.side && !mobile && 'hidden'] });
+  const root = h('div', { class: ['play', mobile && 'mobile'] }, bar, h('div', { class: 'play-body' }, stage, side));
   container.appendChild(root);
 
   // ------------------------------------------------------------ screen
@@ -56,7 +71,42 @@ export async function renderPlay(container, roomId) {
     onSelf: (m) => ghosts.setSelf(m),
     onAction: (a) => { if (a === 'pause') togglePause(); if (a === 'fullscreen') fullscreen(); },
   });
-  screen.setLayout(cfg.dsLayout);
+  // the phone shows the two DS screens one above the other (side by side they would be too small)
+  screen.setLayout(mobile ? 'v' : cfg.dsLayout);
+
+  // ------------------------------------------------------------ phone: buttons, gamepads, orientation
+  const pad = mobile ? new TouchPad(consoleOf(room), {
+    onMask: (m) => screen.setMask('touch', m),
+    haptic: cfg.haptics !== false ? haptic : null,
+  }) : null;
+  if (pad) stage.appendChild(pad.el);
+  const pads = mobile ? new Gamepads({
+    onMask: (m) => screen.setMask('pad', m),
+    onFast: (held) => screen.cmd('ff-hold', { on: held }),
+    onConnected: (c) => { ui.gamepad = c; showPad(); if (c) showOsd('Manette connectée'); },
+  }) : null;
+  pads?.start(Number(cfg.padIndex) || 0);
+
+  /** The touch buttons: hidden while a gamepad is connected, unless the settings say otherwise. */
+  function showPad() {
+    if (!pad) return;
+    const mode = store.state?.config?.touchControls || 'auto';
+    pad.setVisible(mode === 'always' || (mode !== 'never' && !ui.gamepad));
+  }
+  showPad();
+
+  const upright = window.matchMedia('(orientation: portrait)');
+  function orient() {
+    root.classList.toggle('portrait', mobile && upright.matches);
+    root.classList.toggle('landscape', mobile && !upright.matches);
+    drawBar();
+    drawSide();
+    setTimeout(fit, 0);
+  }
+  if (mobile) {
+    upright.addEventListener('change', orient);
+    setPlaying(true);
+  }
 
   /** DS: the two screens one above the other, or side by side. */
   function toggleLayout() {
@@ -72,14 +122,35 @@ export async function renderPlay(container, roomId) {
     const hgt = canvas.height;
     const r = stage.getBoundingClientRect();
     if (!w || !hgt || !r.width) return;
-    let scale = Math.min((r.width - 24) / w, (r.height - 24) / hgt);
+    let scale;
+    if (mobile && upright.matches) {
+      // upright phone: the game at the top, the buttons below it (at least 230 px of them)
+      scale = Math.min((r.width - 8) / w, (r.height - 230) / hgt);
+    } else if (mobile) {
+      scale = Math.min((r.width - 16) / w, (r.height - 8) / hgt);
+    } else {
+      scale = Math.min((r.width - 24) / w, (r.height - 24) / hgt);
+    }
+    scale = Math.max(scale, 0.25);
     if (scale >= 2) scale = Math.floor(scale); // whole multiples keep the pixels sharp
-    canvas.style.width = `${Math.max(1, Math.floor(w * scale))}px`;
-    canvas.style.height = `${Math.max(1, Math.floor(hgt * scale))}px`;
+    const cw = Math.max(1, Math.floor(w * scale));
+    const ch = Math.max(1, Math.floor(hgt * scale));
+    canvas.style.width = `${cw}px`;
+    canvas.style.height = `${ch}px`;
     ghostLayer.style.width = `${w}px`;
     ghostLayer.style.height = `${hgt}px`;
     ghosts.setSize(w, hgt);
-    ghostLayer.style.transform = `scale(${Math.floor(w * scale) / w}, ${Math.floor(hgt * scale) / hgt})`;
+    ghostLayer.style.transform = `scale(${cw / w}, ${ch / hgt})`;
+    // where the touch buttons start (under the game when the phone is upright)
+    stage.style.setProperty('--screen-h', `${ch}px`);
+    stage.style.setProperty('--screen-w', `${cw}px`);
+    if (mobile) {
+      // the touch buttons as big as the room left for them allows
+      const d = Math.max(96, Math.floor(upright.matches ? Math.min(160, r.width * 0.4, r.height - ch - 120)
+        : Math.min(160, (r.width - cw) / 2 - 20, r.height * 0.45)));
+      stage.style.setProperty('--d', `${d}px`);
+      stage.style.setProperty('--b', `${Math.floor(d * 0.42)}px`);
+    }
   }
 
   // the other players inside the game (every generation): drawn where they stand on this player's map
@@ -106,10 +177,10 @@ export async function renderPlay(container, roomId) {
     drawVeil();
     try {
       let st = await local.post(`/api/rooms/${roomId}/play`);
-      for (let i = 0; i < 60 && !(st.state === 'running' && st.wsPort); i++) {
+      for (let i = 0; i < 80 && !(st.state === 'running' && st.wsPort); i++) {
         await new Promise((r) => setTimeout(r, 250));
         st = store.state?.player?.roomId === roomId ? store.state.player : st;
-        if (st.state === 'stopped') throw new Error('Le jeu s’est fermé au démarrage (voir data\\lecteur.log).');
+        if (st.state === 'stopped') throw new Error(mobile ? 'Le jeu s’est fermé au démarrage.' : 'Le jeu s’est fermé au démarrage (voir data\\lecteur.log).');
       }
       if (!(st.state === 'running' && st.wsPort)) throw new Error('Le jeu ne répond pas.');
       screen.connect(st.wsPort, st.wsToken);
@@ -138,6 +209,35 @@ export async function renderPlay(container, roomId) {
     setTimeout(() => { location.hash = `#/salle/${roomId}`; }, 300);
   }
 
+  /** The phone's menu of the game: what the PC shows in its toolbar. */
+  function gameMenu() {
+    const i = ui.info || {};
+    pad?.releaseAll();
+    const m = modal({
+      title: 'Jeu',
+      body: h('div', { class: 'stack game-menu' },
+        h('div', { class: 'rule-row' }, h('div', { class: 'grow' }, h('b', null, 'Son')),
+          seg([[false, 'Activé'], [true, 'Coupé']], !!i.muted, (v) => { screen.cmd('volume', { muted: v }); m.close(); })),
+        h('div', { class: 'rule-row' }, h('div', { class: 'grow' }, h('b', null, 'Avance rapide'), h('small', null, 'Vitesse quand ▶▶ est activé.')),
+          seg([[2, '×2'], [4, '×4'], [8, '×8'], [0, 'Max']], i.speed ?? 4, (v) => {
+            screen.cmd('speed', { v });
+            local.post('/api/config', { fastSpeed: v }).catch(() => {});
+            m.close();
+          })),
+        pad ? h('div', { class: 'rule-row' }, h('div', { class: 'grow' }, h('b', null, 'Boutons à l’écran'),
+          h('small', null, ui.gamepad ? 'Une manette est connectée.' : 'Cachés automatiquement quand une manette est connectée.')),
+        seg([['auto', 'Auto'], ['always', 'Toujours'], ['never', 'Jamais']], store.state?.config?.touchControls || 'auto', async (v) => {
+          try { store.state = await local.post('/api/config', { touchControls: v }); } catch { /* kept for this game */ }
+          showPad();
+          m.close();
+        })) : null,
+        i.states ? h('div', { class: 'row' },
+          btn('Sauvegarde d’état', () => { screen.cmd('save-state', { slot: 1 }); m.close(); }, { iconName: 'save' }),
+          btn('Charger l’état', () => { screen.cmd('load-state', { slot: 1 }); m.close(); }, { iconName: 'refresh' })) : null,
+        btn('Quitter le jeu', () => { m.close(); quitGame(); }, { kind: 'danger block', iconName: 'door' })),
+    });
+  }
+
   // ------------------------------------------------------------ toolbar
   // volume slider: kept across redraws, never redrawn while it is dragged
   const volume = h('input', { type: 'range', class: 'vol-range', min: 0, max: 100, step: 1, title: 'Volume' });
@@ -160,10 +260,22 @@ export async function renderPlay(container, roomId) {
   function drawBar() {
     if (ui.dragVol) { ui.barStale = true; return; }
     const i = ui.info || {};
+    const myLive = room.members.find((m) => m.userId === user?.id)?.live || {};
+    if (mobile) {
+      mount(bar,
+        btn('', () => { location.hash = `#/salle/${roomId}`; }, { kind: 'ghost icon-only', iconName: 'back', title: 'Retour à la salle' }),
+        h('div', { class: 'title' }, h('b', { class: 'ellipsis' }, room.name),
+          myLive.zone ? h('span', { class: 'chip ellipsis' }, myLive.zone) : null),
+        btn('', togglePause, { kind: ['ghost icon-only', i.paused && 'on'].filter(Boolean).join(' '), iconName: i.paused ? 'play' : 'pause', title: i.paused ? 'Reprendre' : 'Pause' }),
+        btn('', () => screen.cmd('ff-toggle'), { kind: ['ghost icon-only', i.fast && 'on'].filter(Boolean).join(' '), iconName: 'ff', title: 'Avance rapide' }),
+        upright.matches ? null : btn('', () => { ui.side = !ui.side; drawSide(); setTimeout(fit, 0); },
+          { kind: ['ghost icon-only', ui.side && 'on'].filter(Boolean).join(' '), iconName: 'panel', title: 'Joueurs, chat et journal' }),
+        btn('', gameMenu, { kind: 'ghost icon-only', iconName: 'settings', title: 'Son, vitesse, boutons, quitter' }));
+      return;
+    }
     volume.value = i.volume ?? 80;
     volume.style.setProperty('--fill', `${i.muted ? 0 : (i.volume ?? 80)}%`);
     volume.classList.toggle('muted', !!i.muted);
-    const myLive = room.members.find((m) => m.userId === user?.id)?.live || {};
     mount(bar,
       btn('', () => { location.hash = `#/salle/${roomId}`; }, { kind: 'ghost icon-only', iconName: 'back', title: 'Retour à la salle' }),
       h('div', { class: 'title' }, h('b', { class: 'ellipsis' }, room.name),
@@ -207,9 +319,10 @@ export async function renderPlay(container, roomId) {
         pause.reason === 'ended' ? h('div', { class: 'row mt', style: { justifyContent: 'center' } },
           btn('Voir le bilan', () => { location.hash = `#/salle/${roomId}`; }, { kind: 'primary' })) : null);
     } else if (ui.info?.paused) {
-      box = h('div', { class: 'veil-box' }, h('h2', null, 'Pause'), h('p', null, 'Appuyez sur P ou sur le bouton pour reprendre.'),
+      box = h('div', { class: 'veil-box' }, h('h2', null, 'Pause'), h('p', null, mobile ? 'Le jeu attend.' : 'Appuyez sur P ou sur le bouton pour reprendre.'),
         h('div', { class: 'row mt', style: { justifyContent: 'center' } }, btn('Reprendre', togglePause, { kind: 'primary', iconName: 'play' })));
     }
+    if (box) pad?.releaseAll();
     mount(veil, box ? h('div', { class: 'veil' }, box) : null);
   }
 
@@ -220,19 +333,38 @@ export async function renderPlay(container, roomId) {
   function drawSide() {
     const partners = [...room.members].filter((m) => m.userId !== user?.id).sort((a, b) => a.slot - b.slot);
     const unread = (store.chat.channels || []).find((c) => c.ch === `room-${roomId}`)?.unread || 0;
+    // upright phone: a tab opens the sheet (the same tab again closes it)
+    const sheet = mobile && upright.matches;
+    const pick = (tab) => () => {
+      if (sheet) ui.sheet = !(ui.sheet && ui.sideTab === tab);
+      ui.sideTab = tab;
+      drawSide();
+      // the phone opens its keyboard only when the player touches the field
+      if (tab === 'chat' && !mobile) setTimeout(() => chat?.focus(), 0);
+    };
+    const active = (tab) => ui.sideTab === tab && (!sheet || ui.sheet) ? 'active' : '';
     const tabs = h('div', { class: 'tabs' },
-      h('button', { class: ui.sideTab === 'partners' ? 'active' : '', onclick: () => { ui.sideTab = 'partners'; drawSide(); } }, partners.length ? 'Partenaires' : 'Équipe'),
-      h('button', { class: ui.sideTab === 'chat' ? 'active' : '', onclick: () => { ui.sideTab = 'chat'; drawSide(); setTimeout(() => chat?.focus(), 0); } },
-        'Chat', unread && ui.sideTab !== 'chat' ? h('span', { class: 'tab-count' }, unread) : null),
-      h('button', { class: ui.sideTab === 'journal' ? 'active' : '', onclick: () => { ui.sideTab = 'journal'; drawSide(); } }, 'Journal'));
-    let body;
+      h('button', { class: active('partners'), onclick: pick('partners') }, mobile ? 'Joueurs' : partners.length ? 'Partenaires' : 'Équipe'),
+      h('button', { class: active('chat'), onclick: pick('chat') },
+        'Chat', unread && (ui.sideTab !== 'chat' || (sheet && !ui.sheet)) ? h('span', { class: 'tab-count' }, unread) : null),
+      h('button', { class: active('journal'), onclick: pick('journal') }, 'Journal'));
+    if (mobile) {
+      side.classList.toggle('hidden', !sheet && !ui.side);
+      side.classList.toggle('open', sheet && ui.sheet);
+      if (sheet && !ui.sheet) {
+        chat?.setVisible(false);
+        mount(side, tabs);
+        return;
+      }
+    }
     if (ui.sideTab === 'chat') {
-      if (!chat) chat = chatPanel(`room-${roomId}`, { compact: true, placeholder: 'Écrire à la salle (Entrée)…' });
-      chat.setVisible(ui.side);
+      if (!chat) chat = chatPanel(`room-${roomId}`, { compact: true, placeholder: mobile ? 'Écrire à la salle…' : 'Écrire à la salle (Entrée)…' });
+      chat.setVisible(mobile ? true : ui.side);
       mount(side, tabs, h('div', { class: 'side-body chat-side-body' }, chat.el));
       return;
     }
     chat?.setVisible(false);
+    let body;
     if (ui.sideTab === 'journal') {
       const logs = store.logs.get(roomId);
       if (!logs) loadLogs(roomId).then(drawSide).catch(() => {});
@@ -242,8 +374,8 @@ export async function renderPlay(container, roomId) {
     } else {
       const list = partners.length ? partners : room.members.filter((m) => m.userId === user?.id);
       if (ui.stream && !partners.some((m) => m.userId === ui.stream)) ui.stream = '';
-      // with several partners: a list to watch one game, or all of them
-      const picker = partners.length > 1 ? h('select', { class: 'input stream-pick', title: 'Direct affiché',
+      // with several partners: a list to watch one game, or all of them (the phone shows no live game)
+      const picker = !mobile && partners.length > 1 ? h('select', { class: 'input stream-pick', title: 'Direct affiché',
         onchange: (e) => {
           ui.stream = e.target.value;
           try { sessionStorage.setItem(`slt.stream.${roomId}`, ui.stream); } catch { /* storage unavailable */ }
@@ -255,7 +387,7 @@ export async function renderPlay(container, roomId) {
       // the chosen game first, the others without their screen
       const ordered = ui.stream ? [...list.filter((m) => m.userId === ui.stream), ...list.filter((m) => m.userId !== ui.stream)] : list;
       body = h('div', null, picker, tradeBox(room, user?.id, { compact: true }),
-        ordered.map((m) => partnerBlock(m, partners.length > 0 && showsScreen(m.userId))));
+        ordered.map((m) => partnerBlock(m, !mobile && partners.length > 0 && showsScreen(m.userId))));
     }
     mount(side, tabs, h('div', { class: 'side-body' }, body));
   }
@@ -273,7 +405,8 @@ export async function renderPlay(container, roomId) {
     return h('div', { class: 'partner', dataset: { partner: m.userId } }, screenEl,
       h('div', { class: 'info' }, avatar(m.name, m.slot, { size: 's', online: m.online, id: m.userId, pic: m.avatar }),
         h('div', { class: 'grow' }, h('b', null, m.name), h('div', { class: 'zone' },
-          m.status === 'champion' ? '🏆 Maître vaincu' : live.zone ? `${live.zone}${live.battle ? ' · en combat' : ''}` : '—'))),
+          m.status === 'champion' ? '🏆 Maître vaincu' : live.zone ? `${live.zone}${live.battle ? ' · en combat' : ''}` : '—',
+          mobile && m.online === false ? ' · hors ligne' : ''))),
       live.team?.length ? h('div', { class: 'team-mini' }, live.team.map((p) => h('span', { class: p.dead || p.hp === 0 ? 'dead' : '', title: `${p.speciesName || ''} ${p.hp}/${p.maxHp} PV` },
         `${p.nickname || p.speciesName || '#' + p.species} ${p.level}`, h('i', { style: { width: `${p.maxHp ? Math.round(100 * p.hp / p.maxHp) : 0}%` } })))) : null);
   }
@@ -313,11 +446,13 @@ export async function renderPlay(container, roomId) {
   }
 
   // ------------------------------------------------------------ wiring
+  if (mobile) orient();
   drawBar();
   drawVeil();
   drawSide();
   connect();
-  for (const m of room.members) if (m.userId !== user?.id) pollPartner(m);
+  // the partners' live games: on the PC only (the phone saves its screen and its data)
+  if (!mobile) for (const m of room.members) if (m.userId !== user?.id) pollPartner(m);
 
   const offs = [
     on('room', (r) => {
@@ -331,7 +466,7 @@ export async function renderPlay(container, roomId) {
     on('ghost', (g) => { if (g.roomId === roomId) ghosts.update(g); }),
     on('presence', (d) => { if (d.roomId === roomId) drawSide(); }),
     on('log', (l) => { if (l.roomId === roomId && ui.sideTab === 'journal') drawSide(); }),
-    on('chat-list', () => { if (ui.sideTab !== 'chat') drawSide(); }),
+    on('chat-list', () => { if (ui.sideTab !== 'chat' || (mobile && !ui.sheet)) drawSide(); }),
     on('notice', (n) => {
       if (n.roomId && n.roomId !== roomId) return;
       if (n.local) return; // already shown by the game itself
@@ -340,14 +475,21 @@ export async function renderPlay(container, roomId) {
     on('player', (p) => {
       if (p.roomId === roomId && p.state === 'stopped' && !ui.closed) { ui.closed = true; drawVeil(); }
     }),
+    // the phone's back button closes the sheet before leaving the game
+    onBack(() => {
+      if (mobile && ui.sheet) { ui.sheet = false; drawSide(); return true; }
+      return false;
+    }),
   ];
-  // the game pauses while the player looks at another screen of SLT
-  const onVisibility = () => {
+  // the game pauses while the player looks at another screen of SLT (or another app of the phone)
+  const hide = (hidden) => {
     if (store.state?.config?.pauseHidden === false) return;
-    if (document.hidden && !ui.userPaused && screen.connected) { ui.autoPaused = true; screen.cmd('pause', { on: true }); }
-    else if (!document.hidden && ui.autoPaused) { ui.autoPaused = false; screen.cmd('pause', { on: false }); }
+    if (hidden && !ui.userPaused && screen.connected) { ui.autoPaused = true; pad?.releaseAll(); screen.cmd('pause', { on: true }); }
+    else if (!hidden && ui.autoPaused) { ui.autoPaused = false; screen.cmd('pause', { on: false }); }
   };
+  const onVisibility = () => hide(document.hidden);
   document.addEventListener('visibilitychange', onVisibility);
+  offs.push(onHidden(hide));
 
   return () => {
     polling = false;
@@ -356,6 +498,11 @@ export async function renderPlay(container, roomId) {
     offs.forEach((f) => f());
     document.removeEventListener('visibilitychange', onVisibility);
     resizeObserver.disconnect();
+    pads?.stop();
+    if (mobile) {
+      upright.removeEventListener('change', orient);
+      setPlaying(false);
+    }
     if (screen.connected && !ui.userPaused) {
       // leaving the game screen: the game waits (resumed when coming back)
       screen.cmd('pause', { on: true });
@@ -366,4 +513,3 @@ export async function renderPlay(container, roomId) {
     for (const st of images.values()) if (st.url) URL.revokeObjectURL(st.url);
   };
 }
-
