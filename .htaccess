@@ -5,6 +5,8 @@ ErrorDocument 404 /404.html
 
 # HTTPS only
 RewriteEngine On
+# certificate validation (Let's Encrypt): never redirected
+RewriteRule ^\.well-known/ - [L]
 RewriteCond %{HTTPS} !=on
 RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 # no www
