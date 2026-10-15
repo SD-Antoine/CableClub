@@ -14,37 +14,33 @@ node site/build.mjs --offline  # sans réseau (liens vers la page des versions)
 cd site/dist && python -m http.server 8080   # voir le résultat sur http://localhost:8080
 ```
 
-## Publication automatique (GitHub Actions → o2switch)
+## Mise en ligne (GitHub → cPanel o2switch)
 
-Le workflow [`site.yml`](../.github/workflows/site.yml) construit le site puis l'envoie par FTPS sur l'hébergement,
-à chaque changement de `site/` ou du CHANGELOG sur `main`, après chaque version publiée, et à la demande
-(onglet Actions › Site › Run workflow).
+GitHub Actions ([`site.yml`](../.github/workflows/site.yml)) construit le site et le range dans la branche **`site`** du dépôt,
+à chaque changement de `site/` ou du CHANGELOG sur `main` et après chaque version publiée. cPanel clone cette branche
+(Git Version Control) et son `.cpanel.yml` copie les fichiers dans le dossier du domaine (`~/cableclub.app` ; changer
+`SITE_DIR` dans `src/.cpanel.yml` si c'est un autre dossier).
 
 ### Mise en place (une seule fois)
 
-1. **Ajouter le domaine dans cPanel** (o2switch) : *Domaines* › *Créer un domaine* (domaine additionnel) `cableclub.app`.
-   Notez le **dossier racine** proposé (par exemple `cableclub.app`).
-2. **Faire pointer le domaine vers o2switch** dans la zone DNS chez OVH (Web Cloud › Noms de domaine › cableclub.app › Zone DNS) :
-   - enregistrement **A** de `cableclub.app` (sans sous-domaine) vers l'adresse IP du serveur o2switch (indiquée dans cPanel,
-     colonne de droite : « Adresse IP partagée ») ;
-   - enregistrement **CNAME** de `www` vers `cableclub.app.` ;
-   - **ne touchez pas** aux enregistrements `play` et `srv1` (le serveur de jeu), ni à ceux de la messagerie (MX, SPF, DKIM, SRV).
-3. **Certificat HTTPS** : cPanel (AutoSSL) l'installe tout seul, quelques minutes à quelques heures après le changement DNS.
-4. **Compte FTP dédié** : cPanel › *Comptes FTP* › créer par exemple `deploy@cableclub.app`, avec comme **répertoire** le dossier
-   racine du domaine (étape 1) et un mot de passe fort. Relevez dans « Configurer le client FTP » le **nom d'hôte du serveur**
-   (de la forme `xxxx.o2switch.net`) : c'est lui, et pas `cableclub.app`, qui présente un certificat valide pour le FTPS.
-5. **Secrets GitHub** (dépôt › Settings › Secrets and variables › Actions › *New repository secret*) :
-   `FTP_SERVER` (le nom d'hôte de l'étape 4), `FTP_USERNAME`, `FTP_PASSWORD`.
-   Variables facultatives (onglet *Variables*) : `FTP_DIR` si le dossier du compte FTP n'est pas la racine du site (défaut `./`),
-   `FTP_SECURITY=loose` si le certificat du serveur FTP est refusé.
-6. Lancer le workflow (*Actions › Site › Run workflow*) et ouvrir https://cableclub.app.
+1. Domaine `cableclub.app` ajouté dans cPanel, A de `cableclub.app` et de `www` vers l'IP partagée du cPanel (fait).
+2. **Clé de déploiement** : cPanel › *Accès SSH* › *Gérer les clés SSH* › générer une clé **sans phrase secrète**, l'autoriser ;
+   copier la clé publique dans GitHub › dépôt › *Settings* › *Deploy keys* › *Add deploy key* (lecture seule).
+   (Le dépôt étant public, l'adresse HTTPS `https://github.com/SD-Antoine/CableClub.git` marche aussi sans clé.)
+3. cPanel › *Git Version Control* › *Créer* : cloner `git@github.com:SD-Antoine/CableClub.git`, chemin par exemple
+   `repositories/cableclub-site` (hors du dossier public). Puis *Gérer* › *Informations de base* › branche extraite : **`site`**.
+4. *Gérer* › *Extraire ou déployer* : **Mettre à jour à partir du distant**, puis **Déployer le commit HEAD**.
+5. Ouvrir https://cableclub.app (le certificat HTTPS est posé par AutoSSL quelques minutes après le changement DNS).
+
+À chaque mise à jour : les deux boutons de l'étape 4. Pour que ce soit automatique, une tâche cron cPanel (toutes les 15 min) :
+
+```
+cd ~/repositories/cableclub-site && git pull -q && uapi VersionControlDeployment create repository_root=$HOME/repositories/cableclub-site >/dev/null
+```
 
 ### Plus tard
 
-- **SignPath accepté** : créer la variable `SITE_SIGNED` = `1`. La page de téléchargement affiche alors la « Code signing policy »
-  exigée par SignPath (« Free code signing provided by SignPath.io… »).
-- **Contact** : l'adresse `contact@cableclub.app` est celle de la boîte Zimbra.
-- **Mentions légales** : `src/mentions-legales.html` (éditeur, hébergeurs) ; à vérifier si l'hébergeur ou l'adresse change.
-
-Le workflow n'utilise pas l'outil « Git Version Control » de cPanel : le site demande une étape de construction (versions
-publiées, notes de version), qu'il vaut mieux faire dans GitHub Actions.
+- **SignPath accepté** : variable GitHub `SITE_SIGNED` = `1` (Settings › Secrets and variables › Actions › Variables). La page de
+  téléchargement affiche alors la « Code signing policy » exigée par SignPath.
+- **Contact** : `contact@cableclub.app` est la boîte Zimbra.
+- **Mentions légales** : `src/mentions-legales.html` (éditeur, hébergeurs).

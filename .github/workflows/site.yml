@@ -1,13 +1,10 @@
-# Builds the site of Cable Club (folder site/, see site/build.mjs) and publishes it to its hosting (o2switch, cPanel) by FTPS.
+# Builds the site of Cable Club (folder site/, see site/build.mjs) into the branch "site" of this repository.
+# The hosting (o2switch, cPanel "Git Version Control") clones that branch and its .cpanel.yml copies it into the
+# web root of cableclub.app: see site/README.md.
 #
 # Runs when the site or the patch notes change on main, after each release (new download links) and on demand.
-# Secrets of the repository (Settings > Secrets and variables > Actions):
-#   FTP_SERVER    host name of the server of the account (cPanel "Nom d'hôte du serveur", e.g. xxxx.o2switch.net)
-#   FTP_USERNAME  an FTP account made for this, whose folder is the web root of cableclub.app
-#   FTP_PASSWORD  its password
-# Variables (all optional): FTP_DIR (folder on the server, default ./), FTP_SECURITY (strict or loose, default strict),
-#   SITE_SIGNED (1 once SignPath signs CableClub.exe: the page of the downloads then shows the code signing policy).
-# Without the secrets the site is only built (and kept as an artifact of the run).
+# Variable (optional): SITE_SIGNED = 1 once SignPath signs CableClub.exe (the page of the downloads then shows the
+# code signing policy).
 name: Site
 
 on:
@@ -20,7 +17,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: site
@@ -43,32 +40,19 @@ jobs:
           SITE_SIGNED: ${{ vars.SITE_SIGNED }}
         run: node site/build.mjs
 
-      - name: Hosting configured?
-        id: hosting
+      # the built site becomes a new commit of the branch "site" (only when something changed)
+      - name: Branch site
         env:
-          FTP_SERVER: ${{ secrets.FTP_SERVER }}
-          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
-          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          TOKEN: ${{ github.token }}
         run: |
-          if [ -n "$FTP_SERVER" ] && [ -n "$FTP_USERNAME" ] && [ -n "$FTP_PASSWORD" ]; then echo "ok=true" >> "$GITHUB_OUTPUT"
-          else echo "::warning::Hebergement non configure (secrets FTP_SERVER, FTP_USERNAME, FTP_PASSWORD) : le site est construit mais pas publie"; fi
-
-      - name: Publish (FTPS)
-        if: steps.hosting.outputs.ok == 'true'
-        uses: SamKirkland/FTP-Deploy-Action@v4.4.0
-        with:
-          server: ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
-          protocol: ftps
-          security: ${{ vars.FTP_SECURITY || 'strict' }}
-          local-dir: ./site/dist/
-          server-dir: ${{ vars.FTP_DIR || './' }}
-
-      - name: Built site
-        if: steps.hosting.outputs.ok != 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: cableclub-site
-          path: site/dist/
-          include-hidden-files: true
+          cd site/dist
+          git init -q -b site
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git remote add origin "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          if git fetch -q --depth 1 origin site; then git reset -q --soft FETCH_HEAD; fi
+          git add -A
+          if git rev-parse -q --verify HEAD >/dev/null && git diff --cached --quiet; then echo 'Site inchange'; exit 0; fi
+          git commit -q -m "Site de Cable Club (${GITHUB_SHA::7})"
+          git push -q origin site
+          echo "Branche site mise a jour"

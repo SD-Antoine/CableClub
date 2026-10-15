@@ -107,7 +107,7 @@ fs.mkdirSync(out, { recursive: true });
 // the folder itself stays (a preview server may be serving it): only its content is renewed
 for (const e of fs.readdirSync(out)) fs.rmSync(path.join(out, e), { recursive: true, force: true });
 fs.cpSync(path.join(src, 'assets'), path.join(out, 'assets'), { recursive: true });
-for (const f of ['.htaccess', 'robots.txt']) fs.copyFileSync(path.join(src, f), path.join(out, f));
+for (const f of ['.htaccess', '.cpanel.yml', 'robots.txt']) fs.copyFileSync(path.join(src, f), path.join(out, f));
 
 const assetVersion = createHash('sha1').update(fs.readFileSync(path.join(src, 'assets/site.css'))).update(fs.readFileSync(path.join(src, 'assets/site.js'))).digest('hex').slice(0, 8);
 const layout = fs.readFileSync(path.join(src, 'layout.html'), 'utf8');
