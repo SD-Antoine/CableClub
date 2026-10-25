@@ -22,6 +22,8 @@ import java.util.Locale;
  * touch 128 300 6          shot titre        dump ram
  * status                   (prints what the tracker found)
  * bag / additem ID QTY / tobox UID dead|alive   (the bag read; an item given back; a party Pokémon to the PC)
+ * held UID ITEM / forget UID MOVE / mon UID     (a held item given, a move forgotten; what the reader sees of it)
+ * directives {JSON}       (the room's decisions, as the server sends them)
  * poke 20244e9 02          copy 2024744 2024550 100     peek 2024550 16   (tests)
  * sram 75ea 16            (cartridge save memory)
  * presence on             presence          (players drawn in game: last reading)
@@ -457,6 +459,20 @@ final class ScriptRunner {
                         System.out.println("PC " + t[1] + " " + t[2] + " : " + th.testToBox(core, Long.parseLong(t[1]), "dead".equals(t[2])));
                     }
                     break;
+                case "held":
+                case "forget":
+                    // held UID ITEM: a held item for a party Pokémon (0: none); forget UID MOVE: it forgets a move
+                    if (tracker instanceof TrackerHost th) {
+                        System.out.println(t[0].toUpperCase(Locale.ROOT) + " " + t[1] + " " + t[2] + " : "
+                                + th.testEdit(core, Long.parseLong(t[1]), t[0], Integer.parseInt(t[2])));
+                    }
+                    break;
+                case "mon":
+                    // mon UID: held item and battle set of a party Pokémon, as the reader sees them
+                    if (tracker instanceof TrackerHost th) {
+                        System.out.println("MON " + t[1] + " : " + th.testMon(core, Long.parseLong(t[1])));
+                    }
+                    break;
                 case "directives":
                     // directives {JSON}: the room's decisions, as the server sends them (park, setMode…)
                     if (tracker instanceof TrackerHost th) {
@@ -503,6 +519,9 @@ final class ScriptRunner {
             }
             if (presence != null) {
                 sample = presence.sample(core);
+                if (tracker instanceof TrackerHost th) {
+                    th.fieldFree(sample == null ? null : sample.free());
+                }
             }
         }
     }

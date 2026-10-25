@@ -279,6 +279,79 @@ public final class NdsReader implements GameReader {
         return List.of(new Write(at + 4L * free, new byte[]{(byte) item, (byte) (item >>> 8), (byte) qty, (byte) (qty >>> 8)}));
     }
 
+    /** Every slot of {@code item} out of its pocket: the next slots move up (the games keep their pockets packed). */
+    @Override
+    public List<Write> removeItem(Mem m, int item) {
+        if (base < 0 || item <= 0 || item > 700) {
+            return null;
+        }
+        for (int[] pocket : pockets()) {
+            long at = base + pocket[0];
+            byte[] slots = m.read(at, 4 * pocket[1]);
+            if (slots == null) {
+                return null;
+            }
+            byte[] out = new byte[slots.length];
+            int n = 0;
+            boolean found = false;
+            for (int i = 0; i < pocket[1]; i++) {
+                int id = NdsPkm.u16(slots, 4 * i);
+                if (id == item) {
+                    found = true;
+                } else if (id != 0) {
+                    System.arraycopy(slots, 4 * i, out, 4 * n++, 4);
+                }
+            }
+            if (found) {
+                return List.of(new Write(at, out));
+            }
+        }
+        return null;
+    }
+
+    /** The party block (capacity, count, structures) of the live save buffer, or null. */
+    private byte[] liveParty(Mem m) {
+        long hdr = partyHeader();
+        byte[] block = hdr < 0 ? null : m.read(hdr, 8 + 6 * layout.partySize);
+        return block == null || NdsPkm.u32(block, 0) != 6 ? null : block;
+    }
+
+    @Override
+    public int heldItem(Mem m, Mon mon) {
+        byte[] block = mon.egg() ? null : liveParty(m);
+        int i = block == null ? -1 : partyIndex(block, mon.uid());
+        return i < 0 ? -1 : NdsPkm.heldItem(block, 8 + i * layout.partySize);
+    }
+
+    /** Held item: word 1 of block A, in the encrypted structure. */
+    @Override
+    public List<Write> setHeldItem(Mem m, Mon mon, int item) {
+        return rewrite(m, mon, (data, a, b, c, d) -> {
+            if (data[a + 1] == item || item < 0 || item > 0xFFFF) {
+                return false;
+            }
+            data[a + 1] = item;
+            return true;
+        });
+    }
+
+    @Override
+    public List<Write> forgetMove(Mem m, Mon mon, int move) {
+        return rewrite(m, mon, (data, a, b, c, d) -> NdsPkm.forget(data, b, move));
+    }
+
+    /** Writes changing the encrypted structure of the party Pokémon {@code mon}, null when nothing changes. */
+    private List<Write> rewrite(Mem m, Mon mon, NdsPkm.Edit edit) {
+        byte[] block = mon.egg() ? null : liveParty(m);
+        int i = block == null ? -1 : partyIndex(block, mon.uid());
+        if (i < 0) {
+            return null;
+        }
+        int off = 8 + i * layout.partySize;
+        byte[] fresh = NdsPkm.rewritten(block, off, edit);
+        return fresh == null ? null : List.of(new Write(partyHeader() + off, fresh));
+    }
+
     /**
      * The pocket of an item never seen in the bag: generation 4 Poké Balls (1-16, Apricorn balls 492-500) in the
      * ball pocket, medicine (17-54) and battle items (55-64) in theirs; generation 5 has its balls and battle items in

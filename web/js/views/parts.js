@@ -7,16 +7,18 @@ import {
 } from '../data/rando.js';
 
 /** The room's rules: switches (editable by the leader, read-only for the others). */
-export function rulesEditor(rules, { editable, onChange, mode, gen }) {
+export function rulesEditor(rules, { editable, onChange, mode, gen, launched }) {
   const r = { ...ruleDefaults(mode), ...(rules || {}) };
   return h('div', { class: 'list' }, rulesOf(mode, gen).map((def) => {
     if (def.section) return h('div', { class: 'rule-section' }, def.section);
     if (def.when && !def.when(r)) return null; // an option of another rule, shown when that rule is on
+    // a rule written in the room's ROM no longer changes once the adventure is launched
+    const can = editable && !(def.rom && launched);
     let control;
     if (def.type === 'bool') {
-      control = switchEl(!!r[def.key] && !def.soon, (v) => onChange({ [def.key]: v }), { disabled: !editable || def.soon });
+      control = switchEl(!!r[def.key] && !def.soon, (v) => onChange({ [def.key]: v }), { disabled: !can || def.soon });
     } else {
-      control = seg(def.options, r[def.key], (v) => onChange({ [def.key]: v }), { disabled: !editable });
+      control = seg(def.options, r[def.key], (v) => onChange({ [def.key]: v }), { disabled: !can });
     }
     return h('div', { class: ['rule-row', def.highlight && 'rule-key', def.soon && 'soon'] },
       h('div', { class: 'grow' }, h('b', null, def.highlight ? '★ ' : '', def.label, def.soon ? h('span', { class: 'chip', style: { marginLeft: '8px' } }, 'Bientôt') : null),

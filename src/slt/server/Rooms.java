@@ -359,12 +359,22 @@ public final class Rooms {
                     }
                     Object before = r.rules.get(e.getKey());
                     if (before == null ? e.getValue() != null : !before.equals(e.getValue())) {
+                        if (Room.ROM_RULES.contains(e.getKey()) && !"lobby".equals(r.state)) {
+                            throw new Http.Fail(409, "Cette règle est écrite dans la ROM de la salle : elle ne peut plus changer une fois l'aventure lancée.");
+                        }
                         r.rules.put(e.getKey(), e.getValue());
                         changed.add(e.getKey());
                     }
                 }
                 if (!changed.isEmpty() && !"lobby".equals(r.state)) {
                     out.log(r.member(user.id), "rules", user.display + " modifie les règles : " + String.join(", ", changed), null);
+                }
+                if (changed.stream().anyMatch(Room.ROM_RULES::contains)) {
+                    // a rule of the ROM (no evolution): every generated ROM is now outdated
+                    for (Room.Member m : r.members) {
+                        m.rom = new LinkedHashMap<>(Map.of("status", "missing"));
+                        m.ready = false;
+                    }
                 }
             }
             if (body.containsKey("maxPlayers")) {
@@ -713,6 +723,16 @@ public final class Rooms {
             leaderOnly(r, user);
             Room.Out out = new Room.Out();
             r.name(zone, nickname, out);
+            commit(r, out);
+        }
+    }
+
+    /** Rule "Exception pour les CS": the player's next forbidden capture is kept for the HMs (or no longer). */
+    void hm(String id, Accounts.User user, boolean on) {
+        Room r = memberRoom(id, user);
+        synchronized (r) {
+            Room.Out out = new Room.Out();
+            r.hmNext(r.member(user.id), on, out);
             commit(r, out);
         }
     }

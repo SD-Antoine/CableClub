@@ -421,6 +421,10 @@ final class ServerApi {
             rooms.name(p.get("id"), user(ex), Json.str(b, "zone"), Json.str(b, "name"));
             Http.ok(ex);
         });
+        r.on("POST", "/api/rooms/{id}/hm", (ex, p) -> {
+            rooms.hm(p.get("id"), user(ex), Json.bool(Http.readJson(ex), "on", true));
+            Http.ok(ex);
+        });
         r.on("POST", "/api/rooms/{id}/ack", (ex, p) -> {
             rooms.ack(p.get("id"), user(ex), Json.arr(Http.readJson(ex).get("refunds")));
             Http.ok(ex);

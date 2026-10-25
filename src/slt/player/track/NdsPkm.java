@@ -187,7 +187,7 @@ public final class NdsPkm {
 
     /**
      * Battle set of the Pokémon at {@code off} (see {@link slt.player.track.GameReader#battleSet}). Block A:
-     * species, held item, happiness (+0x14), ability (+0x15), EVs (+0x18: HP, Attack, Defense, Speed, Special
+     * species, held item, experience (+0x10), happiness (+0x14), ability (+0x15), EVs (+0x18: HP, Attack, Defense, Speed, Special
      * Attack, Special Defense); block B: moves, IVs (+0x10, 5 bits each in the same order), +0x18 female (bit 1),
      * genderless (bit 2), form (bits 3-7), generation 5 nature (+0x19); generation 4 nature = personality % 25.
      */
@@ -220,7 +220,8 @@ public final class NdsPkm {
                         "spe", (long) (data[a + 9] >>> 8), "spa", (long) (data[a + 10] & 0xFF), "spd", (long) (data[a + 10] >>> 8)),
                 "nature", nature, "ability", (long) (data[a + 6] >>> 8), "item", (long) data[a + 1],
                 "happiness", (long) (data[a + 6] & 0xFF), "form", (long) (flags >> 3),
-                "gender", (flags & 4) != 0 ? "N" : (flags & 2) != 0 ? "F" : "M");
+                "gender", (flags & 4) != 0 ? "N" : (flags & 2) != 0 ? "F" : "M",
+                "exp", (data[a + 4] & 0xFFFFL) | ((data[a + 5] & 0xFFFFL) << 16));
     }
 
     /** Bytes (offset, value) that set the current HP of the party Pokémon at {@code off} to zero. */
@@ -298,12 +299,6 @@ public final class NdsPkm {
      * written in this game's characters.
      */
     public static byte[] withNickname(byte[] m, int off, String name, boolean gen4) {
-        long pid = u32(m, off);
-        int checksum = u16(m, off + 6);
-        int[] data = decrypt(m, off + 8, 64, checksum);
-        int order = (int) (((pid & 0x3E000L) >>> 13) % 24);
-        int b = ORDER[order][1] * 16;
-        int c = ORDER[order][2] * 16;
         int[] chars = new int[11];
         java.util.Arrays.fill(chars, 0xFFFF);
         int n = 0;
@@ -316,8 +311,83 @@ public final class NdsPkm {
             }
             chars[n++] = code;
         }
-        System.arraycopy(chars, 0, data, c, 11);
-        data[b + 9] |= 0x8000; // nicknamed
+        return rewritten(m, off, (data, a, b, c, d) -> {
+            System.arraycopy(chars, 0, data, c, 11);
+            data[b + 9] |= 0x8000; // nicknamed
+            return true;
+        });
+    }
+
+    /** A change of the decrypted words of a Pokémon (blocks A, B, C, D start at the word given): false = nothing to do. */
+    public interface Edit {
+        boolean apply(int[] data, int a, int b, int c, int d);
+    }
+
+    /** Held item: word 1 of block A (0 none), -1 if the checksum fails. */
+    public static int heldItem(byte[] m, int off) {
+        long pid = u32(m, off);
+        int checksum = u16(m, off + 6);
+        int[] data = decrypt(m, off + 8, 64, checksum);
+        int sum = 0;
+        for (int w : data) {
+            sum = (sum + w) & 0xFFFF;
+        }
+        return sum != checksum ? -1 : data[ORDER[(int) (((pid & 0x3E000L) >>> 13) % 24)][0] * 16 + 1];
+    }
+
+    /**
+     * Block B: moves (words 0-3), their PP (bytes of words 4-5) and PP Ups (bytes of words 6-7): the next moves move up
+     * with theirs. False when the Pokémon does not know {@code move} or it is its only move.
+     */
+    static boolean forget(int[] data, int b, int move) {
+        int at = -1;
+        int known = 0;
+        for (int i = 0; i < 4; i++) {
+            known += data[b + i] != 0 ? 1 : 0;
+            if (data[b + i] == move && at < 0) {
+                at = i;
+            }
+        }
+        if (at < 0 || known <= 1) {
+            return false;
+        }
+        int[] moves = new int[4];
+        int[] pp = new int[4];
+        int[] ups = new int[4];
+        int n = 0;
+        for (int i = 0; i < 4; i++) {
+            if (i != at) {
+                moves[n] = data[b + i];
+                pp[n] = (data[b + 4 + i / 2] >>> (8 * (i & 1))) & 0xFF;
+                ups[n] = (data[b + 6 + i / 2] >>> (8 * (i & 1))) & 0xFF;
+                n++;
+            }
+        }
+        System.arraycopy(moves, 0, data, b, 4);
+        data[b + 4] = pp[0] | (pp[1] << 8);
+        data[b + 5] = pp[2] | (pp[3] << 8);
+        data[b + 6] = ups[0] | (ups[1] << 8);
+        data[b + 7] = ups[2] | (ups[3] << 8);
+        return true;
+    }
+
+    /**
+     * The 136 first bytes of the Pokémon at {@code off} after {@code edit}: decrypted, changed, checksum recomputed,
+     * encrypted again; null when the checksum fails or the edit changes nothing.
+     */
+    public static byte[] rewritten(byte[] m, int off, Edit edit) {
+        long pid = u32(m, off);
+        int checksum = u16(m, off + 6);
+        int[] data = decrypt(m, off + 8, 64, checksum);
+        int check = 0;
+        for (int w : data) {
+            check = (check + w) & 0xFFFF;
+        }
+        int order = (int) (((pid & 0x3E000L) >>> 13) % 24);
+        if (check != checksum || !edit.apply(data, ORDER[order][0] * 16, ORDER[order][1] * 16, ORDER[order][2] * 16,
+                ORDER[order][3] * 16)) {
+            return null;
+        }
         int sum = 0;
         for (int w : data) {
             sum = (sum + w) & 0xFFFF;

@@ -61,18 +61,23 @@ export const NUZLOCKE_RULES = [
     desc: 'Les Pokémon donnés par des personnages ne comptent pas pour la zone. Désactivé : ils sont relâchés à la réception.' },
   { key: 'saveStates', type: 'bool', label: 'Sauvegardes d’état',
     desc: 'Autorise les sauvegardes instantanées de l’émulateur.' },
-  { section: 'Règles d’honneur : Cable Club ne peut pas les vérifier, chacun s’y tient' },
-  { key: 'honorNoHealItems', type: 'bool', label: 'Pas d’objets de soin', desc: 'Soigner uniquement dans les Centres Pokémon.' },
-  { key: 'honorNoHeldItems', type: 'bool', label: 'Pas d’objet tenu', minGen: 2 },
-  { key: 'honorNoMultiExp', type: 'bool', label: 'Pas de Multi Exp' },
-  { key: 'honorNoMasterBall', type: 'bool', label: 'Pas de Master Ball' },
-  { key: 'honorNoEvolution', type: 'bool', label: 'Pas d’évolution' },
-  { key: 'honorNoFly', type: 'bool', label: 'Pas de Vol' },
-  { key: 'honorNoRepel', type: 'bool', label: 'Pas de Repousse' },
-  { key: 'honorSetMode', type: 'bool', label: 'Mode Défini', desc: 'Pas de changement de Pokémon après avoir mis K.O. le Pokémon d’un dresseur.' },
+  { section: 'Règles classiques du Nuzlocke, appliquées par Cable Club dans le jeu : un objet interdit quitte le sac dès que le joueur reprend la main sur le terrain' },
+  { key: 'honorNoHealItems', type: 'bool', label: 'Pas d’objets de soin',
+    desc: 'Soins uniquement au Centre Pokémon : potions, soins de statut, Rappels, PP, boissons, herbes et baies qui soignent sont retirés du sac.' },
+  { key: 'honorNoHeldItems', type: 'bool', label: 'Pas d’objet tenu', minGen: 2,
+    desc: 'L’objet tenu par un Pokémon de l’équipe est remis dans le sac (les lettres restent).' },
+  { key: 'honorNoMultiExp', type: 'bool', label: 'Pas de Multi Exp', desc: 'Retiré du sac (et des Pokémon qui le tiennent).' },
+  { key: 'honorNoMasterBall', type: 'bool', label: 'Pas de Master Ball', desc: 'Retirée du sac.' },
+  { key: 'honorNoEvolution', type: 'bool', label: 'Pas d’évolution', rom: true,
+    desc: 'Les évolutions sont retirées de la ROM de la salle : aucun Pokémon n’évolue, les pierres sont sans effet. Se choisit avant le lancement de l’aventure.' },
+  { key: 'honorNoFly', type: 'bool', label: 'Pas de Vol', desc: 'La CS Vol est retirée du sac, et les Pokémon de l’équipe oublient l’attaque Vol.' },
+  { key: 'honorNoRepel', type: 'bool', label: 'Pas de Repousse', desc: 'Repousse, Superepousse et Max Repousse sont retirées du sac.' },
+  { key: 'honorSetMode', type: 'bool', label: 'Mode Défini',
+    desc: 'Le style de combat « Défini » est imposé dans les options du jeu : pas de changement de Pokémon proposé après avoir mis K.O. celui d’un dresseur.' },
   { key: 'honorCsException', type: 'bool', label: 'Exception pour les CS',
-    desc: 'Si une CS est indispensable, capturer exceptionnellement un Pokémon compatible pour débloquer le passage, puis le remettre au PC pour toujours.' },
-  { key: 'honorNotepad', type: 'bool', label: 'Aucun Pokémon dans le PC', desc: 'Interdit de capturer tant que l’équipe est pleine (« Notepad Clause »).' },
+    desc: 'Avant de lancer la Poké Ball, touchez « Pokémon de CS » dans la barre du jeu : la capture est gardée même si la zone est déjà utilisée. Ce Pokémon ne doit jamais gagner d’expérience (combat, Multi Exp, Super Bonbon) : sinon il est relâché.' },
+  { key: 'honorNotepad', type: 'bool', label: 'Pas de capture équipe pleine',
+    desc: 'Un Pokémon capturé alors que l’équipe est pleine (il part au PC) est relâché, et la chance de la zone est utilisée (« Notepad Clause »).' },
   { section: 'Nuzlocke Hardcore : appliqué par Cable Club' },
   { key: 'hardcore', type: 'bool', label: 'Nuzlocke Hardcore',
     desc: 'Plafond de niveau : aucun Pokémon de l’équipe au-dessus du Pokémon le plus fort du prochain champion d’arène (puis de la Ligue après 8 badges), lu dans la ROM de la salle ; au-dessus, il part au PC jusqu’au badge suivant. Pas d’objets du sac en combat (les Poké Balls et les objets tenus restent permis). Style de combat Défini imposé dans le jeu. Équipe entière K.O. = partie perdue.' },
@@ -90,11 +95,11 @@ export const NUZLOCKE_DEFAULTS = {
   hardcore: false, hardcoreItems: 'report',
 };
 
-// the honour rules and the Hardcore, shared by the modes where each player has their own run
+// the classic rules and the Hardcore, shared by the modes where each player has their own run
 const sectionAt = (start) => NUZLOCKE_RULES.findIndex((d) => d.section && d.section.startsWith(start));
-const HONOR = NUZLOCKE_RULES.slice(sectionAt('Règles d’honneur'), sectionAt('Nuzlocke Hardcore'));
+const CLASSIC = NUZLOCKE_RULES.slice(sectionAt('Règles classiques'), sectionAt('Nuzlocke Hardcore'));
 const HARDCORE = NUZLOCKE_RULES.slice(sectionAt('Nuzlocke Hardcore'));
-const honorDefaults = Object.fromEntries(HONOR.filter((d) => d.key).map((d) => [d.key, false]));
+const classicDefaults = Object.fromEntries(CLASSIC.filter((d) => d.key).map((d) => [d.key, false]));
 const rule = (key) => NUZLOCKE_RULES.find((d) => d.key === key);
 
 // Sololocke: one Pokémon in the team at a time, the Nuzlocke's rules around it
@@ -112,7 +117,7 @@ export const SOLOLOCKE_RULES = [
   { ...rule('endWhen'), label: 'Fin du Sololocke' },
   { section: 'Règles optionnelles appliquées par Cable Club' },
   rule('dupesClause'), rule('shinyClause'), rule('legendaries'), rule('giftPokemon'), rule('saveStates'),
-  ...HONOR.filter((d) => d.key !== 'honorNoMultiExp' && d.key !== 'honorNotepad'),
+  ...CLASSIC.filter((d) => d.key !== 'honorNoMultiExp' && d.key !== 'honorNotepad'),
   ...HARDCORE,
 ];
 
@@ -133,12 +138,12 @@ export const SHINYLOCKE_RULES = [
   { key: 'giftPokemon', type: 'bool', label: 'Pokémon offerts ou échangés',
     desc: 'Gardés même s’ils ne sont pas chromatiques. Désactivé : seuls les Pokémon offerts chromatiques sont gardés, les autres sont relâchés.' },
   rule('saveStates'),
-  ...HONOR,
+  ...CLASSIC,
   ...HARDCORE,
 ];
 
 export const SHINYLOCKE_DEFAULTS = {
-  ...NUZLOCKE_DEFAULTS, shinyClause: false, giftPokemon: false, oneShinyPerZone: false, ...honorDefaults,
+  ...NUZLOCKE_DEFAULTS, shinyClause: false, giftPokemon: false, oneShinyPerZone: false, ...classicDefaults,
 };
 
 const BY_MODE = {

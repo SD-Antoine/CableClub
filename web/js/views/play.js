@@ -235,8 +235,22 @@ export async function renderPlay(container, roomId) {
         i.states ? h('div', { class: 'row' },
           btn('Sauvegarde d’état', () => { screen.cmd('save-state', { slot: 1 }); m.close(); }, { iconName: 'save' }),
           btn('Charger l’état', () => { screen.cmd('load-state', { slot: 1 }); m.close(); }, { iconName: 'refresh' })) : null,
+        (() => { const b = hmButton('block'); b?.addEventListener('click', () => m.close()); return b; })(),
         btn('Quitter le jeu', () => { m.close(); quitGame(); }, { kind: 'danger block', iconName: 'door' })),
     });
+  }
+
+  /**
+   * Rule "Exception pour les CS": the player keeps their next forbidden capture for the HMs (one touch before throwing
+   * the Poké Ball); null when the room does not have the rule.
+   */
+  function hmButton(kind) {
+    const mine = room.members.find((m) => m.userId === user?.id);
+    if (!mine || room.mode === 'soullink' || !room.rules?.honorCsException || room.state !== 'running' || mine.status !== 'playing') return null;
+    const on = !!mine.hmNext;
+    return btn(on ? 'CS : prochaine capture' : 'Pokémon de CS', () => srv.post(`/rooms/${roomId}/hm`, { on: !on }).catch((e) => showOsd(e.message, 'warn')),
+      { kind: [kind, on && 'on'].filter(Boolean).join(' '), title: on ? 'La prochaine capture interdite sera gardée pour les CS (toucher pour annuler)'
+        : 'Garder la prochaine capture interdite pour les CS : ce Pokémon ne devra jamais gagner d’expérience' });
   }
 
   // ------------------------------------------------------------ toolbar
@@ -296,6 +310,7 @@ export async function renderPlay(container, roomId) {
       btn('', fullscreen, { kind: 'ghost icon-only', iconName: 'full', title: 'Plein écran (F11)' }),
       btn('', () => { ui.side = !ui.side; side.classList.toggle('hidden', !ui.side); chat?.setVisible(ui.side && ui.sideTab === 'chat'); local.post('/api/config', { sidePanel: ui.side }).catch(() => {}); setTimeout(fit, 0); },
         { kind: ['ghost icon-only', ui.side && 'on'].filter(Boolean).join(' '), iconName: 'panel', title: 'Joueurs et journal' }),
+      hmButton('ghost small'),
       btn('Quitter le jeu', quitGame, { kind: 'ghost small' }));
   }
 

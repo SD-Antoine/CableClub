@@ -256,7 +256,8 @@ public final class GbReader implements GameReader {
                 money = bcd(d, o + 0x2A, 3);
             }
         } else {
-            // gen 2: item pocket (20 slots), key items, then the Poké Ball pocket (12 slots); money before them
+            // gen 2: TM / HM pocket (one count per TM or HM), item pocket (20 slots), key items, then the Poké Ball
+            // pocket (12 slots); money before them
             int items = p + layout.balls - GEN2_ITEMS_BEFORE_BALLS;
             int balls = p + layout.balls;
             if (list(d, items, 20) && list(d, balls, 12)) {
@@ -268,6 +269,15 @@ public final class GbReader implements GameReader {
                         int id = d[pk[0] + 1 + 2 * i] & 0xFF;
                         bag.merge(id, d[pk[0] + 2 + 2 * i] & 0xFF, Integer::sum);
                         pocketOf.put(id, pk[1]);
+                    }
+                }
+                int tms = items - GEN2_TMS_HMS;
+                if (tmHmPocket(d, tms)) {
+                    for (int i = 0; i < GEN2_TMS_HMS; i++) {
+                        int n = d[tms + i] & 0xFF;
+                        if (n > 0) {
+                            bag.merge(gen2TmItem(i), n, Integer::sum);
+                        }
                     }
                 }
                 money = bcd(d, p + layout.balls - GEN2_MONEY_BEFORE_BALLS, 3);
@@ -285,6 +295,32 @@ public final class GbReader implements GameReader {
     private static final int GEN2_ITEMS_BEFORE_BALLS = 0x45;
     /** Gen 2: the money (3 bytes, decimal) is 0x89 bytes before the ball pocket. */
     private static final int GEN2_MONEY_BEFORE_BALLS = 0x89;
+    /** Gen 2: the TM / HM pocket, just before the item pocket: how many of each of the 50 TMs, then of the 7 HMs. */
+    private static final int GEN2_TMS_HMS = 57;
+    /** Gen 2: item id of HM01 (HM02, Fly, is the next one). */
+    private static final int GEN2_HM01 = 243;
+
+    /** Gen 2: the item id of the TM or HM counted at {@code index} of the TM / HM pocket (the ids skip 195 and 220). */
+    private static int gen2TmItem(int index) {
+        if (index >= 50) {
+            return GEN2_HM01 + index - 50;
+        }
+        int tm = index + 1;
+        return 190 + tm + (tm >= 5 ? 1 : 0) + (tm >= 29 ? 1 : 0);
+    }
+
+    /** A TM / HM pocket: at most 99 of each TM, at most one of each HM. */
+    private static boolean tmHmPocket(byte[] d, int o) {
+        if (o < 0 || o + GEN2_TMS_HMS > d.length) {
+            return false;
+        }
+        for (int i = 0; i < GEN2_TMS_HMS; i++) {
+            if ((d[o + i] & 0xFF) > (i < 50 ? 99 : 1)) {
+                return false;
+            }
+        }
+        return true;
+    }
     /**
      * Gen 2 Poké Balls (their pocket), from the item list of the cartridges: Master, Hyper, Super, Poké, then Heavy,
      * Level, Lure, Fast, Friend, Moon, Love and Park Ball (163 is the Light Ball, a held item).
@@ -352,6 +388,103 @@ public final class GbReader implements GameReader {
             out[3 + 2 * n] = (byte) 0xFF;
         }
         return List.of(new Write(at, out));
+    }
+
+    /**
+     * Items taken out by the rules: gen 1 from the bag, gen 2 from the item or Poké Ball pocket (the next pairs move
+     * up, as the games remove an item), an HM from the gen 2 TM / HM pocket.
+     */
+    @Override
+    public List<Write> removeItem(Mem m, int item) {
+        if (item <= 0 || item > 0xFF || party < 0) {
+            return null;
+        }
+        if (layout.gen == 2 && item >= GEN2_HM01 && item < GEN2_HM01 + 7) {
+            long tms = party + layout.balls - GEN2_ITEMS_BEFORE_BALLS - GEN2_TMS_HMS;
+            byte[] pocket = m.read(tms, GEN2_TMS_HMS);
+            int i = 50 + item - GEN2_HM01;
+            return pocket == null || !tmHmPocket(pocket, 0) || pocket[i] == 0 ? null : List.of(new Write(tms + i, new byte[]{0}));
+        }
+        long[] lists = layout.gen == 1 ? new long[]{bagAt}
+                : new long[]{party + layout.balls - GEN2_ITEMS_BEFORE_BALLS, party + layout.balls};
+        int[] slots = layout.gen == 1 ? new int[]{20} : new int[]{20, 12};
+        for (int k = 0; k < lists.length; k++) {
+            byte[] l = lists[k] < 0 ? null : m.read(lists[k], 2 + 2 * slots[k]);
+            if (l == null || !list(l, 0, slots[k])) {
+                continue;
+            }
+            int n = l[0] & 0xFF;
+            byte[] out = l.clone();
+            int w = 0;
+            for (int i = 0; i < n; i++) {
+                if ((l[1 + 2 * i] & 0xFF) != item) {
+                    out[1 + 2 * w] = l[1 + 2 * i];
+                    out[2 + 2 * w] = l[2 + 2 * i];
+                    w++;
+                }
+            }
+            if (w < n) {
+                out[0] = (byte) w;
+                out[1 + 2 * w] = (byte) 0xFF;
+                return List.of(new Write(lists[k], out));
+            }
+        }
+        return null;
+    }
+
+    /** The party structure of {@code mon} as it is now, or null when its place holds another Pokémon. */
+    private byte[] liveStruct(Mem m, Mon mon) {
+        byte[] s = m.read(mon.address(), layout.structSize);
+        return s == null || uid(be16(s, otOffset()), be16(s, dvOffset())) != mon.uid() ? null : s;
+    }
+
+    /** Gen 2: the held item is the byte after the species. */
+    @Override
+    public int heldItem(Mem m, Mon mon) {
+        byte[] s = layout.gen == 2 && !mon.egg() ? liveStruct(m, mon) : null;
+        return s == null ? -1 : s[1] & 0xFF;
+    }
+
+    @Override
+    public List<Write> setHeldItem(Mem m, Mon mon, int item) {
+        byte[] s = layout.gen == 2 && !mon.egg() && item >= 0 && item <= 0xFF ? liveStruct(m, mon) : null;
+        return s == null ? null : List.of(new Write(mon.address() + 1, new byte[]{(byte) item}));
+    }
+
+    /** Moves (gen 1 +8, gen 2 +2) and their PP (gen 1 +29, gen 2 +23, PP Ups in the two high bits) move up together. */
+    @Override
+    public List<Write> forgetMove(Mem m, Mon mon, int move) {
+        byte[] s = mon.egg() ? null : liveStruct(m, mon);
+        if (s == null) {
+            return null;
+        }
+        int mo = layout.gen == 1 ? 8 : 2;
+        int pp = layout.gen == 1 ? 29 : 23;
+        int at = -1;
+        int known = 0;
+        for (int i = 0; i < 4; i++) {
+            int id = s[mo + i] & 0xFF;
+            if (id != 0) {
+                known++;
+            }
+            if (id == move && at < 0) {
+                at = i;
+            }
+        }
+        if (at < 0 || known <= 1) {
+            return null;
+        }
+        byte[] moves = new byte[4];
+        byte[] pps = new byte[4];
+        int n = 0;
+        for (int i = 0; i < 4; i++) {
+            if (i != at) {
+                moves[n] = s[mo + i];
+                pps[n] = s[pp + i];
+                n++;
+            }
+        }
+        return List.of(new Write(mon.address() + mo, moves), new Write(mon.address() + pp, pps));
     }
 
     /**
@@ -688,8 +821,8 @@ public final class GbReader implements GameReader {
     }
 
     /**
-     * Battle set: moves (gen 1 +8, gen 2 +2), stat experience (gen 1 +17, gen 2 +11: HP, Attack, Defense,
-     * Speed, Special), DVs; gen 2 also the held item (+1, the game's own ids), happiness (+27).
+     * Battle set: moves (gen 1 +8, gen 2 +2), experience (gen 1 +14, gen 2 +8), stat experience (gen 1 +17, gen 2
+     * +11: HP, Attack, Defense, Speed, Special), DVs; gen 2 also the held item (+1, the game's own ids), happiness (+27).
      */
     @Override
     public java.util.Map<String, Object> battleSet(Mem m, Mon mon) {
@@ -723,6 +856,8 @@ public final class GbReader implements GameReader {
                 "level", (long) mon.level(), "nickname", mon.nickname(), "moves", moves, "ppUps", ppUps, "shiny", mon.shiny(),
                 "ivs", slt.Json.map("hp", 2L * hpDv, "atk", 2L * atk, "def", 2L * def, "spa", 2L * spc, "spd", 2L * spc, "spe", 2L * spe),
                 "evs", slt.Json.map("hp", ev[0], "atk", ev[1], "def", ev[2], "spa", ev[4], "spd", ev[4], "spe", ev[3]));
+        int xo = layout.gen == 1 ? 14 : 8; // experience points: 3 bytes, big-endian
+        out.put("exp", (long) (((s[xo] & 0xFF) << 16) | ((s[xo + 1] & 0xFF) << 8) | (s[xo + 2] & 0xFF)));
         if (layout.gen == 2) {
             out.put("happiness", (long) (s[27] & 0xFF));
             out.put("genderValue", (long) atk); // female when the Attack DV is under the species' threshold

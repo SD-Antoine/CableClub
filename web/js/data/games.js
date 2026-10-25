@@ -42,6 +42,7 @@ export function support(gen, mode = 'soullink') {
     'objets rendus',
     gen >= 2 && 'taux de chromatiques',
     gen >= 2 ? 'combats entre joueurs (avec les objets tenus)' : 'combats entre joueurs',
+    !linked && `règles classiques du Nuzlocke (objets interdits retirés du sac${gen >= 2 ? ', objets tenus' : ''}, Vol, évolutions, mode Défini…)`,
     !linked && 'option Hardcore (plafond de niveau, objets en combat, mode Défini)',
     'fin automatique',
   ].filter(Boolean).join(', ');

@@ -49,6 +49,32 @@ public interface GameReader {
     }
 
     /**
+     * Writes taking every {@code item} out of the bag (rules of the room: no healing items, no Master Ball…), the next
+     * slots of its pocket moving up as the games keep them; null when it is not in the bag or unsupported.
+     */
+    default List<Write> removeItem(Mem m, int item) {
+        return null;
+    }
+
+    /** The item held by a party Pokémon: 0 none, -1 unknown (generation 1 has no held items). */
+    default int heldItem(Mem m, Mon mon) {
+        return -1;
+    }
+
+    /** Writes giving the party Pokémon {@code mon} the held item {@code item} (0: none), null when not possible. */
+    default List<Write> setHeldItem(Mem m, Mon mon, int item) {
+        return null;
+    }
+
+    /**
+     * Writes making the party Pokémon {@code mon} forget {@code move} (the next moves move up, with their PP), null when
+     * it does not know it, when it is its only move or unsupported.
+     */
+    default List<Write> forgetMove(Mem m, Mon mon, int move) {
+        return null;
+    }
+
+    /**
      * Writes moving a dead Pokémon from the party to the dedicated PC box, or
      * null when unsupported or not safe right now (battle, last Pokémon…).
      */
@@ -86,7 +112,7 @@ public interface GameReader {
      * Everything a battle simulator needs about a Pokémon of the party (in-room battles): national species,
      * level, moves (ids), ivs / evs (generations 1-2: DVs x 2 and the square root of the stat experience, as
      * Showdown counts them), nature (0-24), ability (id, or slot 0/1 in generation 3), held item (generations
-     * 4-5: same ids as Showdown), gender, happiness, shiny; null when unknown.
+     * 4-5: same ids as Showdown), gender, happiness, shiny, experience points ("exp"); null when unknown.
      */
     default java.util.Map<String, Object> battleSet(Mem m, Mon mon) {
         return null;

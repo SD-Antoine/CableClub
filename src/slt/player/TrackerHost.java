@@ -58,8 +58,19 @@ final class TrackerHost implements Session.Tracker {
     private volatile Set<Long> park = Set.of();
     /** Why each of them goes: "solo" or "cap". */
     private volatile Map<String, Object> parkWhy = Map.of();
-    /** Hardcore: the game's battle style kept on "Set". */
+    /** Hardcore, or the rule "Mode Défini": the game's battle style kept on "Set". */
     private volatile boolean setMode;
+    /** Items the room's rules take out of the bag, by category ({@link slt.player.track.ItemRules}): heal, repel… */
+    private volatile Set<String> ban = Set.of();
+    /** No held items: they go back to the bag (mail excepted). */
+    private volatile boolean noHeld;
+    /** No Fly: the team forgets the move. */
+    private volatile boolean noFly;
+    /** The presence in game tells when the player has the controls on the field: for how many images (0: not now). */
+    private volatile boolean presenceKnown;
+    private volatile int freeFrames;
+    /** Held items left on a Pokémon because the bag had no room for them (told once). */
+    private final Set<Long> heldNoRoom = new HashSet<>();
     private long lastWrites;
     private final Set<Long> depositFailures = new HashSet<>();
     /** The room's shiny rate, applied in the game (generations 2 and 3), or null. */
@@ -215,7 +226,38 @@ final class TrackerHost implements Session.Tracker {
         Map<String, Object> why = Json.obj(d.get("parkWhy"));
         parkWhy = why == null ? Map.of() : why;
         setMode = Json.bool(d, "setMode", false);
+        Set<String> b = new HashSet<>();
+        List<Object> banList = Json.arr(d.get("ban"));
+        if (banList != null) {
+            for (Object o : banList) {
+                b.add(String.valueOf(o));
+            }
+        }
+        ban = b;
+        noHeld = Json.bool(d, "noHeld", false);
+        noFly = Json.bool(d, "noFly", false);
         trade = Json.obj(d.get("trade"));
+    }
+
+    /**
+     * What the presence in game sees on this image: the player has the controls on the field (no menu, dialogue or
+     * battle), or null when it does not know yet (the player was never seen on the field). The bag and the team are
+     * changed by the rules only while the player has the controls, the game holding no copy of them.
+     */
+    void fieldFree(Boolean free) {
+        presenceKnown = free != null;
+        freeFrames = Boolean.TRUE.equals(free) ? Math.min(freeFrames + 1, 1 << 20) : 0;
+    }
+
+    /** Generation of the game (the ids of its items). */
+    private int gen() {
+        if (reader instanceof slt.player.track.GbReader gb) {
+            return gb.gen();
+        }
+        if (reader instanceof slt.player.track.NdsReader nds) {
+            return nds.gen5() ? 5 : 4;
+        }
+        return 3;
     }
 
     // ----------------------------------------------------------------- tick
@@ -407,6 +449,12 @@ final class TrackerHost implements Session.Tracker {
         // the game works on a copy of the party and would write it back over the change)
         boolean field = engine.battleState() == 0 || (engine.battleState() < 0 && engine.mapJustChanged());
         reader.cartridgeRamLive(core.cartridgeRamLive());
+        // the rules on items and moves: while the player walks on the field with no menu open (the presence in game
+        // tells; without it, out of battle), so that no screen of the game holds a copy of the bag or of the team
+        boolean calm = presenceKnown ? freeFrames >= 30 : field; // half a second with the controls
+        if (calm && enforce(core, m, party)) {
+            return; // the bag or the team changed: the rest waits for a fresh reading
+        }
         if (field) {
             // released (against the rules, cancelled zone): gone from the party and from the PC
             for (long uid : release) {
@@ -460,6 +508,96 @@ final class TrackerHost implements Session.Tracker {
                 break; // one at a time: the party has changed
             }
         }
+    }
+
+    /**
+     * The room's rules on items and moves, one change at a time: an item they forbid taken out of the bag, a held item
+     * put back in the bag (or taken away when forbidden), Fly forgotten. Each change is told to the room; the bag
+     * changes are not reported as the player's.
+     * @return true when the game's memory changed
+     */
+    private boolean enforce(CoreHost core, Mem m, List<Mon> party) {
+        int gen = gen();
+        Set<String> cats = ban;
+        Set<Integer> banned = slt.player.track.ItemRules.banned(gen, cats);
+        Map<Integer, Integer> bag = engine.bag();
+        if (bag != null) {
+            for (int item : banned) {
+                int qty = bag.getOrDefault(item, 0);
+                if (qty <= 0) {
+                    continue;
+                }
+                List<GameReader.Write> w = reader.removeItem(m, item);
+                if (w != null && write(core, w)) {
+                    String cat = slt.player.track.ItemRules.category(gen, item, cats);
+                    String name = itemName(item);
+                    engine.ruleChange(item, -qty);
+                    engine.report(Json.map("type", "removed", "item", (long) item, "name", name, "qty", (long) qty, "rule", cat));
+                    Log.info("Règles de la salle : " + qty + "× " + name + " retiré du sac");
+                    toast.accept("🚫 " + name + " retiré du sac (" + slt.player.track.ItemRules.label(cat) + ")");
+                    return true;
+                }
+            }
+        }
+        if (noHeld || !banned.isEmpty()) {
+            for (Mon mon : party) {
+                int item = reader.heldItem(m, mon);
+                boolean forbidden = banned.contains(item);
+                if (item <= 0 || (!forbidden && (!noHeld || slt.player.track.ItemRules.mail(gen, item)))) {
+                    continue;
+                }
+                List<GameReader.Write> take = reader.setHeldItem(m, mon, 0);
+                if (take == null) {
+                    continue;
+                }
+                List<GameReader.Write> w = new ArrayList<>(take);
+                if (!forbidden) {
+                    List<GameReader.Write> add = reader.addItem(m, item, 1);
+                    if (add == null) {
+                        if (heldNoRoom.add(mon.uid())) {
+                            toast.accept("🎒 Sac plein : " + monName(mon) + " garde son objet pour l'instant (pas d'objet tenu)");
+                        }
+                        continue;
+                    }
+                    w.addAll(add);
+                }
+                if (write(core, w)) {
+                    String name = itemName(item);
+                    String cat = forbidden ? slt.player.track.ItemRules.category(gen, item, cats) : null;
+                    if (!forbidden) {
+                        engine.ruleChange(item, 1);
+                    }
+                    engine.report(Json.map("type", "held", "uid", TrackerEngine.uidText(mon.uid()), "nickname", mon.nickname(),
+                            "item", (long) item, "name", name, "rule", forbidden ? cat : "held"));
+                    Log.info("Règles de la salle : objet tenu " + name + " retiré à " + monName(mon));
+                    toast.accept(forbidden ? "🚫 " + monName(mon) + " : " + name + " retiré (" + slt.player.track.ItemRules.label(cat) + ")"
+                            : "🎒 " + monName(mon) + " : " + name + " remis dans le sac (pas d'objet tenu)");
+                    return true;
+                }
+            }
+        }
+        if (noFly) {
+            for (Mon mon : party) {
+                List<GameReader.Write> w = reader.forgetMove(m, mon, slt.player.track.ItemRules.FLY);
+                if (w != null && write(core, w)) {
+                    engine.report(Json.map("type", "forgot", "uid", TrackerEngine.uidText(mon.uid()), "nickname", mon.nickname(),
+                            "move", (long) slt.player.track.ItemRules.FLY));
+                    Log.info("Règles de la salle : " + monName(mon) + " oublie Vol");
+                    toast.accept("🚫 " + monName(mon) + " oublie Vol (pas de Vol)");
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private String itemName(int item) {
+        String n = engine.info().itemName(item);
+        return n == null ? "Objet #" + item : n;
+    }
+
+    private static String monName(Mon mon) {
+        return mon.nickname() != null ? mon.nickname() : "Pokémon";
     }
 
     /**
@@ -576,6 +714,35 @@ final class TrackerHost implements Session.Tracker {
         }
         List<GameReader.Write> w = reader.addItem(m, item, qty);
         return w != null && write(core, w);
+    }
+
+    /** Gives a party Pokémon a held item (0: none), or makes it forget a move (tests): true when written. */
+    boolean testEdit(CoreHost core, long uid, String what, int value) {
+        Mem m = capture(core);
+        if (m == null || reader.read(m) == null) {
+            return false;
+        }
+        for (Mon mon : engine.party()) {
+            if (mon.uid() == uid) {
+                List<GameReader.Write> w = "forget".equals(what) ? reader.forgetMove(m, mon, value) : reader.setHeldItem(m, mon, value);
+                return w != null && write(core, w);
+            }
+        }
+        return false;
+    }
+
+    /** What the reader sees of a party Pokémon: held item and battle set (tests). */
+    String testMon(CoreHost core, long uid) {
+        Mem m = capture(core);
+        if (m == null || reader.read(m) == null) {
+            return null;
+        }
+        for (Mon mon : engine.party()) {
+            if (mon.uid() == uid) {
+                return "objet " + reader.heldItem(m, mon) + " " + reader.battleSet(m, mon);
+            }
+        }
+        return null;
     }
 
     /** Sends a party Pokémon to the PC (dead: the dead box; else the first boxes), as the rules would (tests). */

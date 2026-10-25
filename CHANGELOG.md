@@ -1,5 +1,16 @@
 # Nouveautés de Cable Club (anciennement SLT)
 
+## 0.11.0 — 2026-10-25
+
+- **Les règles d'honneur sont appliquées par Cable Club** (modes Nuzlocke, Sololocke et Shinylocke, générations 1 à 5) : ce sont maintenant les « Règles classiques du Nuzlocke ». Un objet interdit quitte le sac dès que le joueur reprend la main sur le terrain (hors menus, dialogues et combats), et chaque changement est noté dans le journal de la salle.
+- **Pas d'objets de soin** : potions, soins de statut, Rappels, PP, boissons, herbes et baies qui soignent sont retirés du sac (et des Pokémon qui les tiennent). **Pas de Master Ball**, **Pas de Repousse**, **Pas de Multi Exp** (le Multi Exp de la 1re génération aussi) : retirés du sac.
+- **Pas d'objet tenu** (générations 2 à 5) : l'objet tenu par un Pokémon de l'équipe est remis dans le sac ; les lettres restent.
+- **Pas de Vol** : la CS Vol est retirée du sac, et les Pokémon de l'équipe oublient l'attaque Vol.
+- **Mode Défini** : le style de combat « Défini » est imposé dans les options du jeu, comme dans le Nuzlocke Hardcore.
+- **Pas d'évolution** : les évolutions sont retirées de la ROM de la salle (aucun Pokémon n'évolue, les pierres sont sans effet). La règle se choisit avant le lancement de l'aventure ; la changer fait régénérer les ROMs.
+- **Pas de capture équipe pleine** (« Notepad Clause ») : un Pokémon capturé alors que l'équipe est pleine (il part au PC) est relâché, et la chance de la zone est utilisée.
+- **Exception pour les CS** : le bouton « Pokémon de CS » de la barre du jeu fait garder la prochaine capture interdite (zone déjà utilisée, doublon, pas chromatique, équipe pleine) pour les CS. Ce Pokémon ne doit jamais gagner d'expérience (combat, Multi Exp, Super Bonbon) : sinon, il est relâché. En Sololocke, il reste dans l'équipe sans compter comme le Pokémon seul.
+
 ## 0.10.0 — 2026-10-25
 
 - **Mode Sololocke**, avec son onglet : des salles de 1 (solo) à 10 joueurs, chacun le sien, avec les règles du Nuzlocke autour d'**un seul Pokémon dans l'équipe**. Dès qu'un deuxième Pokémon vivant rejoint l'équipe (capture, cadeau, retrait du PC), Cable Club l'envoie dans le PC ; ou « Sur l'honneur » : l'équipe peut garder des Pokémon pour les CS, mais un seul combat. Quand votre Pokémon meurt : « Un autre prend la relève » (un Pokémon vivant du PC ; la partie n'est perdue que s'il n'en reste aucun) ou « La partie est perdue ». Jeux des générations 1 à 5.

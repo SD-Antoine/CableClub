@@ -75,6 +75,10 @@ public final class TrackerEngine {
     private int quietWildBattles;
     private int lastBalls = -1;
     private boolean capsSent;
+    /** Bag changes made by the room's rules ({item, delta, until (ms)}): not the player's doing, not reported. */
+    private final java.util.Queue<long[]> ruled = new java.util.concurrent.ConcurrentLinkedQueue<>();
+    private final List<long[]> ruledPending = new ArrayList<>();
+    private volatile Map<Integer, Integer> bag;
     private volatile List<Mon> party = List.of();
     private volatile Set<Long> doomed = Set.of();
     private volatile String status = "En attente du jeu…";
@@ -105,6 +109,21 @@ public final class TrackerEngine {
     /** -1 unknown, 0 no battle, 1 wild, 2 trainer (last reading). */
     public int battleState() {
         return battleState;
+    }
+
+    /** The bag of the last reading (item id -> quantity), null when unknown. */
+    public Map<Integer, Integer> bag() {
+        return bag;
+    }
+
+    /** The room's rules changed the bag ({@code delta} of {@code item}): the next readings do not report it. */
+    public void ruleChange(int item, int delta) {
+        ruled.add(new long[]{item, delta, System.currentTimeMillis() + 10_000});
+    }
+
+    /** Sends an event of the room's rules applied in the game (an item taken out, a move forgotten…). */
+    public void report(Map<String, Object> ev) {
+        emit(ev);
     }
 
     /** No wild encounter in progress (last reading). */
@@ -326,10 +345,16 @@ public final class TrackerEngine {
         if (bag == null) {
             return;
         }
+        this.bag = bag;
         Map<Integer, Integer> before = lastBag;
         long moneyBefore = lastMoney;
         lastBag = bag;
         lastMoney = s.money();
+        long now = System.currentTimeMillis();
+        for (long[] r; (r = ruled.poll()) != null; ) {
+            ruledPending.add(r);
+        }
+        ruledPending.removeIf(r -> r[1] == 0 || r[2] < now);
         if (before == null) {
             return;
         }
@@ -338,6 +363,14 @@ public final class TrackerEngine {
         List<Object> changes = new ArrayList<>();
         for (int id : ids) {
             int delta = bag.getOrDefault(id, 0) - before.getOrDefault(id, 0);
+            for (long[] r : ruledPending) {
+                // what the room's rules did (an item taken out, a held item put back in the bag) is not the player's
+                if (r[0] == id && delta != 0 && Long.signum(r[1]) == Integer.signum(delta)) {
+                    long take = Math.min(Math.abs(r[1]), Math.abs(delta)) * Long.signum(r[1]);
+                    delta -= (int) take;
+                    r[1] -= take;
+                }
+            }
             if (delta != 0) {
                 String name = info.itemName(id);
                 changes.add(Json.map("item", (long) id, "name", name == null ? "Objet #" + id : name, "delta", (long) delta));
@@ -383,7 +416,8 @@ public final class TrackerEngine {
             }
             sig.append(x.uid()).append(':').append(x.species()).append(':').append(x.level()).append(':')
                     .append(x.hp()).append(':').append(x.nickname()).append(':')
-                    .append(set == null ? "" : String.valueOf(set.get("moves"))).append(';');
+                    .append(set == null ? "" : String.valueOf(set.get("moves"))).append(':')
+                    .append(set == null ? "" : String.valueOf(set.get("exp"))).append(';');
             list.add(Json.map("uid", uidText(x.uid()), "species", (long) x.species(), "speciesName", info.speciesName(x.species()),
                     "nickname", x.nickname(), "level", (long) x.level(), "hp", (long) x.hp(), "maxHp", (long) x.maxHp(),
                     "shiny", x.shiny(), "dead", doomed.contains(x.uid()), "set", set));

@@ -99,8 +99,11 @@ final class RoomRoms {
             throw new Http.Fail(409, msg);
         }
         report(roomId, Json.map("status", "building"));
+        // the room's rule "Pas d'évolution" (modes where each player has their own run) is written in the ROM
+        Map<String, Object> rules = Json.obj(room.get("rules"));
+        boolean noEvolution = !"soullink".equals(Json.str(room, "mode")) && rules != null && Json.bool(rules, "honorNoEvolution", false);
         try {
-            Map<String, Object> result = build(roomId, source, rando, seedFor(rando, slot), progress);
+            Map<String, Object> result = build(roomId, source, rando, seedFor(rando, slot), noEvolution, progress);
             report(roomId, Json.map("status", "ready", "crc", result.get("crc"), "sourceCrc", source.get("crc"),
                     "lang", source.get("lang"), "gameId", gameId, "families", result.get("families")));
             result.remove("families");
@@ -112,7 +115,7 @@ final class RoomRoms {
     }
 
     private Map<String, Object> build(String roomId, Map<String, Object> source, Map<String, Object> rando, long seed,
-                                      Consumer<String> progress) throws IOException {
+                                      boolean noEvolution, Consumer<String> progress) throws IOException {
         Path dir = dir(roomId);
         Files.createDirectories(dir);
         String src = Json.str(source, "path");
@@ -126,7 +129,7 @@ final class RoomRoms {
             out = dir.resolve("rom." + ext);
             Files.copy(Path.of(src), out, StandardCopyOption.REPLACE_EXISTING);
         }
-        Map<String, Object> patches = SltPatches.apply(out.toString(), rando, seed, progress);
+        Map<String, Object> patches = SltPatches.apply(out.toString(), rando, seed, noEvolution, progress);
         progress.accept("Vérification…");
         String crc = Library.crc32(out);
         Map<String, Object> info = Json.map("roomId", roomId, "path", out.toString(), "crc", crc,

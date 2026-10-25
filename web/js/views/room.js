@@ -361,9 +361,9 @@ export async function renderRoom(container, roomId, { history = false } = {}) {
   const logBox = h('div');
   const LOG_FILTERS = {
     all: () => true,
-    captures: (l) => ['capture', 'encounter', 'link', 'name', 'release', 'existing'].includes(l.type),
+    captures: (l) => ['capture', 'encounter', 'link', 'name', 'release', 'existing', 'hm'].includes(l.type),
     deaths: (l) => ['death', 'kill', 'cancel', 'whiteout', 'wipe'].includes(l.type),
-    items: (l) => ['item', 'buy', 'sell', 'obtain', 'refund', 'foul'].includes(l.type),
+    items: (l) => ['item', 'buy', 'sell', 'obtain', 'refund', 'foul', 'rule'].includes(l.type),
     battles: (l) => ['battle', 'win', 'loss', 'badge', 'champion', 'cap'].includes(l.type),
   };
   function drawLogs() {
@@ -421,7 +421,7 @@ export async function renderRoom(container, roomId, { history = false } = {}) {
     switch (ui.tab) {
       case 'players': content = playersTab(); break;
       case 'journal': drawLogs(); content = logBox; break;
-      case 'rules': content = h('div', { class: 'card' }, rulesEditor(room.rules, { editable: isLeader() && room.state === 'running', mode: room.mode, gen: Number(room.game?.gen), onChange: setRules })); break;
+      case 'rules': content = h('div', { class: 'card' }, rulesEditor(room.rules, { editable: isLeader() && room.state === 'running', launched: true, mode: room.mode, gen: Number(room.game?.gen), onChange: setRules })); break;
       case 'rom': content = (drawRomOnly(), romBox); break;
       case 'chat': content = h('div', { class: 'card chat-card' }, chatBox()); break;
       case 'battles': content = duelsBox(); break;

@@ -329,12 +329,18 @@ final class Session {
         } catch (RuntimeException e) {
             Log.error("Présence en jeu désactivée", e);
             presence = null;
-            if (tracker instanceof TrackerHost th && th.engine().reader() instanceof slt.player.track.NdsReader nds) {
-                nds.fieldShown(false);
+            if (tracker instanceof TrackerHost th) {
+                th.fieldFree(null); // the rules fall back on the battle state the tracker reads
+                if (th.engine().reader() instanceof slt.player.track.NdsReader nds) {
+                    nds.fieldShown(false);
+                }
             }
             return;
         }
         sample = s;
+        if (tracker instanceof TrackerHost th) {
+            th.fieldFree(s == null ? null : s.free()); // the rules change the bag and the team only then
+        }
         if (tracker instanceof TrackerHost th && th.engine().reader() instanceof slt.player.track.NdsReader nds) {
             nds.fieldShown(s != null && ("free".equals(s.status()) || "dialogue".equals(s.status())));
         }

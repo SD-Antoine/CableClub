@@ -44,9 +44,16 @@ public final class Room {
         return "shinylocke".equals(mode) ? 2 : 1;
     }
 
-    /** Rules of the Nuzlocke that Cable Club cannot check: the players keep to them on their honour. */
-    static final List<String> HONOR_RULES = List.of("honorNoHealItems", "honorNoHeldItems", "honorNoMultiExp", "honorNoMasterBall",
+    /**
+     * The classic rules of the Nuzlocke, applied by Cable Club in the games (their keys keep the "honor" of the time the
+     * players kept to them on their honour): items taken out of the bag, held items back in it, Fly forgotten, battle
+     * style "Set", no evolution (in the room's ROM), a Pokémon kept for the HMs, no capture with a full team.
+     */
+    static final List<String> CLASSIC_RULES = List.of("honorNoHealItems", "honorNoHeldItems", "honorNoMultiExp", "honorNoMasterBall",
             "honorNoEvolution", "honorNoFly", "honorNoRepel", "honorSetMode", "honorCsException", "honorNotepad");
+
+    /** Rules written in the room's ROM: they change only while the room is a lobby (the ROMs are generated again). */
+    static final Set<String> ROM_RULES = Set.of("honorNoEvolution");
 
     /** Rules of a new Soul Link room; the leader may change them at any time. */
     public static Map<String, Object> defaultRules() {
@@ -77,7 +84,7 @@ public final class Room {
             r.put("naming", "free");
             r.put("pauseForNaming", false);
             r.put("refundCancelled", false);
-            for (String k : HONOR_RULES) {
+            for (String k : CLASSIC_RULES) {
                 r.put(k, false);
             }
             // Hardcore Nuzlocke: level caps, no items in battle, battle style "Set", a whiteout loses the run
@@ -125,11 +132,15 @@ public final class Room {
         String status = "alive";  // alive, dead, released
         String reason;
         long at;
+        /** Kept for the HMs (rule "Exception pour les CS"): it may never gain experience. */
+        boolean hm;
+        /** Its experience points when first seen (-1: not yet). */
+        long hmExp = -1;
 
         Map<String, Object> toJson() {
             return Json.map("uid", uid, "species", (long) species, "speciesName", speciesName, "level", (long) level,
                     "nickname", nickname, "zoneKey", zoneKey, "zone", zone, "origin", origin, "shiny", shiny,
-                    "bonus", bonus, "status", status, "reason", reason, "at", at);
+                    "bonus", bonus, "status", status, "reason", reason, "at", at, "hm", hm, "hmExp", hmExp);
         }
 
         static MonRec fromJson(Map<String, Object> m) {
@@ -147,6 +158,8 @@ public final class Room {
             r.status = Json.str(m, "status") == null ? "alive" : Json.str(m, "status");
             r.reason = Json.str(m, "reason");
             r.at = Json.num(m, "at", 0);
+            r.hm = Json.bool(m, "hm", false);
+            r.hmExp = Json.num(m, "hmExp", -1);
             return r;
         }
 
@@ -352,6 +365,8 @@ public final class Room {
         /** Hardcore: the levels of the gym leaders (8) and of the League in this player's ROM; null unknown. */
         int[] capGyms;
         int capLeague;
+        /** Rule "Exception pour les CS": the next capture the rules forbid is kept, for the HMs. */
+        boolean hmNext;
         // live view (not saved)
         Map<String, Object> live = new LinkedHashMap<>();
         /** What the game shows (field, dialogue, battle: from the position sent to the room), null when unknown. */
@@ -368,7 +383,7 @@ public final class Room {
                     "rom", rom, "families", families, "status", status, "mons", mons, "refunds", refunds,
                     "stats", stats.toJson(), "lastZone", lastZone, "hasBalls", hasBalls, "soloUid", soloUid,
                     "capGyms", capGyms == null ? null : java.util.Arrays.stream(capGyms).mapToObj(v -> (Object) (long) v).toList(),
-                    "capLeague", (long) capLeague);
+                    "capLeague", (long) capLeague, "hmNext", hmNext);
         }
 
         static Member fromStore(Map<String, Object> m) {
@@ -409,6 +424,7 @@ public final class Room {
             x.soloUid = Json.str(m, "soloUid");
             x.capGyms = ints(Json.arr(m.get("capGyms")), 8);
             x.capLeague = (int) Json.num(m, "capLeague", 0);
+            x.hmNext = Json.bool(m, "hmNext", false);
             return x;
         }
 
@@ -553,6 +569,7 @@ public final class Room {
             case "champion" -> champion(m, out);
             case "balls" -> balls(m, ev, out);
             case "caps" -> caps(m, ev, out);
+            case "removed", "held", "forgot" -> ruled(m, ev, out);
             default -> {
                 // unknown event: ignored
             }
@@ -927,6 +944,18 @@ public final class Room {
         }
         m.encounter = null;
         m.live.remove("battle");
+        // "Notepad Clause": no capture while the team is full (the Pokémon caught went to the PC)
+        boolean full = individual() && rule("honorNotepad") && !Json.bool(ev, "inParty", true);
+        if (keepForHms(m, r, kind, full, enc, out)) {
+            return;
+        }
+        if (full && ("zone".equals(kind) || "shiny".equals(kind))) {
+            if ("zone".equals(kind)) {
+                link(m, r, zone(zoneKey(r.zone), r.zone), enc, out); // the chance of the zone is used all the same
+            }
+            release(m, r, "interdit : équipe pleine", out);
+            return;
+        }
         switch (kind) {
             case "zone" -> link(m, r, zone(zoneKey(r.zone), r.zone), enc, out);
             case "shiny" -> bonus(m, r, "chromatique", out);
@@ -940,6 +969,52 @@ public final class Room {
                 }
             }
             default -> release(m, r, "interdit : zone déjà utilisée", out);
+        }
+    }
+
+    /**
+     * Rule "Exception pour les CS": the player asked to keep their next capture the rules forbid (zone already used,
+     * duplicate, not shiny, team full) for the HMs. It counts for no zone, and may never gain experience.
+     */
+    private boolean keepForHms(Member m, MonRec r, String kind, boolean full, Encounter enc, Out out) {
+        boolean forbidden = full || "used".equals(kind) || "dupe".equals(kind) || "notshiny".equals(kind);
+        if (!individual() || !rule("honorCsException") || !m.hmNext || !forbidden) {
+            return false;
+        }
+        if ("zone".equals(kind)) {
+            link(m, r, zone(zoneKey(r.zone), r.zone), enc, out); // team full: the chance of the zone is used all the same
+        } else {
+            bonus(m, r, "Pokémon de CS", out);
+        }
+        r.hm = true;
+        m.hmNext = false;
+        out.log(m, "hm", r.label() + " de " + m.name + " est gardé pour les CS : il ne doit jamais gagner d'expérience", null);
+        out.notice(m, "info", r.label() + " est votre Pokémon de CS : s'il gagne de l'expérience (combat, Multi Exp, Super Bonbon), il est relâché.");
+        return true;
+    }
+
+    /** A Pokémon kept for the HMs gained experience: it is released. */
+    private void hmBroken(Member m, MonRec r, Out out) {
+        r.status = "released";
+        r.reason = "Pokémon de CS qui a gagné de l'expérience";
+        out.log(m, "release", r.label() + " de " + m.name + " a gagné de l'expérience : un Pokémon de CS ne combat pas, il est relâché", null);
+        out.notice(m, "warn", r.label() + " a gagné de l'expérience : un Pokémon de CS ne doit pas combattre. Il est relâché.");
+    }
+
+    /** Rule "Exception pour les CS": the player keeps (or no longer keeps) their next forbidden capture for the HMs. */
+    void hmNext(Member m, boolean on, Out out) {
+        if (!"running".equals(state) || !individual() || !rule("honorCsException")) {
+            throw new Http.Fail(409, "L'exception pour les CS n'est pas active dans cette salle.");
+        }
+        if (m.hmNext == on) {
+            return;
+        }
+        m.hmNext = on;
+        out.changed = true;
+        out.notice(m, "info", on ? "Pokémon de CS : votre prochaine capture interdite est gardée pour les CS. Il ne devra jamais gagner d'expérience."
+                : "Pokémon de CS annulé : les captures interdites sont de nouveau relâchées.");
+        if (on) {
+            out.log(m, "hm", m.name + " va capturer un Pokémon pour les CS", null);
         }
     }
 
@@ -993,7 +1068,7 @@ public final class Room {
         if (r.shiny) {
             m.stats.shinies++;
         }
-        out.log(m, "capture", m.name + " capture " + r.label() + " N." + r.level + " — " + why + ", sans lien",
+        out.log(m, "capture", m.name + " capture " + r.label() + " N." + r.level + " — " + why + (individual() ? "" : ", sans lien"),
                 Json.map("species", (long) r.species, "speciesName", r.speciesName, "level", (long) r.level,
                         "shiny", r.shiny, "bonus", true));
     }
@@ -1081,6 +1156,10 @@ public final class Room {
             r.speciesName = Json.str(ev, "speciesName");
             out.log(m, "evolution", before + " de " + m.name + " évolue en " + r.speciesName, null);
         }
+        if (r.hm && "alive".equals(r.status) && level > 0 && r.level > level) {
+            hmBroken(m, r, out); // a level gained: experience too (the team view also tells it, without a level)
+            return;
+        }
         if (r.level != level && levelCap(m) > 0) {
             parkCheck(m, out);
         }
@@ -1133,11 +1212,34 @@ public final class Room {
     private void live(Member m, Map<String, Object> ev, Out out) {
         if ("team".equals(Json.str(ev, "type"))) {
             m.live.put("team", ev.get("mons"));
+            hmCheck(m, Json.arr(ev.get("mons")), out);
         } else {
             m.live.put("party", ev.get("uids"));
             parkCheck(m, out);
         }
         m.live.put("at", System.currentTimeMillis());
+    }
+
+    /** The Pokémon kept for the HMs never gain experience: the team view gives their experience points. */
+    private void hmCheck(Member m, List<Object> team, Out out) {
+        if (team == null) {
+            return;
+        }
+        for (Object o : team) {
+            Map<String, Object> x = Json.obj(o);
+            MonRec r = x == null ? null : m.mons.get(Json.str(x, "uid"));
+            Map<String, Object> set = x == null ? null : Json.obj(x.get("set"));
+            long exp = set == null ? -1 : Json.num(set, "exp", -1);
+            if (r == null || !r.hm || !"alive".equals(r.status) || exp < 0) {
+                continue;
+            }
+            if (r.hmExp < 0) {
+                r.hmExp = exp;
+                out.changed = true;
+            } else if (exp > r.hmExp) {
+                hmBroken(m, r, out);
+            }
+        }
     }
 
     /**
@@ -1156,8 +1258,8 @@ public final class Room {
         for (Object o : party) {
             String uid = String.valueOf(o);
             MonRec r = m.mons.get(uid);
-            if (r == null || "alive".equals(r.status)) {
-                alive.add(uid);
+            if (r == null || ("alive".equals(r.status) && !r.hm)) {
+                alive.add(uid); // a Pokémon kept for the HMs stays in the team: it never fights
             }
         }
         if (alive.isEmpty()) {
@@ -1402,6 +1504,22 @@ public final class Room {
         }
     }
 
+    /** What the classic rules changed in the player's game: an item out of the bag or off a Pokémon, Fly forgotten. */
+    private void ruled(Member m, Map<String, Object> ev, Out out) {
+        String name = Json.str(ev, "name") == null ? "un objet" : Json.str(ev, "name");
+        String rule = slt.player.track.ItemRules.label(Json.str(ev, "rule"));
+        MonRec r = m.mons.get(Json.str(ev, "uid"));
+        String who = r != null ? r.label() : Json.str(ev, "nickname") != null ? Json.str(ev, "nickname") : "un Pokémon";
+        String text = switch (String.valueOf(Json.str(ev, "type"))) {
+            case "removed" -> "🚫 " + Json.num(ev, "qty", 1) + "× " + name + " retiré du sac de " + m.name + " (" + rule + ")";
+            case "held" -> "held".equals(Json.str(ev, "rule"))
+                    ? "🎒 " + name + " de " + who + " (" + m.name + ") remis dans le sac (pas d'objet tenu)"
+                    : "🚫 " + name + " retiré à " + who + " de " + m.name + " (" + rule + ")";
+            default -> "🚫 " + who + " de " + m.name + " oublie Vol (pas de Vol)";
+        };
+        out.log(m, "rule", text, null);
+    }
+
     /**
      * Was the player in a battle when the item went? The game tells (generations 1 to 3: "fight"); the DS games do not:
      * what their screen shows then (field or battle, from the position sent to the room). Unknown: no (the tracker's
@@ -1542,6 +1660,18 @@ public final class Room {
         } else if ("finished".equals(state) || "abandoned".equals(state)) {
             pause = Json.map("reason", "ended", "text", "Le " + runName() + " est terminé.");
         }
+        // the classic rules applied in the game while the player's run goes on: items taken out of the bag (by
+        // category, see ItemRules), held items back in it, Fly forgotten
+        boolean classic = individual() && "running".equals(state) && "playing".equals(m.status);
+        List<Object> ban = new ArrayList<>();
+        if (classic) {
+            for (String[] b : new String[][]{{"honorNoHealItems", "heal"}, {"honorNoRepel", "repel"},
+                    {"honorNoMasterBall", "masterBall"}, {"honorNoMultiExp", "expShare"}, {"honorNoFly", "fly"}}) {
+                if (rule(b[0])) {
+                    ban.add(b[1]);
+                }
+            }
+        }
         return Json.map("room", id, "doomed", doomed, "release", release, "nicknames", nicknames, "pause", pause,
                 "refunds", new ArrayList<Object>(m.refunds), "deathBox", rule("deathBox"),
                 // shiny rate of the room: k out of 8192 (0 = the game's), applied while playing in gen 2-3 (the DS games
@@ -1549,8 +1679,10 @@ public final class Room {
                 "shinyNum", (long) slt.ShinyOdds.numerator(rando),
                 "shinyRate", (long) slt.ShinyOdds.oneIn(slt.ShinyOdds.numerator(rando)),
                 "park", new ArrayList<Object>(m.park.keySet()), "parkWhy", new LinkedHashMap<String, Object>(m.park),
-                // Hardcore: the level cap of the player right now, and the battle style "Set" imposed in their game
-                "levelCap", (long) levelCap(m), "setMode", individual() && rule("hardcore"),
+                // Hardcore: the level cap of the player right now; Hardcore or "Mode Défini": the battle style "Set"
+                // imposed in their game
+                "levelCap", (long) levelCap(m), "setMode", individual() && (rule("hardcore") || rule("honorSetMode")),
+                "ban", ban, "noHeld", classic && rule("honorNoHeldItems"), "noFly", classic && rule("honorNoFly"),
                 "saveStates", rule("saveStates"), "state", state, "open", adventureOpen, "trade", tradeDirective(m));
     }
 
@@ -1801,6 +1933,7 @@ public final class Room {
                 x.put("stats", m.stats.toJson());
                 x.put("refunds", (long) m.refunds.size());
                 x.put("levelCap", (long) levelCap(m));
+                x.put("hmNext", m.hmNext);
             }
             ms.add(x);
         }

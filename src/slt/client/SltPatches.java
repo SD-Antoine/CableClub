@@ -32,6 +32,7 @@ import java.util.function.Consumer;
  *       with the badges) untouched, never a Master Ball nor an item worth
  *       more when sold than when bought;</li>
  *   <li>evolution lines of the final ROM (dupes clause of the room);</li>
+ *   <li>the room's rule "Pas d'évolution": no evolution left in the ROM;</li>
  *   <li>DS games: the room's shiny rate (the test "shiny value < 8" of the
  *       games' only shiny function becomes "< N"; generations 2 and 3 get the
  *       rate while playing, see the player's ShinyBoost).</li>
@@ -44,8 +45,12 @@ final class SltPatches {
     private SltPatches() {
     }
 
-    static Map<String, Object> apply(String romPath, Map<String, Object> rando, long seed, Consumer<String> progress)
-            throws IOException {
+    /**
+     * @param noEvolution the room's rule "Pas d'évolution": every evolution is taken out of the ROM (level, stones,
+     *                    trade, happiness…), after the evolution lines were read for the dupes clause
+     */
+    static Map<String, Object> apply(String romPath, Map<String, Object> rando, long seed, boolean noEvolution,
+                                     Consumer<String> progress) throws IOException {
         // the original game ("Jeu original"): nothing changes, only the evolution lines are read
         boolean enabled = Json.bool(rando, "enabled", true);
         boolean shops = enabled && "secondary".equals(Json.str(rando, "shops"));
@@ -83,6 +88,17 @@ final class SltPatches {
             }
             Map<String, Object> r = new LinkedHashMap<>();
             r.put("families", families(rh));
+            if (noEvolution) {
+                progress.accept("Évolutions retirées…");
+                for (Pokemon p : rh.getPokemonInclFormes()) {
+                    if (p != null) {
+                        p.evolutionsFrom.clear();
+                        p.evolutionsTo.clear();
+                    }
+                }
+                notes.add("Pas d'évolution : aucun Pokémon n'évolue dans cette ROM");
+                changed = true;
+            }
             r.put("notes", notes);
             if (changed) {
                 progress.accept("Écriture de la ROM…");

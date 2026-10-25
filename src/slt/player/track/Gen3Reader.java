@@ -250,7 +250,103 @@ public final class Gen3Reader implements GameReader {
         return slt.Json.map("gen", 3L, "species", (long) mon.species(), "level", (long) mon.level(),
                 "nickname", mon.nickname(), "moves", moves, "ppUps", ppUps, "ivs", ivs, "evs", evs, "nature", pid % 25,
                 "abilitySlot", (iv >>> 31) & 1, "genderValue", pid & 0xFF, "happiness", (w[g + 2] >>> 8) & 0xFF,
-                "item3", w[g] >>> 16, "shiny", mon.shiny());
+                "item3", w[g] >>> 16, "shiny", mon.shiny(), "exp", w[g + 1]);
+    }
+
+    /** The 100 bytes of the party Pokémon {@code mon} as they are now, or null when its place holds another one. */
+    private static byte[] liveMon(Mem m, Mon mon) {
+        byte[] d = m.read(mon.address(), MON);
+        return d == null || u32(d, 0) != mon.uid() || mon.egg() || substructs(d, 0) == null ? null : d;
+    }
+
+    /**
+     * The write putting back the substructures {@code w} (decrypted words) of the Pokémon whose structure is {@code d}:
+     * from the checksum (0x1C, the sum of their 16-bit halves) to the end of the 48 encrypted bytes.
+     */
+    private static Write sealed(Mon mon, byte[] d, long[] w) {
+        long key = u32(d, 0) ^ u32(d, 4);
+        byte[] out = new byte[0x34];
+        out[2] = d[0x1E];
+        out[3] = d[0x1F];
+        int sum = 0;
+        for (int i = 0; i < 12; i++) {
+            sum += (int) (w[i] & 0xFFFF) + (int) (w[i] >>> 16);
+            long e = (w[i] ^ key) & 0xFFFFFFFFL;
+            for (int b = 0; b < 4; b++) {
+                out[4 + 4 * i + b] = (byte) (e >>> (8 * b));
+            }
+        }
+        out[0] = (byte) sum;
+        out[1] = (byte) (sum >>> 8);
+        return new Write(mon.address() + 0x1C, out);
+    }
+
+    /** Held item: the high half of the first word of Growth. */
+    @Override
+    public int heldItem(Mem m, Mon mon) {
+        byte[] d = liveMon(m, mon);
+        if (d == null) {
+            return -1;
+        }
+        long[] w = substructs(d, 0);
+        return (int) (w[ORDERS[(int) (u32(d, 0) % 24)].indexOf('G') * 3] >>> 16);
+    }
+
+    @Override
+    public List<Write> setHeldItem(Mem m, Mon mon, int item) {
+        byte[] d = item < 0 || item > 0xFFFF || inBattle != 0 ? null : liveMon(m, mon);
+        if (d == null) {
+            return null;
+        }
+        long[] w = substructs(d, 0);
+        int g = ORDERS[(int) (u32(d, 0) % 24)].indexOf('G') * 3;
+        w[g] = (w[g] & 0xFFFF) | ((long) item << 16);
+        return List.of(sealed(mon, d, w));
+    }
+
+    /**
+     * Attacks: 4 moves (u16) then their PP (u8); Growth: PP Ups of each move (2 bits each, byte 8). The next moves move
+     * up with their PP and PP Ups.
+     */
+    @Override
+    public List<Write> forgetMove(Mem m, Mon mon, int move) {
+        byte[] d = inBattle != 0 ? null : liveMon(m, mon);
+        if (d == null) {
+            return null;
+        }
+        long[] w = substructs(d, 0);
+        String order = ORDERS[(int) (u32(d, 0) % 24)];
+        int g = order.indexOf('G') * 3;
+        int a = order.indexOf('A') * 3;
+        int[] moves = {(int) (w[a] & 0xFFFF), (int) (w[a] >>> 16), (int) (w[a + 1] & 0xFFFF), (int) (w[a + 1] >>> 16)};
+        int at = -1;
+        int known = 0;
+        for (int i = 0; i < 4; i++) {
+            known += moves[i] != 0 ? 1 : 0;
+            if (moves[i] == move && at < 0) {
+                at = i;
+            }
+        }
+        if (at < 0 || known <= 1) {
+            return null;
+        }
+        int[] nm = new int[4];
+        int[] pp = new int[4];
+        int bonus = 0;
+        int n = 0;
+        for (int i = 0; i < 4; i++) {
+            if (i != at) {
+                nm[n] = moves[i];
+                pp[n] = (int) ((w[a + 2] >>> (8 * i)) & 0xFF);
+                bonus |= (int) (((w[g + 2] >>> (2 * i)) & 3) << (2 * n));
+                n++;
+            }
+        }
+        w[a] = nm[0] | ((long) nm[1] << 16);
+        w[a + 1] = nm[2] | ((long) nm[3] << 16);
+        w[a + 2] = pp[0] | ((long) pp[1] << 8) | ((long) pp[2] << 16) | ((long) pp[3] << 24);
+        w[g + 2] = (w[g + 2] & ~0xFFL) | bonus;
+        return List.of(sealed(mon, d, w));
     }
 
     /** Valid Pokémon structures following each other from {@code o} (a party array). */
@@ -708,6 +804,50 @@ public final class Gen3Reader implements GameReader {
                 System.arraycopy(le16(Math.min(99, quantity) ^ key16), 0, slot, 2, 2);
                 return List.of(new Write(sb1 + p.offset() + 4 * i, slot));
             }
+        }
+        return null;
+    }
+
+    /**
+     * Every slot of {@code item} out of its pocket: the next slots move up, the last ones become empty (no item, its
+     * quantity 0 encrypted with the key, as the games clear a slot).
+     */
+    @Override
+    public List<Write> removeItem(Mem m, int item) {
+        if (sb1 < 0 || item <= 0) {
+            return null;
+        }
+        Mem.Block ew = m.block(EWRAM, EWRAM_SIZE);
+        long key = ew == null ? -1 : encryptionKey(ew);
+        if (key < 0) {
+            return null;
+        }
+        int s1 = (int) (sb1 - EWRAM);
+        byte[] d = ew.data;
+        for (Pocket p : new Pocket[]{items, keyItems, balls, tms, berries}) {
+            int o = s1 + p.offset();
+            if (o + 4 * p.slots() > d.length) {
+                return null;
+            }
+            byte[] out = new byte[4 * p.slots()];
+            int n = 0;
+            boolean found = false;
+            for (int i = 0; i < p.slots(); i++) {
+                int id = u16(d, o + 4 * i);
+                if (id == item) {
+                    found = true;
+                } else if (id != 0) {
+                    System.arraycopy(d, o + 4 * i, out, 4 * n++, 4);
+                }
+            }
+            if (!found) {
+                continue;
+            }
+            byte[] empty = le16((int) (key & 0xFFFF));
+            for (int i = n; i < p.slots(); i++) {
+                System.arraycopy(empty, 0, out, 4 * i + 2, 2);
+            }
+            return List.of(new Write(sb1 + p.offset(), out));
         }
         return null;
     }

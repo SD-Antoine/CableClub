@@ -16,6 +16,10 @@ du défi s'appliquent toutes seules dans les jeux. Quatre modes de jeu :
 Option Nuzlocke Hardcore : plafond de niveau du prochain champion d'arène
 (les Pokémon trop forts vont au PC), pas d'objets en combat, style de combat
 Défini imposé, équipe entière K.O. = partie perdue.
+Règles classiques du Nuzlocke, appliquées dans les jeux : pas d'objets de
+soin, de Master Ball, de Repousse ni de Multi Exp (retirés du sac), pas
+d'objet tenu, pas de Vol, mode Défini, pas d'évolution, pas de capture
+équipe pleine, Pokémon de CS.
 
 
 DÉMARRER

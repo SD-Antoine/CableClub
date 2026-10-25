@@ -20,6 +20,13 @@ niveau du prochain champion d'arène (lu dans la ROM, les Pokémon trop forts vo
 au PC), pas d'objets en combat, style de combat Défini imposé, équipe entière
 K.O. = partie perdue.
 
+**Règles classiques du Nuzlocke**, appliquées elles aussi dans les jeux : pas
+d'objets de soin, pas de Master Ball, de Repousse ni de Multi Exp (retirés du
+sac), pas d'objet tenu (remis dans le sac), pas de Vol (CS retirée, attaque
+oubliée), mode Défini, pas d'évolution (retirées de la ROM de la salle), pas de
+capture équipe pleine, et un Pokémon de CS qui ne doit jamais gagner
+d'expérience.
+
 **[⬇ Télécharger la dernière version](https://github.com/SD-Antoine/CableClub/releases/latest)**
 (`CableClub-x.y.z-windows-x64.zip` : décompressez-le et lancez `CableClub.exe`, rien à
 installer). Les nouveautés de chaque version sont dans [CHANGELOG.md](CHANGELOG.md).
