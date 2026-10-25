@@ -7,10 +7,11 @@ import {
 } from '../data/rando.js';
 
 /** The room's rules: switches (editable by the leader, read-only for the others). */
-export function rulesEditor(rules, { editable, onChange, mode }) {
+export function rulesEditor(rules, { editable, onChange, mode, gen }) {
   const r = { ...ruleDefaults(mode), ...(rules || {}) };
-  return h('div', { class: 'list' }, rulesOf(mode).map((def) => {
+  return h('div', { class: 'list' }, rulesOf(mode, gen).map((def) => {
     if (def.section) return h('div', { class: 'rule-section' }, def.section);
+    if (def.when && !def.when(r)) return null; // an option of another rule, shown when that rule is on
     let control;
     if (def.type === 'bool') {
       control = switchEl(!!r[def.key] && !def.soon, (v) => onChange({ [def.key]: v }), { disabled: !editable || def.soon });
@@ -30,24 +31,53 @@ export function randoLines(rando, gen) {
     if (rando?.perPlayer) lines.push('Une ROM différente par joueur');
     if (rando?.shops === 'secondary') lines.push('Vendeurs secondaires aléatoires (sans Master Ball ni objet de revente)');
   }
-  if (Number(rando?.shinyRate) > 0 && gen >= 2) lines.push(`Chromatiques : 1 sur ${rando.shinyRate}`);
+  const k = shinyNum(rando);
+  if (k > 1 && gen >= 2) lines.push(`Chromatiques : ${k}/${SHINY_DENOMINATOR}`);
   return lines;
 }
 
-// shiny rates a room may choose (1 in N); the games' own is 1 in 8192
-export const SHINY_RATES = [[0, 'Celui du jeu (1 sur 8192)'], [4096, '1 sur 4096'], [2048, '1 sur 2048'], [1024, '1 sur 1024'],
-  [512, '1 sur 512'], [256, '1 sur 256']];
+// the games of generations 2 to 5 make 1 Pokémon out of 8192 shiny; a room may choose k out of 8192
+export const SHINY_DENOMINATOR = 8192;
 
-/** The shiny rate of a room (part of the randomization: the DS games get it in their ROM). */
+/** The numerator of a room's shiny rate (0: the game's own). Older rooms kept "1 in N" (shinyRate). */
+export function shinyNum(rando) {
+  if (rando?.shinyNum != null) return Math.max(0, Math.min(SHINY_DENOMINATOR, Math.round(Number(rando.shinyNum) || 0)));
+  const n = Number(rando?.shinyRate) || 0;
+  return n > 0 && n < SHINY_DENOMINATOR ? Math.max(1, Math.round(SHINY_DENOMINATOR / n)) : 0;
+}
+
+/** The shiny rate of a room (part of the randomization: the DS games get it in their ROM). Not in generation 1. */
 function shinyCard(rando, gen, changed) {
   if (gen < 2) return null;
   const how = gen >= 4
     ? 'Écrit dans la ROM de la salle : vaut pour tous les Pokémon du jeu, sauvages comme ceux des dresseurs.'
     : 'Appliqué pendant la partie : chaque Pokémon sauvage a cette chance d’apparaître chromatique (étincelles, couleurs, et chromatique une fois capturé).';
+  const k = shinyNum(rando);
+  const custom = k > 1 || rando.shinyCustom === true;
+  const odds = (n) => (n >= SHINY_DENOMINATOR ? 'tous les Pokémon' : `≈ 1 sur ${Math.round(SHINY_DENOMINATOR / n)}`);
+  const hint = h('small', { class: 'faint' }, custom && k > 1 ? odds(k) : '');
+  const input = h('input', { class: 'input mono', type: 'number', min: 1, max: SHINY_DENOMINATOR, step: 1, style: { width: '96px' },
+    value: k > 1 ? k : '', placeholder: '1',
+    oninput: (e) => {
+      const v = Math.max(0, Math.min(SHINY_DENOMINATOR, Math.round(Number(e.target.value) || 0)));
+      rando.shinyNum = v > 1 ? v : 0;
+      delete rando.shinyRate;
+      hint.textContent = v > 1 ? odds(v) : 'Au moins 2 (1 est le taux du jeu).';
+    },
+    onchange: () => changed() });
   return h('div', { class: 'card tight' }, h('div', { class: 'rule-row' },
     h('div', { class: 'grow' }, h('b', null, 'Pokémon chromatiques'), h('small', null, how)),
-    h('select', { class: 'input', style: { width: '210px' }, onchange: (e) => { rando.shinyRate = Number(e.target.value); changed(); } },
-      SHINY_RATES.map(([v, label]) => h('option', { value: v, selected: Number(rando.shinyRate || 0) === v }, label)))));
+    h('div', { class: 'stack s', style: { alignItems: 'flex-end' } },
+      h('select', { class: 'input', style: { width: '230px' }, onchange: (e) => {
+        rando.shinyCustom = e.target.value === 'custom';
+        if (!rando.shinyCustom) rando.shinyNum = 0;
+        delete rando.shinyRate;
+        changed();
+      } },
+      h('option', { value: 'game', selected: !custom }, `Celui du jeu (1/${SHINY_DENOMINATOR})`),
+      h('option', { value: 'custom', selected: custom }, 'Au choix')),
+      custom ? h('div', { class: 'row', style: { gap: '8px' } }, input, h('span', { class: 'muted' }, `/ ${SHINY_DENOMINATOR}`)) : null,
+      custom ? hint : null)));
 }
 
 /**

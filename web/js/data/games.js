@@ -29,11 +29,21 @@ export const LANG = { fr: 'Français', en: 'Anglais', de: 'Allemand', es: 'Espag
 
 export const gameName = (id) => (GAMES[id] ? `Pokémon ${GAMES[id].name}` : 'Jeu inconnu');
 
-/** What Cable Club applies inside each generation's games (shown to the players). */
-export const SUPPORT = {
-  1: 'Partenaires visibles dans le jeu, suivi, morts liées, surnoms, morts rangés dans la boîte actuelle du PC, fin automatique',
-  2: 'Partenaires visibles dans le jeu, suivi, morts liées, surnoms, morts rangés dans la boîte actuelle du PC, fin automatique',
-  3: 'Tout : partenaires visibles dans le jeu, suivi, morts liées, surnoms, combats, objets, objets rendus, boîte MORTS, fin automatique',
-  4: 'Partenaires visibles dans le jeu (3D), suivi, morts liées, surnoms, boîte MORTS (au changement de lieu), fin automatique',
-  5: 'Partenaires visibles dans le jeu (3D), suivi, morts liées, surnoms, boîte MORTS (au changement de lieu), fin automatique',
-};
+/** What Cable Club applies inside a generation's games for a game mode (shown to the players). */
+export function support(gen, mode = 'soullink') {
+  const linked = mode === 'soullink';
+  const parts = [
+    linked && (gen >= 4 ? 'partenaires visibles dans le jeu (3D)' : 'partenaires visibles dans le jeu'),
+    'suivi',
+    linked && 'morts liées',
+    linked && 'surnoms',
+    mode === 'sololocke' && 'un seul Pokémon dans l’équipe (les autres vont au PC)',
+    gen <= 2 ? 'morts rangés dans la boîte actuelle du PC' : gen === 3 ? 'boîte MORTS' : 'boîte MORTS (au changement de lieu)',
+    'objets rendus',
+    gen >= 2 && 'taux de chromatiques',
+    gen >= 2 ? 'combats entre joueurs (avec les objets tenus)' : 'combats entre joueurs',
+    !linked && 'option Hardcore (plafond de niveau, objets en combat, mode Défini)',
+    'fin automatique',
+  ].filter(Boolean).join(', ');
+  return parts[0].toUpperCase() + parts.slice(1) + (gen === 1 ? ' (pas de Pokémon chromatiques dans cette génération)' : '');
+}

@@ -74,6 +74,7 @@ public final class TrackerEngine {
     private long lastTeamAt;
     private int quietWildBattles;
     private int lastBalls = -1;
+    private boolean capsSent;
     private volatile List<Mon> party = List.of();
     private volatile Set<Long> doomed = Set.of();
     private volatile String status = "En attente du jeu…";
@@ -202,6 +203,11 @@ public final class TrackerEngine {
             if (!firstRead || badges > 0) {
                 emit(Json.map("type", "badges", "count", (long) badges));
             }
+        }
+        if (!capsSent && info.levelCaps() != null) {
+            // the levels of the gym leaders and of the League in this ROM (Hardcore Nuzlocke)
+            capsSent = true;
+            emit(Json.map("type", "caps", "gyms", info.levelCaps().get("gyms"), "league", info.levelCaps().get("league")));
         }
         items(s);
         champion(s);
@@ -342,7 +348,11 @@ public final class TrackerEngine {
         }
         long money = s.money() >= 0 && moneyBefore >= 0 ? s.money() - moneyBefore : 0;
         boolean inBattle = s.battle() > 0 || pending != null;
-        emit(Json.map("type", "items", "changes", changes, "money", money, "battle", inBattle));
+        Map<String, Object> ev = Json.map("type", "items", "changes", changes, "money", money, "battle", inBattle);
+        if (s.battle() >= 0) {
+            ev.put("fight", s.battle() > 0); // the game tells (generations 1 to 3); the DS games do not
+        }
+        emit(ev);
     }
 
     private void champion(Snapshot s) {

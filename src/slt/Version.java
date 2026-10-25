@@ -3,7 +3,7 @@ package slt;
 /** Version of Cable Club (application, player and server share it). */
 public final class Version {
 
-    public static final String VERSION = "0.9.0";
+    public static final String VERSION = "0.10.0";
 
     private Version() {
     }

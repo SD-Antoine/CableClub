@@ -7,6 +7,7 @@
 import { h, mount, btn, icon, modal, toast, errorToast, seg, confirmDialog } from '../ui.js';
 import { local, srv } from '../api.js';
 import { on, me } from '../store.js';
+import { buildTeam, pretty, gameItemId } from '../game/battleteam.js';
 
 let sim = null;
 async function loadSim() {
@@ -23,18 +24,6 @@ async function roomNames(roomId) {
   return namesCache.get(roomId);
 }
 
-/** "POING-KARATE" (generations 1-3 write in capitals) -> "Poing-Karate". */
-function pretty(name) {
-  if (!name || typeof name !== 'string') return null;
-  const n = name.replace(/[\u0000-\u001f]/g, '').trim();
-  if (!n || n === '-' || /^-+$/.test(n)) return null;
-  if (n !== n.toUpperCase()) return n;
-  return n.toLowerCase().replace(/(^|[\s'-])([\p{L}])/gu, (m, a, b) => a + b.toUpperCase());
-}
-
-const NATURES = ['Hardy', 'Lonely', 'Brave', 'Adamant', 'Naughty', 'Bold', 'Docile', 'Relaxed', 'Impish', 'Lax',
-  'Timid', 'Hasty', 'Serious', 'Jolly', 'Naive', 'Modest', 'Mild', 'Quiet', 'Bashful', 'Rash', 'Calm', 'Gentle',
-  'Sassy', 'Careful', 'Quirky'];
 const TYPES = {
   Normal: 'Normal', Fire: 'Feu', Water: 'Eau', Electric: 'Électrik', Grass: 'Plante', Ice: 'Glace', Fighting: 'Combat',
   Poison: 'Poison', Ground: 'Sol', Flying: 'Vol', Psychic: 'Psy', Bug: 'Insecte', Rock: 'Roche', Ghost: 'Spectre',
@@ -44,55 +33,6 @@ const STATUS = { par: ['PAR', 'paralysé'], brn: ['BRU', 'brûlé'], slp: ['SOM'
   psn: ['PSN', 'empoisonné'], tox: ['PSN', 'gravement empoisonné'] };
 const STATS = { atk: 'l’Attaque', def: 'la Défense', spa: 'l’Attaque Spéciale', spd: 'la Défense Spéciale', spe: 'la Vitesse',
   accuracy: 'la Précision', evasion: 'l’Esquive', spc: 'le Spécial' };
-
-/** Showdown sets from the players' Pokémon (see GameReader.battleSet). */
-function buildTeam(sets, dex, names, levelMode) {
-  const byNum = (list) => { const m = new Map(); for (const x of list) if (!m.has(x.num)) m.set(x.num, x); return m; };
-  const species = byNum(dex.species.all().filter((s) => !s.forme || s.baseSpecies === s.name));
-  const moves = byNum(dex.moves.all());
-  const abilities = byNum(dex.abilities.all());
-  const items = byNum(dex.items.all());
-  const used = new Set();
-  return sets.map((s) => {
-    const sp = species.get(Number(s.species)) || dex.species.get('Pikachu');
-    const gen = Number(s.gen);
-    let name = (s.nickname || pretty(names.species?.[s.species]) || sp.name).replace(/[|,\]]/g, '').slice(0, 18) || sp.name;
-    // the names identify the Pokémon in the battle: two the same get a number
-    for (let i = 2; used.has(name); i++) name = `${name.slice(0, 15)} ${i}`;
-    used.add(name);
-    const known = (s.moves || []).map((id, i) => [moves.get(Number(id))?.id, Number(s.ppUps?.[i]) || 0]).filter(([id]) => id);
-    const set = {
-      name, species: sp.name,
-      level: levelMode === 'real' ? Math.max(1, Math.min(100, Number(s.level) || 50)) : Number(levelMode),
-      moves: known.map(([id]) => id),
-      // the games' own PP Ups (Showdown would give 3 to every move)
-      movePPUps: known.map(([, up]) => Math.max(0, Math.min(3, up))),
-      ivs: s.ivs || {}, evs: s.evs || {},
-      happiness: s.happiness ?? 255,
-      shiny: !!s.shiny,
-      item: '',
-      ability: '',
-      gender: '',
-    };
-    if (!set.moves.length) { set.moves = ['struggle']; set.movePPUps = [0]; }
-    if (gen >= 3) set.nature = NATURES[Number(s.nature) % 25] || 'Hardy';
-    if (gen >= 4) {
-      set.ability = abilities.get(Number(s.ability))?.name || Object.values(sp.abilities)[0] || '';
-      if (Number(s.item) > 0) set.item = items.get(Number(s.item))?.name || '';
-      set.gender = s.gender === 'N' ? '' : s.gender || '';
-    } else if (gen === 3) {
-      set.ability = sp.abilities[Number(s.abilitySlot) || 0] || sp.abilities[0] || '';
-    }
-    // gender: the species decides, else the game's own rule (generation 3-4 personality, generation 2 Attack DV)
-    if (sp.gender) set.gender = sp.gender === 'N' ? '' : sp.gender;
-    else if (!set.gender && s.genderValue !== undefined && sp.genderRatio) {
-      const f = sp.genderRatio.F;
-      set.gender = gen === 2 ? (Number(s.genderValue) < f * 16 ? 'F' : 'M') : (Number(s.genderValue) < f * 256 ? 'F' : 'M');
-    }
-    if (gen <= 2) delete set.nature;
-    return set;
-  });
-}
 
 // --------------------------------------------------------------- the battle
 
@@ -129,7 +69,7 @@ export async function openBattle(roomId, battleId) {
   const moveNum = (idOrName) => dex.moves.get(idOrName)?.num;
   const moveName = (idOrName) => pretty(names.moves?.[moveNum(idOrName)]) || dex.moves.get(idOrName)?.name || idOrName;
   const abilityName = (n) => pretty(names.abilities?.[dex.abilities.get(n)?.num]) || n;
-  const itemName = (n) => pretty(names.items?.[dex.items.get(n)?.num]) || n;
+  const itemName = (n) => pretty(names.items?.[gameItemId(n, gen, dex)]) || n;
   const playerName = { p1: info.p1Name || 'Joueur 1', p2: info.p2Name === info.p1Name ? `${info.p2Name} (2)` : info.p2Name || 'Joueur 2' };
 
   // a custom game, as in the cartridges: no team preview (generation 5 has one by default), the first Pokémon leads

@@ -8,7 +8,7 @@ import { local, srv, pollJob } from '../api.js';
 import { store, on, loadRoom, loadLogs, refreshFriends, me } from '../store.js';
 import { gameName, LANG } from '../data/games.js';
 import { rulesEditor, randoEditor, randoLines } from './parts.js';
-import { playerChoices } from '../data/rules.js';
+import { playerChoices, modeName } from '../data/rules.js';
 import { stateChip } from './home.js';
 import { tradeBox, TRADES } from './trades.js';
 import { chatPanel } from './chat.js';
@@ -129,7 +129,7 @@ export async function renderRoom(container, roomId, { history = false } = {}) {
   async function endRun() {
     modal({
       title: 'Terminer l’aventure',
-      body: h('p', { class: 'muted' }, 'Le Soul Link s’arrête pour tout le monde et rejoint l’historique avec son bilan. La fin est détectée automatiquement quand le Maître de la Ligue est battu ; utilisez ceci si besoin.'),
+      body: h('p', { class: 'muted' }, `Le ${modeName(room.mode)} s’arrête pour tout le monde et rejoint l’historique avec son bilan. La fin est détectée automatiquement quand le Maître de la Ligue est battu ; utilisez ceci si besoin.`),
       actions: [
         { label: 'Annuler', onClick: (c) => c() },
         { label: 'Abandonner', kind: 'danger', onClick: (c) => finish('abandon', c) },
@@ -147,7 +147,7 @@ export async function renderRoom(container, roomId, { history = false } = {}) {
     const m = mine();
     return h('div', { class: 'room-head' },
       h('div', null,
-        h('h1', null, room.name, stateChip(room), room.mode === 'nuzlocke' ? chip('Nuzlocke') : null, room.visibility === 'public' ? chip('Publique', 'accent') : null),
+        h('h1', null, room.name, stateChip(room), room.mode && room.mode !== 'soullink' ? chip(modeName(room.mode)) : null, room.rules?.hardcore ? chip('Hardcore', 'danger') : null, room.visibility === 'public' ? chip('Publique', 'accent') : null),
         h('div', { class: 'meta' },
           h('span', null, gameName(room.game?.gameId)),
           h('span', null, '·'), h('span', null, room.maxPlayers === 1 ? 'Solo' : `${room.members.length}/${room.maxPlayers} joueur(s)`),
@@ -246,7 +246,7 @@ export async function renderRoom(container, roomId, { history = false } = {}) {
           h('ul', { class: 'muted small', style: { margin: '10px 0 0', paddingLeft: '18px' } }, randoLines(room.rando, gen()).map((l) => h('li', null, l))),
           h('p', { class: 'tiny faint mt-s' }, 'Seed ', h('span', { class: 'mono' }, room.rando?.seed || '—')))),
         h('div', { class: 'card' }, h('h3', null, 'Règles'), h('p', { class: 'tiny faint mt-s' }, isLeader() ? 'Modifiables à tout moment, même en cours de partie.' : 'Fixées par le chef de salle.'),
-          rulesEditor(room.rules, { editable: isLeader(), mode: room.mode, onChange: setRules }))),
+          rulesEditor(room.rules, { editable: isLeader(), mode: room.mode, gen: Number(room.game?.gen), onChange: setRules }))),
       m ? h('div', { class: 'card mt chat-card' }, h('h3', { class: 'mb' }, 'Discussion de la salle'), chatBox()) : null,
       m ? h('div', { class: 'action-bar' },
         h('div', { class: 'grow' },
@@ -271,7 +271,7 @@ export async function renderRoom(container, roomId, { history = false } = {}) {
       h('div', { class: 'grid2 mt-l' },
         h('div', { class: 'card' }, h('h3', null, 'Randomisation'),
           h('ul', { class: 'muted small', style: { margin: '10px 0 0', paddingLeft: '18px' } }, randoLines(room.rando || {}, gen()).map((l) => h('li', null, l)))),
-        h('div', { class: 'card' }, h('h3', null, 'Règles'), rulesEditor(room.rules || {}, { editable: false, mode: room.mode, onChange: () => {} }))));
+        h('div', { class: 'card' }, h('h3', null, 'Règles'), rulesEditor(room.rules || {}, { editable: false, mode: room.mode, gen: Number(room.game?.gen), onChange: () => {} }))));
   }
 
   function invitedView() {
@@ -343,7 +343,8 @@ export async function renderRoom(container, roomId, { history = false } = {}) {
       return h('div', { class: 'card' },
         h('div', { class: 'row' }, avatar(m.name, m.slot, { online: m.online, id: m.userId, pic: m.avatar }),
           h('div', { class: 'grow' }, h('b', null, m.name), h('div', { class: 'tiny muted' },
-            m.status === 'champion' ? '🏆 Maître vaincu' : live.zone ? `À ${live.zone}${live.battle ? ' · en combat' : ''}` : m.online ? 'En ligne' : 'Hors ligne'))),
+            m.status === 'champion' ? '🏆 Maître vaincu' : live.zone ? `À ${live.zone}${live.battle ? ' · en combat' : ''}` : m.online ? 'En ligne' : 'Hors ligne'),
+            m.levelCap > 0 ? h('div', { class: 'tiny muted' }, `Hardcore : niveau ${m.levelCap} au plus${s.fouls ? ` · ⚠ ${s.fouls} objet(s) en combat` : ''}`) : null)),
         h('div', { class: 'stat-nums' },
           h('div', null, h('b', null, s.captures || 0), h('small', null, 'captures')),
           h('div', null, h('b', null, s.deaths || 0), h('small', null, 'morts')),
@@ -361,9 +362,9 @@ export async function renderRoom(container, roomId, { history = false } = {}) {
   const LOG_FILTERS = {
     all: () => true,
     captures: (l) => ['capture', 'encounter', 'link', 'name', 'release', 'existing'].includes(l.type),
-    deaths: (l) => ['death', 'kill', 'cancel', 'whiteout'].includes(l.type),
-    items: (l) => ['item', 'buy', 'sell', 'obtain', 'refund'].includes(l.type),
-    battles: (l) => ['battle', 'win', 'loss', 'badge', 'champion'].includes(l.type),
+    deaths: (l) => ['death', 'kill', 'cancel', 'whiteout', 'wipe'].includes(l.type),
+    items: (l) => ['item', 'buy', 'sell', 'obtain', 'refund', 'foul'].includes(l.type),
+    battles: (l) => ['battle', 'win', 'loss', 'badge', 'champion', 'cap'].includes(l.type),
   };
   function drawLogs() {
     const logs = store.logs.get(roomId);
@@ -388,7 +389,7 @@ export async function renderRoom(container, roomId, { history = false } = {}) {
     const ended = room.ended || {};
     const sum = ended.summary || [];
     const icons = { victory: '🏆', defeat: '☠', abandon: '⏹' };
-    const titles = { victory: 'Soul Link réussi', defeat: 'Soul Link perdu', abandon: 'Aventure arrêtée' };
+    const titles = { victory: `${modeName(room.mode)} réussi`, defeat: `${modeName(room.mode)} perdu`, abandon: 'Aventure arrêtée' };
     return h('div', null,
       h('div', { class: ['outcome', ended.outcome] }, h('span', { class: 'big-icon' }, icons[ended.outcome] || '•'),
         h('div', null, h('h2', null, titles[ended.outcome] || 'Terminé'), h('p', { class: 'muted small' }, `${ended.reason || ''} ${ended.at ? '· ' + dateTime(ended.at) : ''}`))),
@@ -420,7 +421,7 @@ export async function renderRoom(container, roomId, { history = false } = {}) {
     switch (ui.tab) {
       case 'players': content = playersTab(); break;
       case 'journal': drawLogs(); content = logBox; break;
-      case 'rules': content = h('div', { class: 'card' }, rulesEditor(room.rules, { editable: isLeader() && room.state === 'running', mode: room.mode, onChange: setRules })); break;
+      case 'rules': content = h('div', { class: 'card' }, rulesEditor(room.rules, { editable: isLeader() && room.state === 'running', mode: room.mode, gen: Number(room.game?.gen), onChange: setRules })); break;
       case 'rom': content = (drawRomOnly(), romBox); break;
       case 'chat': content = h('div', { class: 'card chat-card' }, chatBox()); break;
       case 'battles': content = duelsBox(); break;

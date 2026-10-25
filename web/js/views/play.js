@@ -12,6 +12,7 @@ import { keymap } from '../game/keys.js';
 import { TouchPad } from '../game/touch.js';
 import { Gamepads } from '../game/gamepad.js';
 import { GAMES } from '../data/games.js';
+import { modeName } from '../data/rules.js';
 import { mobile, setPlaying, haptic, onBack, onHidden } from '../platform.js';
 import { tradeBox } from './trades.js';
 import { chatPanel } from './chat.js';
@@ -314,7 +315,7 @@ export async function renderPlay(container, roomId) {
     } else if (pause) {
       const leaderNaming = pause.reason === 'naming' && room.leaderId === user?.id;
       box = h('div', { class: 'veil-box' },
-        h('h2', null, pause.reason === 'naming' ? 'Nommage du lien' : pause.reason === 'closed' ? 'Aventure en pause' : 'Soul Link terminé'),
+        h('h2', null, pause.reason === 'naming' ? 'Nommage du lien' : pause.reason === 'closed' ? 'Aventure en pause' : `${modeName(room?.mode)} terminé`),
         h('p', null, leaderNaming ? `Choisissez le nom du lien de ${pause.zoneName}.` : pause.text),
         pause.reason === 'ended' ? h('div', { class: 'row mt', style: { justifyContent: 'center' } },
           btn('Voir le bilan', () => { location.hash = `#/salle/${roomId}`; }, { kind: 'primary' })) : null);
@@ -406,6 +407,7 @@ export async function renderPlay(container, roomId) {
       h('div', { class: 'info' }, avatar(m.name, m.slot, { size: 's', online: m.online, id: m.userId, pic: m.avatar }),
         h('div', { class: 'grow' }, h('b', null, m.name), h('div', { class: 'zone' },
           m.status === 'champion' ? '🏆 Maître vaincu' : live.zone ? `${live.zone}${live.battle ? ' · en combat' : ''}` : '—',
+          m.levelCap > 0 ? ` · niv. ${m.levelCap} max` : '',
           mobile && m.online === false ? ' · hors ligne' : ''))),
       live.team?.length ? h('div', { class: 'team-mini' }, live.team.map((p) => h('span', { class: p.dead || p.hp === 0 ? 'dead' : '', title: `${p.speciesName || ''} ${p.hp}/${p.maxHp} PV` },
         `${p.nickname || p.speciesName || '#' + p.species} ${p.level}`, h('i', { style: { width: `${p.maxHp ? Math.round(100 * p.hp / p.maxHp) : 0}%` } })))) : null);

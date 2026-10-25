@@ -78,14 +78,20 @@ final class ShinyBoost {
         return reader instanceof Gen3Reader ? b : null;
     }
 
-    /** 1 in {@code denominator} wild Pokémon shiny (0 or 8192 and more: the game's own rate). */
+    /** 1 in {@code denominator} wild Pokémon shiny (0 or 8192 and more: the game's own rate). Scripts (tests). */
     void setRate(int denominator) {
-        rate = denominator;
-        if (denominator <= 0 || denominator >= NATURAL) {
+        setNumerator(denominator <= 0 || denominator >= NATURAL ? 0 : (int) Math.round((double) NATURAL / denominator));
+    }
+
+    /** {@code num} wild Pokémon out of 8192 shiny (0 or 1: the game's own rate; 8192: all of them). */
+    void setNumerator(int num) {
+        rate = slt.ShinyOdds.oneIn(num);
+        if (num <= 1) {
             chance = 0;
         } else {
             // natural shinies stay: the extra chance makes up the rest
-            chance = (1.0 / denominator - 1.0 / NATURAL) / (1.0 - 1.0 / NATURAL);
+            double p = slt.ShinyOdds.probability(num);
+            chance = Math.min(1.0, (p - 1.0 / NATURAL) / (1.0 - 1.0 / NATURAL));
         }
     }
 

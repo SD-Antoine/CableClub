@@ -21,6 +21,7 @@ import java.util.Locale;
  * hold RIGHT 32            mash A 10 24      (button, count, interval)
  * touch 128 300 6          shot titre        dump ram
  * status                   (prints what the tracker found)
+ * bag / additem ID QTY / tobox UID dead|alive   (the bag read; an item given back; a party Pokémon to the PC)
  * poke 20244e9 02          copy 2024744 2024550 100     peek 2024550 16   (tests)
  * sram 75ea 16            (cartridge save memory)
  * presence on             presence          (players drawn in game: last reading)
@@ -440,6 +441,28 @@ final class ScriptRunner {
                     // jitter3d BUTTON FRAMES: 3D games, on which images the picture changes and on which the position
                     // and the camera read change: they must change together for the others to stay on the ground
                     jitter3d(t[1], Integer.parseInt(t[2]));
+                    break;
+                case "bag":
+                    if (tracker instanceof TrackerHost th) {
+                        System.out.println("SAC " + new java.util.TreeMap<>(th.testBag(core) == null ? java.util.Map.of() : th.testBag(core)));
+                    }
+                    break;
+                case "additem":
+                    if (tracker instanceof TrackerHost th) {
+                        System.out.println("AJOUT " + t[1] + " x" + t[2] + " : " + th.testAddItem(core, Integer.parseInt(t[1]), Integer.parseInt(t[2])));
+                    }
+                    break;
+                case "tobox":
+                    if (tracker instanceof TrackerHost th) {
+                        System.out.println("PC " + t[1] + " " + t[2] + " : " + th.testToBox(core, Long.parseLong(t[1]), "dead".equals(t[2])));
+                    }
+                    break;
+                case "directives":
+                    // directives {JSON}: the room's decisions, as the server sends them (park, setMode…)
+                    if (tracker instanceof TrackerHost th) {
+                        th.setToast(s -> System.out.println("TOAST " + s));
+                        th.directives(slt.Json.parseObject(line.substring(line.indexOf('{'))));
+                    }
                     break;
                 case "status":
                     if (tracker instanceof TrackerHost th) {

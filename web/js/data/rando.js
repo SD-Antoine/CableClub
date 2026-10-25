@@ -550,7 +550,7 @@ export const PRESETS = [
     }),
   },
   {
-    id: 'classic', emoji: '🔗', label: 'Soul Link randomisé',
+    id: 'classic', emoji: '🔗', label: 'Randomisé classique',
     desc: 'Le format le plus joué : sauvages, starters, dresseurs, talents, attaques et objets au hasard, avec des sécurités pour ne jamais être bloqué.',
     build: () => P({
       ...SOULLINK_BASE,
@@ -574,7 +574,7 @@ export const PRESETS = [
   },
   {
     id: 'wild', emoji: '🌪️', label: 'Sauvage',
-    desc: 'Comme « Soul Link randomisé », avec en plus les types, les évolutions et les statistiques mélangés : chaque Pokémon est à redécouvrir.',
+    desc: 'Comme « Randomisé classique », avec en plus les types, les évolutions et les statistiques mélangés : chaque Pokémon est à redécouvrir.',
     build: () => ({
       ...PRESETS.find((p) => p.id === 'classic').build(),
       baseStatisticsMod: 'SHUFFLE', baseStatsFollowEvolutions: true,

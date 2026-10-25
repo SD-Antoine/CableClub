@@ -25,7 +25,7 @@ export function renderHistory(container, { mode = 'soullink' } = {}) {
             h('p', { class: 'muted small mt-s' }, `${gameName(room.game?.gameId)} · ${room.launchedAt ? 'lancée le ' + dateTime(room.launchedAt) : ''}`
               + ` · ${caught} capture(s) · ${dead} mort(s)`)),
           h('div', { class: 'avatars' }, (room.members || []).map((m) => avatar(m.name, m.slot, { size: 's', id: m.userId, pic: m.avatar }))));
-      })) : h('div', { class: 'empty' }, h('b', null, 'Aucune partie pour l’instant'), 'Vos Soul Link apparaîtront ici dès leur lancement.'));
+      })) : h('div', { class: 'empty' }, h('b', null, 'Aucune partie pour l’instant'), 'Vos parties apparaîtront ici dès leur lancement.'));
   }).catch((e) => mount(page, h('div', { class: 'empty' }, e.message)));
   return () => {};
 }

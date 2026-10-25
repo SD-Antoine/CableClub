@@ -17,7 +17,7 @@ import java.util.Set;
 import java.util.TreeMap;
 
 /**
- * A room (1 to 4 players) and its Soul Link: the server is the referee.
+ * A room and its run (Soul Link, or each player's own Nuzlocke, Sololocke or Shinylocke): the server is the referee.
  * Every player's game reports what happens (tracker events); the rules below
  * decide which encounter counts, which Pokémon are linked, who dies with whom,
  * and what each game must apply (deaths, nicknames, refunds, pauses).
@@ -29,14 +29,19 @@ public final class Room {
     // ------------------------------------------------------------------ rules
 
     /** Game modes of the rooms, with the number of players each allows. */
-    public static final Set<String> MODES = Set.of("soullink", "nuzlocke");
+    public static final Set<String> MODES = Set.of("soullink", "nuzlocke", "sololocke", "shinylocke");
 
     public static int minPlayers(String mode) {
         return "soullink".equals(mode) ? 2 : 1;
     }
 
     public static int maxPlayers(String mode) {
-        return "nuzlocke".equals(mode) ? 10 : 5;
+        return "soullink".equals(mode) ? 5 : 10;
+    }
+
+    /** The first generation a mode can be played in: the Shinylocke needs shinies (none in generation 1). */
+    public static int minGen(String mode) {
+        return "shinylocke".equals(mode) ? 2 : 1;
     }
 
     /** Rules of the Nuzlocke that Cable Club cannot check: the players keep to them on their honour. */
@@ -64,8 +69,8 @@ public final class Room {
         r.put("autoEnd", true);            // beating the Champion is detected in the game and ends the run
         r.put("startWithBalls", true);     // deaths count once every player has had a Poké Ball
         r.put("saveStates", false);        // save states allowed in the player
-        if ("nuzlocke".equals(mode)) {
-            // each player has their own Nuzlocke: nothing is shared, nobody is linked
+        if (!"soullink".equals(mode)) {
+            // each player has their own run: nothing is shared, nobody is linked
             r.put("shinyClause", false);   // a shiny can be caught even in a zone already used
             r.put("dupesClause", false);   // an evolution line the player already owns is ignored (they meet another one)
             r.put("giftPokemon", true);
@@ -75,6 +80,21 @@ public final class Room {
             for (String k : HONOR_RULES) {
                 r.put(k, false);
             }
+            // Hardcore Nuzlocke: level caps, no items in battle, battle style "Set", a whiteout loses the run
+            r.put("hardcore", false);
+            r.put("hardcoreItems", "report");  // an item used in battle: "report" to the room, or "lose" the run
+        }
+        if ("sololocke".equals(mode)) {
+            r.put("soloParty", "auto");    // "auto": a second living Pokémon of the team goes to the PC; "honor": on trust
+            r.put("soloLoss", "next");     // "next": another Pokémon of the PC takes over; "end": the run is lost
+            r.remove("wipeEndsRun");
+            r.remove("honorNoMultiExp");
+            r.remove("honorNotepad");
+        }
+        if ("shinylocke".equals(mode)) {
+            r.put("giftPokemon", false);   // given Pokémon kept even when not shiny
+            r.put("oneShinyPerZone", false);
+            r.remove("shinyClause");
         }
         return r;
     }
@@ -277,6 +297,7 @@ public final class Room {
         int encounters;
         int trainersBeaten;
         int badges;
+        int fouls;           // Hardcore: items used in battle
         final Map<String, Integer> itemsBattle = new TreeMap<>();
         final Map<String, Integer> itemsField = new TreeMap<>();
         final Map<String, Integer> bought = new TreeMap<>();
@@ -284,8 +305,8 @@ public final class Room {
         Map<String, Object> toJson() {
             return Json.map("captures", (long) captures, "deaths", (long) deaths, "wildKills", (long) wildKills,
                     "shinies", (long) shinies, "encounters", (long) encounters, "trainersBeaten", (long) trainersBeaten,
-                    "badges", (long) badges, "itemsBattle", intMap(itemsBattle), "itemsField", intMap(itemsField),
-                    "bought", intMap(bought));
+                    "badges", (long) badges, "fouls", (long) fouls, "itemsBattle", intMap(itemsBattle),
+                    "itemsField", intMap(itemsField), "bought", intMap(bought));
         }
 
         static Stats fromJson(Map<String, Object> m) {
@@ -300,6 +321,7 @@ public final class Room {
             s.encounters = (int) Json.num(m, "encounters", 0);
             s.trainersBeaten = (int) Json.num(m, "trainersBeaten", 0);
             s.badges = (int) Json.num(m, "badges", 0);
+            s.fouls = (int) Json.num(m, "fouls", 0);
             readInts(m.get("itemsBattle"), s.itemsBattle);
             readInts(m.get("itemsField"), s.itemsField);
             readInts(m.get("bought"), s.bought);
@@ -323,8 +345,19 @@ public final class Room {
         Stats stats = new Stats();
         Encounter encounter;
         String lastZone;
+        /** Sololocke: the Pokémon alone in the team. */
+        String soloUid;
+        /** Living Pokémon its game must send to the PC (Sololocke, Hardcore level cap), with the reason: solo, cap. */
+        final Map<String, String> park = new LinkedHashMap<>();
+        /** Hardcore: the levels of the gym leaders (8) and of the League in this player's ROM; null unknown. */
+        int[] capGyms;
+        int capLeague;
         // live view (not saved)
         Map<String, Object> live = new LinkedHashMap<>();
+        /** What the game shows (field, dialogue, battle: from the position sent to the room), null when unknown. */
+        String shown;
+        /** Hardcore: the whole team is above the level cap (told once). */
+        boolean allOver;
 
         Map<String, Object> toStore() {
             Map<String, Object> mons = new LinkedHashMap<>();
@@ -333,7 +366,9 @@ public final class Room {
             }
             return Json.map("userId", userId, "name", name, "joinedAt", joinedAt, "slot", (long) slot, "ready", ready,
                     "rom", rom, "families", families, "status", status, "mons", mons, "refunds", refunds,
-                    "stats", stats.toJson(), "lastZone", lastZone, "hasBalls", hasBalls);
+                    "stats", stats.toJson(), "lastZone", lastZone, "hasBalls", hasBalls, "soloUid", soloUid,
+                    "capGyms", capGyms == null ? null : java.util.Arrays.stream(capGyms).mapToObj(v -> (Object) (long) v).toList(),
+                    "capLeague", (long) capLeague);
         }
 
         static Member fromStore(Map<String, Object> m) {
@@ -371,6 +406,9 @@ public final class Room {
             }
             x.stats = Stats.fromJson(Json.obj(m.get("stats")));
             x.lastZone = Json.str(m, "lastZone");
+            x.soloUid = Json.str(m, "soloUid");
+            x.capGyms = ints(Json.arr(m.get("capGyms")), 8);
+            x.capLeague = (int) Json.num(m, "capLeague", 0);
             return x;
         }
 
@@ -452,17 +490,31 @@ public final class Room {
         return v == null ? String.valueOf(defaultRules(mode).get(key)) : v.toString();
     }
 
-    boolean nuzlocke() {
-        return "nuzlocke".equals(mode);
+    /** Each player has their own run (Nuzlocke, Sololocke, Shinylocke): nobody is linked. */
+    boolean individual() {
+        return !"soullink".equals(mode);
+    }
+
+    boolean sololocke() {
+        return "sololocke".equals(mode);
+    }
+
+    boolean shinylocke() {
+        return "shinylocke".equals(mode);
     }
 
     String runName() {
-        return nuzlocke() ? "Nuzlocke" : "Soul Link";
+        return switch (mode) {
+            case "nuzlocke" -> "Nuzlocke";
+            case "sololocke" -> "Sololocke";
+            case "shinylocke" -> "Shinylocke";
+            default -> "Soul Link";
+        };
     }
 
     /** Do the deaths count for this player? Soul Link: once everybody has a Poké Ball; Nuzlocke: once they have theirs. */
     boolean started(Member m) {
-        return nuzlocke() ? !rule("startWithBalls") || m.hasBalls : linkStarted;
+        return individual() ? !rule("startWithBalls") || m.hasBalls : linkStarted;
     }
 
     String gameName() {
@@ -493,13 +545,14 @@ public final class Room {
             case "capture" -> capture(m, ev, out);
             case "update" -> update(m, ev, out);
             case "faint" -> faint(m, ev, out);
-            case "party", "team" -> live(m, ev);
+            case "party", "team" -> live(m, ev, out);
             case "badges" -> badges(m, ev, out);
             case "whiteout" -> whiteout(m, out);
             case "battle" -> battle(m, ev, out);
             case "items" -> items(m, ev, out);
             case "champion" -> champion(m, out);
             case "balls" -> balls(m, ev, out);
+            case "caps" -> caps(m, ev, out);
             default -> {
                 // unknown event: ignored
             }
@@ -521,7 +574,9 @@ public final class Room {
                 hint = " — zone annulée";
             } else if ("dead".equals(z.status)) {
                 hint = " — lien perdu";
-            } else if (nuzlocke()) {
+            } else if (shinylocke()) {
+                hint = e != null && "caught".equals(e.result) && rule("oneShinyPerZone") ? " — chromatique déjà capturé ici" : "";
+            } else if (individual()) {
                 hint = e != null ? " — première rencontre déjà faite ici" : "";
             } else if (e != null) {
                 hint = " — capture déjà faite ici";
@@ -558,15 +613,19 @@ public final class Room {
                 Json.map("species", (long) species, "speciesName", speciesName, "level", (long) level, "zone", zone,
                         "shiny", shiny, "kind", e.kind));
         switch (e.kind) {
-            case "zone" -> out.notice(m, "info", nuzlocke()
+            case "zone" -> out.notice(m, shinylocke() ? "ok" : "info", shinylocke()
+                    ? "Chromatique ! Vous pouvez le capturer."
+                    : individual()
                     ? "Première rencontre de " + zone + " : c'est votre seule chance ici (fuir ou le battre l'épuise)."
                     : "Première rencontre de " + zone + " : elle compte pour le Soul Link.");
             case "shiny" -> out.notice(m, "ok", "Chromatique ! Capture libre (clause chromatique), sans lien.");
-            case "used" -> out.notice(m, "warn", nuzlocke()
+            case "used" -> out.notice(m, "warn", shinylocke()
+                    ? zone + " : vous y avez déjà capturé un chromatique. Capture interdite."
+                    : individual()
                     ? zone + " : vous y avez déjà rencontré un Pokémon. Capture interdite."
                     : zone + " : vous y avez déjà capturé ou mis K.O. un Pokémon. Capture interdite.");
             case "cancelled" -> out.notice(m, "warn", zone + " est annulée pour la salle. Capture interdite.");
-            case "dupe" -> out.notice(m, "warn", nuzlocke()
+            case "dupe" -> out.notice(m, "warn", individual()
                     ? "Doublon : vous avez déjà cette lignée d'évolution. Rencontre ignorée, fuyez ou mettez-le K.O."
                     : "Doublon : cette lignée d'évolution est déjà dans la salle. Rencontre ignorée, fuyez ou mettez-le K.O.");
             case "legendary" -> out.notice(m, "warn", "Légendaire interdit par les règles : ne le capturez pas.");
@@ -592,7 +651,7 @@ public final class Room {
         if (linkStarted || !"running".equals(state)) {
             return;
         }
-        if (nuzlocke()) {
+        if (individual()) {
             linkStarted = true; // nobody waits for the others: each player's rules start with their own first Poké Ball
             return;
         }
@@ -610,7 +669,28 @@ public final class Room {
 
     /** Does this wild Pokémon count for its zone? */
     private String classify(Member m, String key, int species, boolean shiny) {
-        if (nuzlocke()) {
+        if (shinylocke()) {
+            // only shinies may be caught, anywhere (one per zone if the room wants)
+            if (!started(m)) {
+                return "noballs";
+            }
+            if (LEGENDARIES.contains(species) && !rule("legendaries")) {
+                return "legendary";
+            }
+            if (!shiny) {
+                return "notshiny";
+            }
+            Zone sz = zones.get(key);
+            Entry se = sz == null ? null : sz.entries.get(m.userId);
+            if (rule("oneShinyPerZone") && se != null && "caught".equals(se.result)) {
+                return "used";
+            }
+            if (rule("dupesClause") && ownedFamily(m, species, key, false)) {
+                return "dupe";
+            }
+            return "zone";
+        }
+        if (individual()) {
             // each player alone: the first wild Pokémon met in a zone is the only one that can be caught there
             if (!started(m)) {
                 return "noballs";
@@ -684,11 +764,11 @@ public final class Room {
         m.encounter = null;
         boolean killed = Json.bool(ev, "wildFainted", false);
         String who = e.speciesName == null ? "#" + e.species : e.speciesName;
-        if (nuzlocke()) {
+        if (individual()) {
             if (killed) {
                 m.stats.wildKills++;
             }
-            if ("zone".equals(e.kind)) {
+            if ("zone".equals(e.kind) && !shinylocke()) {
                 // the first Pokémon of the zone got away or was beaten: no second chance in this zone
                 Zone z = zone(e.zoneKey, e.zone);
                 if (!z.entries.containsKey(m.userId)) {
@@ -799,8 +879,9 @@ public final class Room {
         boolean wild = "wild".equals(origin) || (e != null && uid.equals(e.uid));
         if (!wild && first) {
             r.zone = "Départ";
-            if (nuzlocke()) {
+            if (individual()) {
                 bonus(m, r, "Pokémon de départ", out);
+                parkCheck(m, out);
                 return;
             }
             // the first Pokémon received is the starter: linked with the other starters
@@ -808,11 +889,15 @@ public final class Room {
             return;
         }
         if (!wild) {
-            if (!rule("giftPokemon")) {
-                release(m, r, "interdit : Pokémon offert ou échangé", out);
+            if (shinylocke() && r.shiny) {
+                bonus(m, r, "Pokémon offert chromatique", out);
                 return;
             }
-            if (nuzlocke()) {
+            if (!rule("giftPokemon")) {
+                release(m, r, shinylocke() ? "interdit : Pokémon offert non chromatique" : "interdit : Pokémon offert ou échangé", out);
+                return;
+            }
+            if (individual()) {
                 bonus(m, r, "Pokémon offert", out);
                 return;
             }
@@ -847,6 +932,7 @@ public final class Room {
             case "shiny" -> bonus(m, r, "chromatique", out);
             case "legendary" -> release(m, r, "interdit : légendaire", out);
             case "dupe" -> release(m, r, "interdit : doublon", out);
+            case "notshiny" -> release(m, r, "interdit : pas chromatique", out);
             case "cancelled" -> {
                 release(m, r, "interdit : zone annulée", out);
                 if (enc != null && rule("refundCancelled") && !enc.items.isEmpty()) {
@@ -880,7 +966,7 @@ public final class Room {
         out.log(m, "capture", m.name + " capture " + r.label() + " N." + r.level + " (" + z.name + ")",
                 Json.map("zone", z.name, "species", (long) r.species, "speciesName", r.speciesName, "level", (long) r.level,
                         "shiny", r.shiny));
-        if (nuzlocke()) {
+        if (individual()) {
             return; // alone: nobody to link with, the Pokémon is simply the player's for the zone
         }
         if (z.nickname != null) {
@@ -988,11 +1074,15 @@ public final class Room {
         int species = (int) Json.num(ev, "species", r.species);
         boolean evolved = Json.bool(ev, "evolved", false) && species != r.species;
         String before = r.label();
+        int level = r.level;
         r.level = (int) Json.num(ev, "level", r.level);
         if (evolved) {
             r.species = species;
             r.speciesName = Json.str(ev, "speciesName");
             out.log(m, "evolution", before + " de " + m.name + " évolue en " + r.speciesName, null);
+        }
+        if (r.level != level && levelCap(m) > 0) {
+            parkCheck(m, out);
         }
     }
 
@@ -1004,14 +1094,18 @@ public final class Room {
         if (!started(m)) {
             out.log(m, "faint", r.label() + " de " + m.name + " est K.O., sans conséquence : le " + runName() + " n'a pas encore commencé.", null);
             out.notice(m, "info", r.label() + " est K.O. mais ne meurt pas : le " + runName() + " commence "
-                    + (nuzlocke() ? "à votre première Poké Ball." : "quand chaque joueur a une Poké Ball."));
+                    + (individual() ? "à votre première Poké Ball." : "quand chaque joueur a une Poké Ball."));
             return;
         }
         r.status = "dead";
         r.reason = "K.O.";
         m.stats.deaths++;
         out.log(m, "death", "☠ " + r.label() + " de " + m.name + " est mort" + (r.zone != null ? " (" + r.zone + ")" : ""), null);
-        if (nuzlocke() || r.bonus || r.zoneKey == null) {
+        if (sololocke()) {
+            soloFallen(m, r, out);
+            return;
+        }
+        if (individual() || r.bonus || r.zoneKey == null) {
             return;
         }
         Zone z = zones.get(r.zoneKey);
@@ -1036,13 +1130,170 @@ public final class Room {
         }
     }
 
-    private void live(Member m, Map<String, Object> ev) {
+    private void live(Member m, Map<String, Object> ev, Out out) {
         if ("team".equals(Json.str(ev, "type"))) {
             m.live.put("team", ev.get("mons"));
         } else {
             m.live.put("party", ev.get("uids"));
+            parkCheck(m, out);
         }
         m.live.put("at", System.currentTimeMillis());
+    }
+
+    /**
+     * The living Pokémon of the team that its game must send to the PC (directive "park"). Sololocke with "les autres
+     * vont au PC": one living Pokémon in the team, the one that was alone stays (or the first one). Hardcore: a Pokémon
+     * above the level cap goes to the PC until the next badge raises it (a team always keeps one Pokémon: the lowest).
+     */
+    private void parkCheck(Member m, Out out) {
+        Map<String, String> before = new LinkedHashMap<>(m.park);
+        m.park.clear();
+        List<Object> party = Json.arr(m.live.get("party"));
+        if (party == null || !individual() || !started(m)) {
+            return;
+        }
+        List<String> alive = new ArrayList<>();
+        for (Object o : party) {
+            String uid = String.valueOf(o);
+            MonRec r = m.mons.get(uid);
+            if (r == null || "alive".equals(r.status)) {
+                alive.add(uid);
+            }
+        }
+        if (alive.isEmpty()) {
+            return;
+        }
+        int cap = levelCap(m);
+        List<String> fit = new ArrayList<>();
+        for (String uid : alive) {
+            if (cap <= 0 || levelOf(m, uid) <= cap) {
+                fit.add(uid);
+            }
+        }
+        String lowest = alive.stream().min(java.util.Comparator.comparingInt(u -> levelOf(m, u))).orElse(alive.get(0));
+        String kept = null;
+        if (sololocke() && "auto".equals(ruleText("soloParty"))) {
+            String keep = m.soloUid != null && fit.contains(m.soloUid) ? m.soloUid
+                    : !fit.isEmpty() ? fit.get(0) : m.soloUid != null && alive.contains(m.soloUid) ? m.soloUid : lowest;
+            m.soloUid = keep;
+            kept = keep;
+            for (String uid : alive) {
+                if (!uid.equals(keep)) {
+                    m.park.put(uid, fit.contains(uid) ? "solo" : "cap");
+                }
+            }
+        } else if (fit.size() < alive.size()) {
+            kept = fit.isEmpty() ? lowest : null;
+            for (String uid : alive) {
+                if (!fit.contains(uid) && !uid.equals(kept)) {
+                    m.park.put(uid, "cap");
+                }
+            }
+        }
+        boolean soloNotice = false;
+        for (Map.Entry<String, String> e : m.park.entrySet()) {
+            if (before.containsKey(e.getKey())) {
+                continue;
+            }
+            MonRec r = m.mons.get(e.getKey());
+            String label = r == null ? "Un Pokémon" : r.label();
+            if ("cap".equals(e.getValue())) {
+                int level = levelOf(m, e.getKey());
+                out.notice(m, "warn", "Hardcore : " + label + " (niv. " + level + ") dépasse le plafond de niveau (" + cap
+                        + ") : il va au PC jusqu'au prochain badge.");
+                out.log(m, "cap", label + " de " + m.name + " dépasse le plafond de niveau (" + level + " > " + cap
+                        + ") : envoyé au PC", null);
+            } else {
+                soloNotice = true;
+            }
+        }
+        if (soloNotice) {
+            MonRec r = m.mons.get(m.soloUid);
+            out.notice(m, "info", "Sololocke : un seul Pokémon dans l'équipe" + (r != null ? " (" + r.label() + ")" : "")
+                    + ", les autres vont au PC.");
+        }
+        boolean allOver = cap > 0 && fit.isEmpty();
+        if (allOver && !m.allOver) {
+            MonRec r = m.mons.get(kept);
+            out.notice(m, "warn", "Hardcore : toute l'équipe dépasse le plafond de niveau (" + cap + ")"
+                    + (r != null ? " : " + r.label() + " reste seul dans l'équipe." : "."));
+        }
+        m.allOver = allOver;
+    }
+
+    /** Level of a Pokémon of the player (as the referee knows it, else as its team shows it). */
+    private static int levelOf(Member m, String uid) {
+        MonRec r = m.mons.get(uid);
+        if (r != null && r.level > 0) {
+            return r.level;
+        }
+        List<Object> team = Json.arr(m.live.get("team"));
+        if (team != null) {
+            for (Object o : team) {
+                Map<String, Object> x = Json.obj(o);
+                if (x != null && uid.equals(Json.str(x, "uid"))) {
+                    return (int) Json.num(x, "level", 0);
+                }
+            }
+        }
+        return 0;
+    }
+
+    /**
+     * Hardcore: the level no Pokémon of the team may pass right now, the strongest Pokémon of the next gym leader
+     * (from the player's ROM), then of the League once the 8 badges are won; -1 when there is none (rule off, levels
+     * unknown, Champion beaten).
+     */
+    int levelCap(Member m) {
+        if (!individual() || !rule("hardcore") || m.capGyms == null || "champion".equals(m.status)) {
+            return -1;
+        }
+        int b = Math.max(0, m.stats.badges);
+        int cap = b < 8 ? m.capGyms[b] : m.capLeague;
+        return cap > 0 ? cap : -1;
+    }
+
+    /** The levels of the gym leaders and of the League in the player's ROM (sent by the tracker of their game). */
+    private void caps(Member m, Map<String, Object> ev, Out out) {
+        int[] gyms = ints(Json.arr(ev.get("gyms")), 8);
+        if (gyms == null) {
+            return;
+        }
+        int league = (int) Json.num(ev, "league", 0);
+        if (m.capGyms != null && java.util.Arrays.equals(gyms, m.capGyms) && m.capLeague == league) {
+            return;
+        }
+        m.capGyms = gyms;
+        m.capLeague = league;
+        out.changed = true;
+        parkCheck(m, out);
+    }
+
+    static int[] ints(List<Object> l, int size) {
+        if (l == null || l.size() != size) {
+            return null;
+        }
+        int[] out = new int[size];
+        for (int i = 0; i < size; i++) {
+            out[i] = l.get(i) instanceof Number n ? n.intValue() : 0;
+        }
+        return out;
+    }
+
+    /** Sololocke: the player's Pokémon is dead. Lost run, or another one of the PC takes over (if any is alive). */
+    private void soloFallen(Member m, MonRec r, Out out) {
+        if ("wiped".equals(m.status)) {
+            return;
+        }
+        long alive = m.mons.values().stream().filter(x -> "alive".equals(x.status)).count();
+        if ("end".equals(ruleText("soloLoss")) || alive == 0) {
+            m.status = "wiped";
+            out.log(m, "wipe", "☠ " + m.name + " a perdu son Sololocke" + (alive == 0 ? " : il ne lui reste aucun Pokémon." : "."), null);
+            endWhenAllDone(out);
+            return;
+        }
+        out.notice(m, "warn", r.label() + " est mort : prenez un autre Pokémon vivant dans le PC pour continuer.");
+        out.log(m, "solo", m.name + " doit choisir un nouveau Pokémon dans le PC", null);
     }
 
     private void badges(Member m, Map<String, Object> ev, Out out) {
@@ -1050,12 +1301,27 @@ public final class Room {
         if (count > m.stats.badges) {
             m.stats.badges = count;
             out.log(m, "badge", m.name + " obtient son " + ordinal(count) + " badge", Json.map("count", (long) count));
+            int cap = levelCap(m);
+            if (cap > 0) {
+                out.notice(m, "info", "Hardcore : nouveau plafond de niveau, " + cap + ".");
+                parkCheck(m, out);
+            }
         }
     }
 
     private void whiteout(Member m, Out out) {
         out.log(m, "whiteout", "L'équipe de " + m.name + " est entièrement K.O.", null);
-        if (nuzlocke()) {
+        if (individual() && rule("hardcore") && started(m) && !"wiped".equals(m.status) && !"champion".equals(m.status)) {
+            // Hardcore: a whiteout loses the run, whatever the other rules say
+            m.status = "wiped";
+            out.log(m, "wipe", "☠ " + m.name + " a perdu son " + runName() + " Hardcore : toute son équipe est tombée.", null);
+            endWhenAllDone(out);
+            return;
+        }
+        if (sololocke()) {
+            return; // the death of the Pokémon already decided (soloFallen)
+        }
+        if (individual()) {
             if (rule("wipeEndsRun") && started(m) && !"wiped".equals(m.status)) {
                 m.status = "wiped";
                 out.log(m, "wipe", "☠ " + m.name + " a perdu son Nuzlocke : toute son équipe est tombée.", null);
@@ -1122,6 +1388,9 @@ public final class Room {
                 }
                 out.log(m, "item", m.name + " utilise " + qty + "× " + name + (inBattle ? " en combat" : ""),
                         Json.map("item", name, "qty", (long) qty, "battle", inBattle));
+                if (fight(m, ev) && !ball(Json.num(c, "item", 0))) {
+                    foul(m, name, qty, out);
+                }
             } else if (delta > 0) {
                 if (money < 0) {
                     m.stats.bought.merge(name, delta, Integer::sum);
@@ -1133,6 +1402,46 @@ public final class Room {
         }
     }
 
+    /**
+     * Was the player in a battle when the item went? The game tells (generations 1 to 3: "fight"); the DS games do not:
+     * what their screen shows then (field or battle, from the position sent to the room). Unknown: no (the tracker's
+     * own guess on the DS lasts until the next map, it would count the items used after a wild battle).
+     */
+    private boolean fight(Member m, Map<String, Object> ev) {
+        if (ev.containsKey("fight")) {
+            return Json.bool(ev, "fight", false);
+        }
+        return "battle".equals(m.shown);
+    }
+
+    /** Poké Balls of the room's game (thrown in battle: always allowed). */
+    boolean ball(long item) {
+        int id = (int) item;
+        return switch ((int) Json.num(game, "gen", 0)) {
+            case 1 -> (id >= 1 && id <= 4) || id == 8;
+            case 2 -> Set.of(1, 2, 4, 5, 157, 159, 160, 161, 164, 165, 166, 177).contains(id);
+            case 3 -> id >= 1 && id <= 12;
+            default -> (id >= 1 && id <= 16) || (id >= 492 && id <= 500) || id == 576;
+        };
+    }
+
+    /** Hardcore: an item of the bag used in a battle (held items and Poké Balls are allowed). */
+    private void foul(Member m, String name, int qty, Out out) {
+        if (!individual() || !rule("hardcore") || !started(m) || "wiped".equals(m.status) || "champion".equals(m.status)) {
+            return;
+        }
+        m.stats.fouls++;
+        if ("lose".equals(ruleText("hardcoreItems"))) {
+            m.status = "wiped";
+            out.log(m, "wipe", "☠ " + m.name + " a perdu son " + runName() + " Hardcore : " + qty + "× " + name
+                    + " utilisé en combat.", null);
+            endWhenAllDone(out);
+            return;
+        }
+        out.log(m, "foul", "⚠ Hardcore : " + m.name + " utilise " + qty + "× " + name + " en combat (interdit)", null);
+        out.notice(m, "warn", "Hardcore : pas d'objets en combat. " + name + " est signalé à la salle.");
+    }
+
     private void champion(Member m, Out out) {
         if ("champion".equals(m.status)) {
             return;
@@ -1142,7 +1451,7 @@ public final class Room {
         if (!rule("autoEnd")) {
             return; // the leader ends the run by hand
         }
-        if (nuzlocke()) {
+        if (individual()) {
             if ("first".equals(ruleText("endWhen"))) {
                 finish("victory", m.name + " a battu le Maître de la Ligue.", out);
             } else {
@@ -1156,13 +1465,13 @@ public final class Room {
         }
     }
 
-    /** Nuzlocke: the run ends when every player has either beaten the League or lost their team. */
+    /** Each player's own run: it ends when every player has either beaten the League or lost their team. */
     private void endWhenAllDone(Out out) {
         if (!members.stream().allMatch(x -> "champion".equals(x.status) || "wiped".equals(x.status))) {
             return;
         }
         boolean any = members.stream().anyMatch(x -> "champion".equals(x.status));
-        finish(any ? "victory" : "defeat", any ? "Tous les joueurs ont terminé leur Nuzlocke." : "Toutes les équipes sont tombées.", out);
+        finish(any ? "victory" : "defeat", any ? "Tous les joueurs ont terminé leur " + runName() + "." : "Toutes les équipes sont tombées.", out);
     }
 
     /** Ends the run: victory, defeat or abandon. */
@@ -1235,8 +1544,13 @@ public final class Room {
         }
         return Json.map("room", id, "doomed", doomed, "release", release, "nicknames", nicknames, "pause", pause,
                 "refunds", new ArrayList<Object>(m.refunds), "deathBox", rule("deathBox"),
-                // shiny rate of the room (1 in N wild Pokémon; 0 = the game's): applied while playing in gen 2-3
-                "shinyRate", Json.num(rando, "shinyRate", 0),
+                // shiny rate of the room: k out of 8192 (0 = the game's), applied while playing in gen 2-3 (the DS games
+                // have it in their ROM); "1 in N" too, for the players of older versions
+                "shinyNum", (long) slt.ShinyOdds.numerator(rando),
+                "shinyRate", (long) slt.ShinyOdds.oneIn(slt.ShinyOdds.numerator(rando)),
+                "park", new ArrayList<Object>(m.park.keySet()), "parkWhy", new LinkedHashMap<String, Object>(m.park),
+                // Hardcore: the level cap of the player right now, and the battle style "Set" imposed in their game
+                "levelCap", (long) levelCap(m), "setMode", individual() && rule("hardcore"),
                 "saveStates", rule("saveStates"), "state", state, "open", adventureOpen, "trade", tradeDirective(m));
     }
 
@@ -1486,6 +1800,7 @@ public final class Room {
                 x.put("live", m.live);
                 x.put("stats", m.stats.toJson());
                 x.put("refunds", (long) m.refunds.size());
+                x.put("levelCap", (long) levelCap(m));
             }
             ms.add(x);
         }

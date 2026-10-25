@@ -1,10 +1,21 @@
 Cable Club (anciennement SLT — Soul Link Together)
 ==================================================
 
-Pokémon à plusieurs, de la 1re à la 5e génération. Premier mode de jeu : le
-Soul Link (2 à 5 joueurs) : chacun joue sa partie dans la fenêtre de Cable
-Club, voit ses partenaires en direct, et les règles du Soul Link
-s'appliquent toutes seules dans les jeux.
+Pokémon à plusieurs, de la 1re à la 5e génération : chacun joue sa partie
+dans la fenêtre de Cable Club, voit ses partenaires en direct, et les règles
+du défi s'appliquent toutes seules dans les jeux. Quatre modes de jeu :
+- Soul Link (2 à 5 joueurs) : les Pokémon d'une même zone sont liés, si l'un
+  meurt son partenaire aussi.
+- Nuzlocke (1 à 10 joueurs, chacun le sien) : un Pokémon K.O. est mort, seul
+  le premier Pokémon de chaque zone peut être capturé.
+- Sololocke (1 à 10 joueurs) : un Nuzlocke avec un seul Pokémon dans
+  l'équipe ; les autres partent au PC.
+- Shinylocke (1 à 10 joueurs, 2e à 5e génération) : seuls les Pokémon
+  chromatiques peuvent être capturés, avec le taux de chromatiques de votre
+  choix.
+Option Nuzlocke Hardcore : plafond de niveau du prochain champion d'arène
+(les Pokémon trop forts vont au PC), pas d'objets en combat, style de combat
+Défini imposé, équipe entière K.O. = partie perdue.
 
 
 DÉMARRER
@@ -26,7 +37,8 @@ DÉMARRER
 4. « Mes ROMs » > « Ajouter un dossier » : le dossier qui contient les ROMs
    de vos jeux (copies de vos cartouches). Elles ne sont jamais modifiées.
 
-5. « Soul Link » > « Mes salles » > « Nouvelle salle » : jeu, nombre de
+5. Un mode (« Soul Link », « Nuzlocke », « Sololocke » ou « Shinylocke »)
+   > « Mes salles » > « Nouvelle salle » : jeu, nombre de
    joueurs, règles, randomisation, salle privée ou publique. Invitez vos
    amis (ou donnez le code de la salle) ; une salle publique se trouve dans
    « Salles publiques ». Chacun voit sa ROM se préparer toute seule, puis

@@ -54,6 +54,12 @@ final class TrackerHost implements Session.Tracker {
     private volatile List<Object> refunds = List.of();
     private volatile boolean deathBox;
     private volatile Set<Long> release = Set.of();
+    /** Living Pokémon of the team to send to the PC (Sololocke: one Pokémon in the team; Hardcore: level cap). */
+    private volatile Set<Long> park = Set.of();
+    /** Why each of them goes: "solo" or "cap". */
+    private volatile Map<String, Object> parkWhy = Map.of();
+    /** Hardcore: the game's battle style kept on "Set". */
+    private volatile boolean setMode;
     private long lastWrites;
     private final Set<Long> depositFailures = new HashSet<>();
     /** The room's shiny rate, applied in the game (generations 2 and 3), or null. */
@@ -174,12 +180,13 @@ final class TrackerHost implements Session.Tracker {
         List<Object> r = Json.arr(d.get("refunds"));
         refunds = r == null ? List.of() : r;
         deathBox = Json.bool(d, "deathBox", false);
-        int shinyRate = (int) Json.num(d, "shinyRate", 0);
+        // the room's shiny rate: k out of 8192 (servers before 0.10 only send "1 in N")
+        int shinyNum = slt.ShinyOdds.numerator(d);
         if (shiny != null) {
-            shiny.setRate(shinyRate);
+            shiny.setNumerator(shinyNum);
         }
         if ("nds".equals(platform)) {
-            slt.player.track.NdsPkm.shinyRate(shinyRate); // the ROM's own test was changed (SltPatches)
+            slt.player.track.NdsPkm.shinyNumerator(shinyNum); // the ROM's own test was changed (SltPatches)
         }
         Set<Long> rel = new HashSet<>();
         List<Object> relList = Json.arr(d.get("release"));
@@ -193,6 +200,21 @@ final class TrackerHost implements Session.Tracker {
             }
         }
         release = rel;
+        Set<Long> pk = new HashSet<>();
+        List<Object> parkList = Json.arr(d.get("park"));
+        if (parkList != null) {
+            for (Object o : parkList) {
+                try {
+                    pk.add(Long.parseLong(String.valueOf(o)));
+                } catch (NumberFormatException ignored) {
+                    // not a tracker id
+                }
+            }
+        }
+        park = pk;
+        Map<String, Object> why = Json.obj(d.get("parkWhy"));
+        parkWhy = why == null ? Map.of() : why;
+        setMode = Json.bool(d, "setMode", false);
         trade = Json.obj(d.get("trade"));
     }
 
@@ -373,6 +395,14 @@ final class TrackerHost implements Session.Tracker {
         if (!done.isEmpty()) {
             ack.accept(done);
         }
+        if (setMode) {
+            // Hardcore: no switch offered after knocking out the foe's Pokémon (the options of the game itself)
+            List<GameReader.Write> w = reader.setBattleStyle(m);
+            if (w != null && !w.isEmpty() && write(core, w)) {
+                Log.info("Style de combat Défini imposé (Hardcore)");
+                toast.accept("⚔ Style de combat : Défini (Nuzlocke Hardcore)");
+            }
+        }
         // out of battle for sure: no battle (games that know), or a map change (DS games: during a battle,
         // the game works on a copy of the party and would write it back over the change)
         boolean field = engine.battleState() == 0 || (engine.battleState() < 0 && engine.mapJustChanged());
@@ -386,6 +416,28 @@ final class TrackerHost implements Session.Tracker {
                     toast.accept("🕊 Pokémon relâché (règles de la salle)");
                     return; // the party changed: next round with a fresh reading
                 }
+            }
+        }
+        if (field && !park.isEmpty()) {
+            // Sololocke: one living Pokémon in the team, the others to the PC; Hardcore: above the level cap (one at a time)
+            for (Mon mon : party) {
+                if (!park.contains(mon.uid()) || depositFailures.contains(mon.uid())) {
+                    continue;
+                }
+                List<GameReader.Write> w = reader.store(m, mon);
+                if (w == null) {
+                    continue; // not possible right now (battle, PC full…): later
+                }
+                if (write(core, w)) {
+                    String name = mon.nickname() != null ? mon.nickname() : "Pokémon";
+                    boolean cap = "cap".equals(parkWhy.get(TrackerEngine.uidText(mon.uid())));
+                    Log.info((cap ? "Plafond de niveau : " : "Sololocke : ") + name + " envoyé au PC");
+                    toast.accept("📦 " + name + " va au PC : " + (cap ? "au-dessus du plafond de niveau (Hardcore)"
+                            : "un seul Pokémon dans l'équipe (Sololocke)"));
+                } else {
+                    depositFailures.add(mon.uid());
+                }
+                return; // the party has changed
             }
         }
         if (deathBox && field) {
@@ -505,6 +557,40 @@ final class TrackerHost implements Session.Tracker {
         } catch (IOException e) {
             Log.warn("Remboursements non enregistrés : " + e.getMessage());
         }
+    }
+
+    // ------------------------------------------------------------- tests (ScriptRunner)
+
+    /** The bag as the reader sees it now (tests). */
+    Map<Integer, Integer> testBag(CoreHost core) {
+        Mem m = capture(core);
+        slt.player.track.Snapshot s = m == null ? null : reader.read(m);
+        return s == null ? null : s.bag();
+    }
+
+    /** Gives an item back right now, as a refund would (tests): true when written. */
+    boolean testAddItem(CoreHost core, int item, int qty) {
+        Mem m = capture(core);
+        if (m == null || reader.read(m) == null) {
+            return false;
+        }
+        List<GameReader.Write> w = reader.addItem(m, item, qty);
+        return w != null && write(core, w);
+    }
+
+    /** Sends a party Pokémon to the PC (dead: the dead box; else the first boxes), as the rules would (tests). */
+    boolean testToBox(CoreHost core, long uid, boolean dead) {
+        Mem m = capture(core);
+        if (m == null || reader.read(m) == null) {
+            return false;
+        }
+        for (Mon mon : engine.party()) {
+            if (mon.uid() == uid) {
+                List<GameReader.Write> w = dead ? reader.deposit(m, mon) : reader.store(m, mon);
+                return w != null && write(core, w);
+            }
+        }
+        return false;
     }
 
     void close() {

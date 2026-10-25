@@ -208,10 +208,16 @@ public final class NdsReader implements GameReader {
         return layout == HGSS ? POCKETS_HGSS : POCKETS_DP;
     }
 
+    /** The pocket each item was last seen in (to give an item back where it was). */
+    private final java.util.Map<Integer, Integer> pocketOf = new java.util.concurrent.ConcurrentHashMap<>();
+
     /** Every item of the bag, or null if the bytes do not look like a bag. */
     private java.util.Map<Integer, Integer> bag(byte[] d, int b) {
         java.util.Map<Integer, Integer> out = new java.util.HashMap<>();
-        for (int[] pocket : pockets()) {
+        java.util.Map<Integer, Integer> seen = new java.util.HashMap<>();
+        int[][] pockets = pockets();
+        for (int k = 0; k < pockets.length; k++) {
+            int[] pocket = pockets[k];
             for (int i = 0; i < pocket[1]; i++) {
                 int o = b + pocket[0] + 4 * i;
                 if (o + 4 > d.length) {
@@ -226,9 +232,67 @@ public final class NdsReader implements GameReader {
                     return null;
                 }
                 out.merge(id, qty, Integer::sum);
+                seen.put(id, k);
             }
         }
+        pocketOf.putAll(seen);
         return out;
+    }
+
+    /**
+     * Items given back (zone cancelled): in the pocket where the item was seen (or the usual one: Poké Balls, medicine,
+     * battle items), added to its stack or in the first free slot, 999 at most. The bag of the live save buffer is the
+     * one the game uses.
+     */
+    @Override
+    public List<Write> addItem(Mem m, int item, int quantity) {
+        if (base < 0 || item <= 0 || item > 700 || quantity <= 0) {
+            return null;
+        }
+        int[][] pockets = pockets();
+        Integer known = pocketOf.get(item);
+        int k = known != null ? known : usualPocket(item);
+        if (k < 0 || k >= pockets.length) {
+            return null;
+        }
+        int[] pocket = pockets[k];
+        long at = base + pocket[0];
+        byte[] slots = m.read(at, 4 * pocket[1]);
+        if (slots == null) {
+            return null;
+        }
+        int free = -1;
+        for (int i = 0; i < pocket[1]; i++) {
+            int id = NdsPkm.u16(slots, 4 * i);
+            if (id == item) {
+                int qty = Math.min(999, NdsPkm.u16(slots, 4 * i + 2) + quantity);
+                return List.of(new Write(at + 4L * i + 2, new byte[]{(byte) qty, (byte) (qty >>> 8)}));
+            }
+            if (id == 0 && free < 0) {
+                free = i;
+            }
+        }
+        if (free < 0) {
+            return null;
+        }
+        int qty = Math.min(999, quantity);
+        return List.of(new Write(at + 4L * free, new byte[]{(byte) item, (byte) (item >>> 8), (byte) qty, (byte) (qty >>> 8)}));
+    }
+
+    /**
+     * The pocket of an item never seen in the bag: generation 4 Poké Balls (1-16, Apricorn balls 492-500) in the
+     * ball pocket, medicine (17-54) and battle items (55-64) in theirs; generation 5 has its balls and battle items in
+     * the main pocket, its medicine in the fourth.
+     */
+    private int usualPocket(int item) {
+        boolean ball = (item >= 1 && item <= 16) || (item >= 492 && item <= 500) || item == 576;
+        if (layout == GEN5) {
+            return item >= 17 && item <= 54 ? 3 : 0;
+        }
+        if (ball) {
+            return 6;
+        }
+        return item >= 17 && item <= 54 ? 4 : item >= 55 && item <= 64 ? 7 : 0;
     }
 
     /** 1 if a Poké Ball (items 1-16, HeartGold / SoulSilver Apricorn balls 492-500, Dream Ball 576) is in the bag, 0 if not, -1 if unknown. */
@@ -405,6 +469,28 @@ public final class NdsReader implements GameReader {
         return false;
     }
 
+    /**
+     * Battle style "Set": bit 6 of the options (u16: text speed 0-2 in bits 0-3, sound in bits 4-5, battle style,
+     * battle scene…), the 4 bytes before the player name in generations 4 and 5 (verified on the French SoulSilver
+     * and White 2). The battles read them from the live save buffer.
+     */
+    @Override
+    public List<Write> setBattleStyle(Mem m) {
+        if (base < 0) {
+            return null;
+        }
+        long at = base + layout.trainerId + trainerShift - 0x14;
+        byte[] b = m.read(at, 2);
+        if (b == null) {
+            return null;
+        }
+        int v = b[0] & 0xFF;
+        if ((v & 0x0F) > 2 || ((v >> 4) & 3) > 1) {
+            return null;
+        }
+        return (v & 0x40) != 0 ? List.of() : List.of(new Write(at, new byte[]{(byte) (v | 0x40)}));
+    }
+
     @Override
     public java.util.Map<String, Object> battleSet(Mem m, Mon mon) {
         byte[] d = m.read(mon.address(), layout.partySize);
@@ -520,6 +606,16 @@ public final class NdsReader implements GameReader {
      */
     @Override
     public List<Write> deposit(Mem m, Mon mon) {
+        return toBox(m, mon, true);
+    }
+
+    @Override
+    public List<Write> store(Mem m, Mon mon) {
+        return toBox(m, mon, false);
+    }
+
+    /** Party to PC: a dead Pokémon to the last box (MORTS, then the ones before), a living one from the first box. */
+    private List<Write> toBox(Mem m, Mon mon, boolean dead) {
         long hdr = partyHeader();
         if (hdr < 0 || layout.boxes < 0) {
             return null;
@@ -535,7 +631,8 @@ public final class NdsReader implements GameReader {
         List<Write> out = new ArrayList<>();
         if (boxSlotOf(m, mon.uid()) < 0) {
             long target = -1;
-            for (int box = layout.boxCount - 1; box >= 0 && target < 0; box--) {
+            for (int k = 0; k < (dead ? layout.boxCount : layout.boxCount - 1) && target < 0; k++) {
+                int box = dead ? layout.boxCount - 1 - k : k;
                 for (int slot = 0; slot < 30; slot++) {
                     long a = base + layout.boxes + (long) box * layout.boxStride + (long) slot * NdsPkm.BOX_SIZE;
                     byte[] cur = m.read(a, NdsPkm.BOX_SIZE);
@@ -551,7 +648,7 @@ public final class NdsReader implements GameReader {
             out.add(new Write(target, java.util.Arrays.copyOfRange(block, 8 + i * layout.partySize, 8 + i * layout.partySize + NdsPkm.BOX_SIZE)));
         }
         out.add(new Write(hdr, partyWithout(block, i)));
-        if (layout.boxNames >= 0) {
+        if (dead && layout.boxNames >= 0) {
             byte[] name = new byte[0x28];
             boolean gen4 = layout != GEN5;
             int n = 0;

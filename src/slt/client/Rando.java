@@ -228,7 +228,7 @@ public final class Rando {
     // ------------------------------------------------------------ tracker
 
     /** Bumped when the content of the tracker info changes (invalidates the cache). */
-    private static final String TRACKER_INFO_VERSION = "slt-2";
+    private static final String TRACKER_INFO_VERSION = "slt-3";
 
     /**
      * Data the in-game tracker needs (map and location names, species names,
@@ -273,6 +273,12 @@ public final class Rando {
                 }
             }
             info.put("abilities", abilities);
+            // level caps of the Hardcore Nuzlocke (the gym leaders and the League of this ROM)
+            try {
+                info.put("levelCaps", LevelCaps.of(rh));
+            } catch (RuntimeException e) {
+                Log.warn("Plafonds de niveau introuvables dans la ROM : " + e.getMessage());
+            }
         }
         Files.createDirectories(cacheDir);
         Path tmp = out.resolveSibling(out.getFileName() + ".tmp");

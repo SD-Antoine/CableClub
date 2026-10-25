@@ -62,6 +62,10 @@ public final class GbReader implements GameReader {
     private final String game;
     private long party = -1;
     private volatile int lastShift;
+    /** Gen 1: the bag (count, item / quantity pairs, 0xFF) where it was last read; -1 unknown. */
+    private volatile long bagAt = -1;
+    /** Gen 2: the pocket each item was last seen in: 0 items, 1 Poké Balls. */
+    private final java.util.Map<Integer, Integer> pocketOf = new java.util.concurrent.ConcurrentHashMap<>();
     /** Gen 2: writes to the cartridge RAM reach the game (no save state loaded since the start). */
     private volatile boolean cartRamLive = true;
 
@@ -243,12 +247,30 @@ public final class GbReader implements GameReader {
         if (layout.gen == 1) {
             int o = bagStart(d, p, shift);
             if (o >= 0) {
+                bagAt = WRAM + o;
                 bag = new java.util.HashMap<>();
                 int n = d[o] & 0xFF;
                 for (int i = 0; i < n; i++) {
                     bag.merge(d[o + 1 + 2 * i] & 0xFF, d[o + 2 + 2 * i] & 0xFF, Integer::sum);
                 }
                 money = bcd(d, o + 0x2A, 3);
+            }
+        } else {
+            // gen 2: item pocket (20 slots), key items, then the Poké Ball pocket (12 slots); money before them
+            int items = p + layout.balls - GEN2_ITEMS_BEFORE_BALLS;
+            int balls = p + layout.balls;
+            if (list(d, items, 20) && list(d, balls, 12)) {
+                bag = new java.util.HashMap<>();
+                int[][] pockets = {{items, 0}, {balls, 1}};
+                for (int[] pk : pockets) {
+                    int n = d[pk[0]] & 0xFF;
+                    for (int i = 0; i < n; i++) {
+                        int id = d[pk[0] + 1 + 2 * i] & 0xFF;
+                        bag.merge(id, d[pk[0] + 2 + 2 * i] & 0xFF, Integer::sum);
+                        pocketOf.put(id, pk[1]);
+                    }
+                }
+                money = bcd(d, p + layout.balls - GEN2_MONEY_BEFORE_BALLS, 3);
             }
         }
         int cleared = -1;
@@ -257,6 +279,112 @@ public final class GbReader implements GameReader {
             cleared = (d[hofAt] & 0xFF) > 0 ? 1 : 0;
         }
         return new Snapshot(mons, badges, map, ot, wild, battle, balls(d, p), bag, money, cleared, List.of());
+    }
+
+    /** Gen 2: the item pocket (1 + 20 pairs + 0xFF) and the key items (1 + 25 + 0xFF) come before the ball pocket. */
+    private static final int GEN2_ITEMS_BEFORE_BALLS = 0x45;
+    /** Gen 2: the money (3 bytes, decimal) is 0x89 bytes before the ball pocket. */
+    private static final int GEN2_MONEY_BEFORE_BALLS = 0x89;
+    /**
+     * Gen 2 Poké Balls (their pocket), from the item list of the cartridges: Master, Hyper, Super, Poké, then Heavy,
+     * Level, Lure, Fast, Friend, Moon, Love and Park Ball (163 is the Light Ball, a held item).
+     */
+    private static final java.util.Set<Integer> GEN2_BALLS = java.util.Set.of(1, 2, 4, 5, 157, 159, 160, 161, 164, 165, 166, 177);
+
+    /** A list of the bag: count (at most {@code slots}), item / quantity pairs, then 0xFF. */
+    private static boolean list(byte[] d, int o, int slots) {
+        if (o < 0 || o + 2 + 2 * slots > d.length) {
+            return false;
+        }
+        int n = d[o] & 0xFF;
+        if (n > slots || (d[o + 1 + 2 * n] & 0xFF) != 0xFF) {
+            return false;
+        }
+        for (int i = 0; i < n; i++) {
+            int qty = d[o + 2 + 2 * i] & 0xFF;
+            if (qty == 0 || qty > 99) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Items given back (zone cancelled): gen 1 in the bag, gen 2 in the item or Poké Ball pocket; added to their
+     * stack (99 at most) or at the end of the list.
+     */
+    @Override
+    public List<Write> addItem(Mem m, int item, int quantity) {
+        if (item <= 0 || item > 0xFF || quantity <= 0 || party < 0) {
+            return null;
+        }
+        long at;
+        int slots;
+        if (layout.gen == 1) {
+            at = bagAt;
+            slots = 20;
+        } else {
+            Integer known = pocketOf.get(item);
+            boolean ball = known != null ? known == 1 : GEN2_BALLS.contains(item);
+            at = party + layout.balls - (ball ? 0 : GEN2_ITEMS_BEFORE_BALLS);
+            slots = ball ? 12 : 20;
+        }
+        byte[] l = at < 0 ? null : m.read(at, 2 + 2 * slots);
+        if (l == null || !list(l, 0, slots)) {
+            return null;
+        }
+        int n = l[0] & 0xFF;
+        byte[] out = l.clone();
+        boolean done = false;
+        for (int i = 0; i < n && !done; i++) {
+            if ((l[1 + 2 * i] & 0xFF) == item) {
+                out[2 + 2 * i] = (byte) Math.min(99, (l[2 + 2 * i] & 0xFF) + quantity);
+                done = true;
+            }
+        }
+        if (!done) {
+            if (n >= slots) {
+                return null; // full: given back later, when there is room
+            }
+            out[0] = (byte) (n + 1);
+            out[1 + 2 * n] = (byte) item;
+            out[2 + 2 * n] = (byte) Math.min(99, quantity);
+            out[3 + 2 * n] = (byte) 0xFF;
+        }
+        return List.of(new Write(at, out));
+    }
+
+    /**
+     * Battle style "Set": bit 6 of the options byte (bits 0-3 the text speed 1, 3 or 5; bit 7 the battle animations).
+     * Gen 1: the byte just before the badges, in the player data (verified on the French Red); gen 2: wOptions, outside
+     * the player data, Gold / Silver 0xD199 and Crystal 0xCFCC (verified on the French versions), followed by the save
+     * flag, the frame, the text box flags and the printer brightness.
+     */
+    @Override
+    public List<Write> setBattleStyle(Mem m) {
+        if (party < 0) {
+            return null;
+        }
+        long at;
+        if (layout.gen == 1) {
+            int shift = lastShift;
+            at = party + layout.badges + shift - 1;
+        } else {
+            at = layout == CRYSTAL ? 0xCFCCL : 0xD199L;
+        }
+        byte[] b = m.read(at, 5);
+        if (b == null) {
+            return null;
+        }
+        int v = b[0] & 0xFF;
+        int speed = v & (layout.gen == 1 ? 0x0F : 0x07);
+        if (speed != 1 && speed != 3 && speed != 5 || (layout.gen == 1 && (v & 0x30) != 0)) {
+            return null;
+        }
+        if (layout.gen == 2 && (b[4] & 0x9F) != 0 && (b[4] & 0xFF) != 0x7F) {
+            return null; // not the printer brightness (0x00, 0x20, 0x40, 0x60 or 0x7F): not the options
+        }
+        return (v & 0x40) != 0 ? List.of() : List.of(new Write(at, new byte[]{(byte) (v | 0x40)}));
     }
 
     /** Gen 1 bag (count, then item / quantity pairs, then 0xFF), right after the party data or shifted like the player ID. */
@@ -598,6 +726,7 @@ public final class GbReader implements GameReader {
         if (layout.gen == 2) {
             out.put("happiness", (long) (s[27] & 0xFF));
             out.put("genderValue", (long) atk); // female when the Attack DV is under the species' threshold
+            out.put("item2", (long) (s[1] & 0xFF)); // the game's own item id (battle team: battleteam.js)
         }
         return out;
     }

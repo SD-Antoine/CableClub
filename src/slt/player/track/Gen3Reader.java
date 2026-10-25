@@ -349,6 +349,30 @@ public final class Gen3Reader implements GameReader {
         return new Snapshot(mons, badges, map, ot, wild, battle, ballsFlag, bag, money, cleared, enemy);
     }
 
+    /**
+     * Battle style "Set": SaveBlock2 +0x15 bit 1 (+0x14: text speed 0-2 in bits 0-2, frame 0-19 in bits 3-7; +0x15:
+     * sound, battle style, battle scene, map zoom), the same in Ruby / Sapphire, Emerald and FireRed / LeafGreen
+     * (verified on the French Ruby). The block moves in Emerald and FireRed / LeafGreen: its trainer ID is checked.
+     */
+    @Override
+    public List<Write> setBattleStyle(Mem m) {
+        long at = sb2;
+        long id = trainerId;
+        if (at < 0) {
+            return null;
+        }
+        byte[] b = m.read(at, 0x16);
+        if (b == null || u32(b, 0xA) != id) {
+            return null;
+        }
+        int o = b[0x14] & 0xFF;
+        int v = b[0x15] & 0xFF;
+        if ((o & 7) > 2 || (o >> 3) > 19 || (v & 0xF0) != 0) {
+            return null;
+        }
+        return (v & 2) != 0 ? List.of() : List.of(new Write(at + 0x15, new byte[]{(byte) (v | 2)}));
+    }
+
     private boolean flag(byte[] d, int s1, int flag) {
         int o = s1 + flagsOffset + (flag >> 3);
         return o < d.length && (d[o] & (1 << (flag & 7))) != 0;
@@ -695,6 +719,16 @@ public final class Gen3Reader implements GameReader {
      */
     @Override
     public List<Write> deposit(Mem m, Mon mon) {
+        return toBox(m, mon, true);
+    }
+
+    @Override
+    public List<Write> store(Mem m, Mon mon) {
+        return toBox(m, mon, false);
+    }
+
+    /** Party to PC: a dead Pokémon to the MORTS box (then the boxes before it), a living one from the first box. */
+    private List<Write> toBox(Mem m, Mon mon, boolean dead) {
         if (party < 0 || storage < 0 || inBattle != 0) {
             return null;
         }
@@ -724,7 +758,8 @@ public final class Gen3Reader implements GameReader {
         }
         int so = (int) (storage - sb.start);
         long target = -1;
-        for (int box = DEAD_BOX; box >= 0 && target < 0; box--) {
+        for (int i = 0; i < (dead ? DEAD_BOX + 1 : DEAD_BOX) && target < 0; i++) {
+            int box = dead ? DEAD_BOX - i : i;
             for (int slot = 0; slot < BOX_SLOTS; slot++) {
                 int o = so + 4 + (box * BOX_SLOTS + slot) * BOX_MON;
                 if (allZero(sb.data, o, BOX_MON)) {
@@ -751,7 +786,7 @@ public final class Gen3Reader implements GameReader {
         }
         out.add(new Write(party, compact));
         out.add(new Write(countAddr, new byte[]{(byte) (count - 1)}));
-        byte[] name = info.encode(DEAD_BOX_NAME, 9, 0xFF);
+        byte[] name = dead ? info.encode(DEAD_BOX_NAME, 9, 0xFF) : null;
         if (name != null) {
             out.add(new Write(storage + 4 + (long) BOXES * BOX_SLOTS * BOX_MON + DEAD_BOX * 9L, name));
         }

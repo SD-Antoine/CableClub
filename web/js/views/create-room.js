@@ -3,15 +3,16 @@
 import { h, mount, keepScroll, modal, btn, field, seg, icon, errorToast, switchEl } from '../ui.js';
 import { local, srv } from '../api.js';
 import { store } from '../store.js';
-import { LANG, GEN_LABEL, SUPPORT, gameName } from '../data/games.js';
-import { ruleDefaults, playerChoices, MODE_PLAYERS } from '../data/rules.js';
+import { LANG, GEN_LABEL, support, gameName } from '../data/games.js';
+import { ruleDefaults, playerChoices, MODE_PLAYERS, modeAvailable, modeName, MODE_MIN_GEN } from '../data/rules.js';
 import { defaultRando } from '../data/rando.js';
 import { rulesEditor, randoEditor } from './parts.js';
 
 export async function openCreateRoom(mode = 'soullink') {
   let library;
   try {
-    library = (await local.get('/api/library')).roms.filter((r) => r.present);
+    // the games this mode can be played with (the Shinylocke needs shinies: not the first generation)
+    library = (await local.get('/api/library')).roms.filter((r) => r.present && modeAvailable(mode, r.gen));
   } catch (e) { errorToast(e); return; }
 
   const user = store.state?.link?.user;
@@ -19,14 +20,14 @@ export async function openCreateRoom(mode = 'soullink') {
     step: 0,
     romId: library[0]?.id || null,
     name: '',
-    maxPlayers: mode === 'nuzlocke' ? 1 : 2,
+    maxPlayers: MODE_PLAYERS[mode]?.min === 1 ? 1 : 2,
     visibility: 'private',
     rules: { ...ruleDefaults(mode) },
     rando: null,
   };
   const body = h('div');
   const foot = h('div', { class: 'row', style: { width: '100%' } });
-  const m = modal({ title: mode === 'nuzlocke' ? 'Nouvelle salle Nuzlocke' : 'Nouvelle salle Soul Link', body: h('div', null, body), wide: true, actions: [foot] });
+  const m = modal({ title: `Nouvelle salle ${modeName(mode)}`, body: h('div', null, body), wide: true, actions: [foot] });
 
   const rom = () => library.find((r) => r.id === st.romId);
   const gen = () => Number(rom()?.gen || 3);
@@ -41,7 +42,7 @@ export async function openCreateRoom(mode = 'soullink') {
     let content;
     if (st.step === 0) content = gameStep();
     else if (st.step === 1) content = h('div', null, h('p', { class: 'muted mb' }, 'Vous pourrez les ajuster à tout moment, même en cours de partie.'),
-      rulesEditor(st.rules, { editable: true, mode, onChange: (c) => { Object.assign(st.rules, c); draw(); } }));
+      rulesEditor(st.rules, { editable: true, mode, gen: gen(), onChange: (c) => { Object.assign(st.rules, c); draw(); } }));
     else {
       if (!st.rando) st.rando = defaultRando(gen());
       content = randoEditor(st.rando, gen(), () => {});
@@ -58,8 +59,9 @@ export async function openCreateRoom(mode = 'soullink') {
 
   function gameStep() {
     if (!library.length) {
-      return h('div', { class: 'empty' }, h('b', null, 'Aucune ROM dans votre bibliothèque'),
-        h('p', null, 'Ajoutez d’abord les ROMs de vos jeux (copies de vos cartouches).'),
+      return h('div', { class: 'empty' }, h('b', null, MODE_MIN_GEN[mode] ? `Aucun jeu compatible dans votre bibliothèque` : 'Aucune ROM dans votre bibliothèque'),
+        h('p', null, MODE_MIN_GEN[mode] ? `Le ${modeName(mode)} se joue avec les jeux de la ${MODE_MIN_GEN[mode]}e génération et plus : ajoutez-en un dans « Mes ROMs ».`
+          : 'Ajoutez d’abord les ROMs de vos jeux (copies de vos cartouches).'),
         h('div', { class: 'mt' }, btn('Ouvrir « Mes ROMs »', () => { m.close(); location.hash = '#/roms'; }, { kind: 'primary' })));
     }
     const byGen = {};
@@ -71,7 +73,7 @@ export async function openCreateRoom(mode = 'soullink') {
         h('div', { class: 'grid3' }, byGen[g].map((r) => h('button', { type: 'button', class: ['choice', st.romId === r.id && 'selected'],
           onclick: () => { st.romId = r.id; st.rando = null; draw(); } },
         h('div', { class: 'grow' }, h('b', null, gameName(r.gameId)), h('small', null, `${LANG[r.lang] || r.lang} · ${r.file}`)))))))),
-      rom() ? h('p', { class: 'tiny faint' }, icon('info'), ' ', SUPPORT[gen()]) : null,
+      rom() ? h('p', { class: 'tiny faint' }, icon('info'), ' ', support(gen(), mode)) : null,
       h('div', { class: 'grid2' },
         field('Nom de la salle', name),
         field('Joueurs', seg(playerChoices(mode), st.maxPlayers, (v) => { st.maxPlayers = v; if (v < 2) st.visibility = 'private'; draw(); }))),

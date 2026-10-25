@@ -71,11 +71,11 @@ final class SltPatches {
                     notes.add("Boutiques : non modifiables dans ce jeu (1re et 2e générations)");
                 }
             }
-            int rate = (int) Json.num(rando, "shinyRate", 0);
-            if (rate > 0 && rate < 8192 && rh.generationOfPokemon() >= 4) {
+            int shinyNum = slt.ShinyOdds.numerator(rando);
+            if (shinyNum > 1 && rh.generationOfPokemon() >= 4) {
                 progress.accept("Taux de chromatiques…");
-                if (dsShinyRate(rh, rate)) {
-                    notes.add("Chromatiques : 1 sur " + rate);
+                if (dsShinyRate(rh, shinyNum)) {
+                    notes.add("Chromatiques : " + slt.ShinyOdds.label(shinyNum));
                     changed = true;
                 } else {
                     notes.add("Chromatiques : taux non modifiable dans cette version du jeu");
@@ -110,43 +110,74 @@ final class SltPatches {
 
     /**
      * The shiny test of the DS games (thumb, same in Diamond/Pearl/Platinum, HeartGold/SoulSilver and the four
-     * generation 5 games): {@code eor r0,r1; eor r0,r2; cmp r0,#8; bhs; mov r0,#1}. The constant becomes the
-     * room's threshold (65536 / rate, at most 255: 1 in 257).
+     * generation 5 games): {@code eor r0,r1; eor r0,r2; cmp r0,#8; bhs; mov r0,#1}, then the end of the function:
+     * generation 4 {@code b; mov r0,#0; lsl r0,#24; lsr r0,#24; bx lr}, generation 5 {@code bx lr; mov r0,#0; bx lr}.
+     * A threshold up to 255 only changes the constant; a higher one (up to 65536, every Pokémon) rewrites the test
+     * from the {@code cmp}: {@code lsr r0,#s; sub r0,#c; sbc r0,r0; neg r0,r0; bx lr}, i.e. 1 when (x >> s) < c.
      */
     private static final byte[] DS_SHINY = {0x48, 0x40, 0x50, 0x40, 0x08, 0x28, 0x01, (byte) 0xD2, 0x01, 0x20};
+    private static final byte[] DS_TAIL_GEN4 = {0x00, (byte) 0xE0, 0x00, 0x20, 0x00, 0x06, 0x00, 0x0E, 0x70, 0x47};
+    private static final byte[] DS_TAIL_GEN5 = {0x70, 0x47, 0x00, 0x20, 0x70, 0x47};
 
-    static int dsShinyThreshold(int rate) {
-        return rate <= 0 || rate >= 8192 ? 8 : Math.max(8, Math.min(255, Math.round(65536f / rate)));
-    }
-
-    private static boolean dsShinyRate(RomHandler rh, int rate) {
+    private static boolean dsShinyRate(RomHandler rh, int num) {
         try {
             java.lang.reflect.Field f = rh.getClass().getDeclaredField("arm9");
             f.setAccessible(true);
             byte[] arm9 = (byte[]) f.get(rh);
-            int at = -1;
-            for (int i = 0; i + DS_SHINY.length <= arm9.length; i++) {
-                boolean ok = true;
-                for (int k = 0; k < DS_SHINY.length && ok; k++) {
-                    ok = arm9[i + k] == DS_SHINY[k];
-                }
-                if (ok) {
-                    if (at >= 0) {
-                        Log.warn("Taux de chromatiques : plusieurs tests trouvés, ROM non modifiée");
-                        return false;
-                    }
-                    at = i;
-                }
-            }
+            int at = find(arm9, DS_SHINY);
             if (at < 0) {
                 return false;
             }
-            arm9[at + 4] = (byte) dsShinyThreshold(rate);
+            if (find(arm9, DS_SHINY, at + 1) >= 0) {
+                Log.warn("Taux de chromatiques : plusieurs tests trouvés, ROM non modifiée");
+                return false;
+            }
+            int[] test = slt.ShinyOdds.dsTest(num);
+            if (test[0] == 0) {
+                arm9[at + 4] = (byte) test[1];
+                return true;
+            }
+            int tail = at + DS_SHINY.length;
+            int room = matches(arm9, tail, DS_TAIL_GEN4) ? 16 : matches(arm9, tail, DS_TAIL_GEN5) ? 12 : -1;
+            if (room < 0) {
+                Log.warn("Taux de chromatiques : fin du test inconnue, ROM non modifiée");
+                return false;
+            }
+            int[] code = {0x0800 | (test[0] << 6), 0x3800 | test[1], 0x4180, 0x4240, 0x4770, 0x4770, 0x4770, 0x4770};
+            for (int i = 0; i < room / 2; i++) {
+                arm9[at + 4 + 2 * i] = (byte) code[i];
+                arm9[at + 5 + 2 * i] = (byte) (code[i] >>> 8);
+            }
             return true;
         } catch (ReflectiveOperationException | RuntimeException e) {
             Log.warn("Taux de chromatiques : " + e.getMessage());
             return false;
         }
+    }
+
+    private static int find(byte[] data, byte[] pattern) {
+        return find(data, pattern, 0);
+    }
+
+    private static int find(byte[] data, byte[] pattern, int from) {
+        for (int i = from; i + pattern.length <= data.length; i++) {
+            if (matches(data, i, pattern)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private static boolean matches(byte[] data, int at, byte[] pattern) {
+        if (at < 0 || at + pattern.length > data.length) {
+            return false;
+        }
+        for (int k = 0; k < pattern.length; k++) {
+            if (data[at + k] != pattern[k]) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static final int GEN3_LAST_ITEM = 376;

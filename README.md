@@ -1,9 +1,24 @@
 # Cable Club (anciennement SLT — Soul Link Together)
 
-Application Windows pour jouer en **Soul Link à plusieurs (1 à 4 joueurs)** sur
-les jeux Pokémon de la **1re à la 5e génération**, chacun dans sa propre
-partie, **en se voyant en direct**, avec les règles du Soul Link **appliquées
-automatiquement dans les jeux**.
+Application Windows et Android pour jouer **à plusieurs** sur les jeux Pokémon
+de la **1re à la 5e génération**, chacun dans sa propre partie, **en se voyant
+en direct**, avec les règles du défi **appliquées automatiquement dans les
+jeux**. Quatre modes de jeu :
+
+- **Soul Link** (2 à 5 joueurs) : les Pokémon capturés dans une même zone sont
+  liés ; si l'un meurt, son partenaire aussi.
+- **Nuzlocke** (1 à 10 joueurs, chacun le sien) : un Pokémon K.O. est mort, et
+  seul le premier Pokémon sauvage de chaque zone peut être capturé.
+- **Sololocke** (1 à 10 joueurs) : un Nuzlocke avec **un seul Pokémon dans
+  l'équipe** ; Cable Club envoie les autres au PC.
+- **Shinylocke** (1 à 10 joueurs, 2e à 5e génération) : seuls les Pokémon
+  **chromatiques** peuvent être capturés, avec un taux de chromatiques au choix
+  (de 1/8192 à 8192/8192).
+
+Option **Nuzlocke Hardcore** (Nuzlocke, Sololocke, Shinylocke) : plafond de
+niveau du prochain champion d'arène (lu dans la ROM, les Pokémon trop forts vont
+au PC), pas d'objets en combat, style de combat Défini imposé, équipe entière
+K.O. = partie perdue.
 
 **[⬇ Télécharger la dernière version](https://github.com/SD-Antoine/CableClub/releases/latest)**
 (`CableClub-x.y.z-windows-x64.zip` : décompressez-le et lancez `CableClub.exe`, rien à

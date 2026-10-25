@@ -5,7 +5,7 @@ import { srv } from '../api.js';
 import { store, on, refreshRooms, loadRoom } from '../store.js';
 import { gameName } from '../data/games.js';
 import { openCreateRoom } from './create-room.js';
-import { MODE_PLAYERS } from '../data/rules.js';
+import { MODE_PLAYERS, modeName } from '../data/rules.js';
 import { mobile } from '../platform.js';
 
 export function stateChip(room) {
@@ -42,7 +42,7 @@ export function renderHome(container, { mode = 'soullink' } = {}) {
       invites.length ? h('div', { class: 'section-title' }, h('h2', null, 'Mes salles')) : null,
       mine.length ? h('div', { class: 'stack' }, mine.map(roomCard))
         : h('div', { class: 'empty' }, h('b', null, 'Aucune salle pour l’instant'),
-          `Créez-en une pour lancer un ${mode === 'nuzlocke' ? 'Nuzlocke' : 'Soul Link'}, puis invitez vos amis… ou rejoignez une salle publique.`));
+          `Créez-en une pour lancer un ${modeName(mode)}, puis invitez vos amis… ou rejoignez une salle publique.`));
   }
 
   function roomCard(room) {

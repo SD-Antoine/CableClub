@@ -1,5 +1,5 @@
 // The tab of a game mode: its rooms, its public rooms and its history. Each
-// mode of Cable Club has its own tab (Soul Link and Nuzlocke; others to come, greyed).
+// mode of Cable Club has its own tab (Soul Link, Nuzlocke, Sololocke, Shinylocke).
 
 import { h, mount } from '../ui.js';
 import { renderHome } from './home.js';
@@ -20,9 +20,18 @@ export const MODES = {
     hash: '#/nuzlocke',
     blurb: 'De 1 à 10 joueurs, chacun son Nuzlocke : un Pokémon K.O. est mort, et seul le premier Pokémon sauvage rencontré dans chaque zone peut être capturé.',
   },
-  // to come
-  sololocke: { name: 'Sololocke', logo: 'img/sololocke.svg', soon: true },
-  shinylocke: { name: 'Shinylocke', logo: 'img/shinylocke.svg', soon: true },
+  sololocke: {
+    name: 'Sololocke',
+    logo: 'img/sololocke.svg',
+    hash: '#/sololocke',
+    blurb: 'De 1 à 10 joueurs, chacun le sien : un seul Pokémon dans l’équipe, et les règles du Nuzlocke autour de lui.',
+  },
+  shinylocke: {
+    name: 'Shinylocke',
+    logo: 'img/shinylocke.svg',
+    hash: '#/shinylocke',
+    blurb: 'De 1 à 10 joueurs, chacun le sien : seuls les Pokémon chromatiques peuvent être capturés, et un Pokémon K.O. est mort. Jeux de la 2e à la 5e génération.',
+  },
 };
 
 const TABS = [['salles', 'Mes salles'], ['publiques', 'Salles publiques'], ['historique', 'Historique']];

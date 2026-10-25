@@ -6,7 +6,7 @@ export const RULES = [
     desc: 'Cable Club détecte dans le jeu la victoire contre le Maître de la Ligue et termine le Soul Link (selon « Fin du Soul Link »). Désactivé : le chef de salle termine l’aventure à la main.' },
   { key: 'startWithBalls', type: 'bool', label: 'Départ aux premières Poké Balls',
     desc: 'Le Soul Link ne commence vraiment que quand chaque joueur a au moins une Poké Ball : avant, un Pokémon K.O. (le starter par exemple) ne meurt pas et les rencontres ne comptent pas.' },
-  { key: 'shinyClause', type: 'bool', label: 'Clause chromatique',
+  { key: 'shinyClause', type: 'bool', label: 'Clause chromatique', minGen: 2,
     desc: 'Un Pokémon chromatique peut toujours être capturé, même dans une zone déjà utilisée (il n’est lié à personne).' },
   { key: 'dupesClause', type: 'bool', label: 'Clause des doublons',
     desc: 'Une lignée d’évolution déjà possédée dans la salle ne compte pas : la rencontre est ignorée tant que la zone n’est pas réglée.' },
@@ -53,7 +53,7 @@ export const NUZLOCKE_RULES = [
   { section: 'Règles optionnelles appliquées par Cable Club' },
   { key: 'dupesClause', type: 'bool', label: 'Clause des doublons',
     desc: 'Si le premier Pokémon rencontré est d’une lignée d’évolution que vous possédez déjà, la rencontre est ignorée : vous pouvez en rencontrer un autre dans la zone.' },
-  { key: 'shinyClause', type: 'bool', label: 'Clause chromatique',
+  { key: 'shinyClause', type: 'bool', label: 'Clause chromatique', minGen: 2,
     desc: 'Un Pokémon chromatique peut toujours être capturé, même dans une zone déjà utilisée.' },
   { key: 'legendaries', type: 'bool', label: 'Légendaires autorisés',
     desc: 'Désactivé : un légendaire capturé est aussitôt relâché.' },
@@ -63,7 +63,7 @@ export const NUZLOCKE_RULES = [
     desc: 'Autorise les sauvegardes instantanées de l’émulateur.' },
   { section: 'Règles d’honneur : Cable Club ne peut pas les vérifier, chacun s’y tient' },
   { key: 'honorNoHealItems', type: 'bool', label: 'Pas d’objets de soin', desc: 'Soigner uniquement dans les Centres Pokémon.' },
-  { key: 'honorNoHeldItems', type: 'bool', label: 'Pas d’objet tenu' },
+  { key: 'honorNoHeldItems', type: 'bool', label: 'Pas d’objet tenu', minGen: 2 },
   { key: 'honorNoMultiExp', type: 'bool', label: 'Pas de Multi Exp' },
   { key: 'honorNoMasterBall', type: 'bool', label: 'Pas de Master Ball' },
   { key: 'honorNoEvolution', type: 'bool', label: 'Pas d’évolution' },
@@ -73,9 +73,12 @@ export const NUZLOCKE_RULES = [
   { key: 'honorCsException', type: 'bool', label: 'Exception pour les CS',
     desc: 'Si une CS est indispensable, capturer exceptionnellement un Pokémon compatible pour débloquer le passage, puis le remettre au PC pour toujours.' },
   { key: 'honorNotepad', type: 'bool', label: 'Aucun Pokémon dans le PC', desc: 'Interdit de capturer tant que l’équipe est pleine (« Notepad Clause »).' },
-  { section: 'Bientôt' },
-  { key: 'hardcore', type: 'bool', label: 'Nuzlocke Hardcore', soon: true,
-    desc: 'Pas d’objets en combat, plafond de niveau selon le prochain champion d’arène, hors-jeu = défaite et partie à recommencer, mode Défini.' },
+  { section: 'Nuzlocke Hardcore : appliqué par Cable Club' },
+  { key: 'hardcore', type: 'bool', label: 'Nuzlocke Hardcore',
+    desc: 'Plafond de niveau : aucun Pokémon de l’équipe au-dessus du Pokémon le plus fort du prochain champion d’arène (puis de la Ligue après 8 badges), lu dans la ROM de la salle ; au-dessus, il part au PC jusqu’au badge suivant. Pas d’objets du sac en combat (les Poké Balls et les objets tenus restent permis). Style de combat Défini imposé dans le jeu. Équipe entière K.O. = partie perdue.' },
+  { key: 'hardcoreItems', type: 'choice', label: 'Objet utilisé en combat', when: (r) => r.hardcore,
+    options: [['report', 'Signalé à la salle'], ['lose', 'Partie perdue']],
+    desc: 'Cable Club voit les objets du sac utilisés pendant un combat (sur DS, d’après l’écran du jeu).' },
 ];
 
 export const NUZLOCKE_DEFAULTS = {
@@ -84,13 +87,81 @@ export const NUZLOCKE_DEFAULTS = {
   autoEnd: true, startWithBalls: true,
   honorNoHealItems: false, honorNoHeldItems: false, honorNoMultiExp: false, honorNoMasterBall: false, honorNoEvolution: false,
   honorNoFly: false, honorNoRepel: false, honorSetMode: false, honorCsException: false, honorNotepad: false,
+  hardcore: false, hardcoreItems: 'report',
 };
 
-export const rulesOf = (mode) => (mode === 'nuzlocke' ? NUZLOCKE_RULES : RULES);
-export const ruleDefaults = (mode) => (mode === 'nuzlocke' ? NUZLOCKE_DEFAULTS : RULE_DEFAULTS);
+// the honour rules and the Hardcore, shared by the modes where each player has their own run
+const sectionAt = (start) => NUZLOCKE_RULES.findIndex((d) => d.section && d.section.startsWith(start));
+const HONOR = NUZLOCKE_RULES.slice(sectionAt('Règles d’honneur'), sectionAt('Nuzlocke Hardcore'));
+const HARDCORE = NUZLOCKE_RULES.slice(sectionAt('Nuzlocke Hardcore'));
+const honorDefaults = Object.fromEntries(HONOR.filter((d) => d.key).map((d) => [d.key, false]));
+const rule = (key) => NUZLOCKE_RULES.find((d) => d.key === key);
+
+// Sololocke: one Pokémon in the team at a time, the Nuzlocke's rules around it
+export const SOLOLOCKE_RULES = [
+  { section: 'Les règles de base : un seul Pokémon dans l’équipe, un Pokémon K.O. est mort, et seul le premier Pokémon sauvage rencontré dans chaque zone peut être capturé (appliquées par Cable Club)' },
+  { ...rule('autoEnd'), desc: 'Cable Club détecte dans le jeu la victoire contre le Maître de la Ligue (selon « Fin du Sololocke »). Désactivé : le chef de salle termine l’aventure à la main.' },
+  rule('startWithBalls'),
+  { key: 'soloParty', type: 'choice', label: 'Un seul Pokémon dans l’équipe',
+    options: [['auto', 'Les autres vont au PC'], ['honor', 'Sur l’honneur']],
+    desc: '« Les autres vont au PC » : dès qu’un deuxième Pokémon vivant rejoint l’équipe, Cable Club l’envoie dans le PC. « Sur l’honneur » : l’équipe peut garder des Pokémon pour les CS, mais un seul combat.' },
+  { key: 'soloLoss', type: 'choice', label: 'Quand votre Pokémon meurt',
+    options: [['next', 'Un autre prend la relève'], ['end', 'La partie est perdue']],
+    desc: '« Un autre prend la relève » : allez chercher un Pokémon vivant dans le PC ; la partie n’est perdue que s’il n’en reste aucun.' },
+  rule('deathBox'),
+  { ...rule('endWhen'), label: 'Fin du Sololocke' },
+  { section: 'Règles optionnelles appliquées par Cable Club' },
+  rule('dupesClause'), rule('shinyClause'), rule('legendaries'), rule('giftPokemon'), rule('saveStates'),
+  ...HONOR.filter((d) => d.key !== 'honorNoMultiExp' && d.key !== 'honorNotepad'),
+  ...HARDCORE,
+];
+
+export const SOLOLOCKE_DEFAULTS = {
+  ...NUZLOCKE_DEFAULTS, soloParty: 'auto', soloLoss: 'next',
+};
+
+// Shinylocke: only shiny Pokémon may be caught (generations 2 to 5: the first one has no shinies)
+export const SHINYLOCKE_RULES = [
+  { section: 'Les règles de base : seuls les Pokémon chromatiques peuvent être capturés, et un Pokémon K.O. est mort (appliquées par Cable Club). Le Pokémon de départ est autorisé. Le taux de chromatiques se règle à l’étape « Randomisation ».' },
+  { ...rule('autoEnd'), desc: 'Cable Club détecte dans le jeu la victoire contre le Maître de la Ligue (selon « Fin du Shinylocke »). Désactivé : le chef de salle termine l’aventure à la main.' },
+  rule('startWithBalls'), rule('deathBox'), rule('wipeEndsRun'),
+  { ...rule('endWhen'), label: 'Fin du Shinylocke' },
+  { section: 'Règles optionnelles appliquées par Cable Club' },
+  { key: 'oneShinyPerZone', type: 'bool', label: 'Un seul chromatique par zone',
+    desc: 'Après une capture dans une zone, un autre chromatique rencontré là ne peut plus être capturé.' },
+  rule('dupesClause'), rule('legendaries'),
+  { key: 'giftPokemon', type: 'bool', label: 'Pokémon offerts ou échangés',
+    desc: 'Gardés même s’ils ne sont pas chromatiques. Désactivé : seuls les Pokémon offerts chromatiques sont gardés, les autres sont relâchés.' },
+  rule('saveStates'),
+  ...HONOR,
+  ...HARDCORE,
+];
+
+export const SHINYLOCKE_DEFAULTS = {
+  ...NUZLOCKE_DEFAULTS, shinyClause: false, giftPokemon: false, oneShinyPerZone: false, ...honorDefaults,
+};
+
+const BY_MODE = {
+  soullink: [RULES, RULE_DEFAULTS],
+  nuzlocke: [NUZLOCKE_RULES, NUZLOCKE_DEFAULTS],
+  sololocke: [SOLOLOCKE_RULES, SOLOLOCKE_DEFAULTS],
+  shinylocke: [SHINYLOCKE_RULES, SHINYLOCKE_DEFAULTS],
+};
+
+/** The rules of a mode, without those impossible in the room's generation (shinies in generation 1, held items…). */
+export const rulesOf = (mode, gen) => (BY_MODE[mode] || BY_MODE.soullink)[0].filter((d) => !d.minGen || !gen || gen >= d.minGen);
+export const ruleDefaults = (mode) => (BY_MODE[mode] || BY_MODE.soullink)[1];
+
+/** Names of the game modes. */
+export const MODE_NAMES = { soullink: 'Soul Link', nuzlocke: 'Nuzlocke', sololocke: 'Sololocke', shinylocke: 'Shinylocke' };
+export const modeName = (mode) => MODE_NAMES[mode] || MODE_NAMES.soullink;
 
 // players a room of each mode may have
-export const MODE_PLAYERS = { soullink: { min: 2, max: 5 }, nuzlocke: { min: 1, max: 10 } };
+export const MODE_PLAYERS = { soullink: { min: 2, max: 5 }, nuzlocke: { min: 1, max: 10 }, sololocke: { min: 1, max: 10 }, shinylocke: { min: 1, max: 10 } };
+
+/** The first generation a mode can be played in (the Shinylocke needs shinies: generation 2 and later). */
+export const MODE_MIN_GEN = { shinylocke: 2 };
+export const modeAvailable = (mode, gen) => !MODE_MIN_GEN[mode] || Number(gen) >= MODE_MIN_GEN[mode];
 
 /** Choices of the number of players of a room: [value, label] (1 is "Solo"). */
 export function playerChoices(mode) {

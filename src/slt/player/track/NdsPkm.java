@@ -20,8 +20,9 @@ public final class NdsPkm {
      */
     static volatile int shinyThreshold = 8;
 
-    public static void shinyRate(int rate) {
-        shinyThreshold = rate <= 0 || rate >= 8192 ? 8 : Math.max(8, Math.min(255, Math.round(65536f / rate)));
+    /** The room's shiny rate ({@code num} out of 8192, 0: the game's), as the patched ROM tests it (SltPatches). */
+    public static void shinyNumerator(int num) {
+        shinyThreshold = slt.ShinyOdds.dsThreshold(num);
     }
 
     public static final int GEN4_PARTY_SIZE = 236;

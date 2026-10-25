@@ -25,6 +25,7 @@ public final class GameInfo {
     private final String[] charTable;
     private String[] items = new String[0];
     private Map<String, Integer> encoding;
+    private Map<String, Object> levelCaps;
 
     private GameInfo(String game, int gen, String[] species, int[] internal, String[] charTable) {
         this.game = game;
@@ -70,6 +71,7 @@ public final class GameInfo {
                 info.items[i] = it.get(i) == null ? null : it.get(i).toString();
             }
         }
+        info.levelCaps = Json.obj(o.get("levelCaps"));
         fill(info.maps, Json.obj(o.get("maps")));
         fill(info.locations, Json.obj(o.get("locations")));
         return info;
@@ -130,6 +132,11 @@ public final class GameInfo {
 
     public boolean knowsItems() {
         return items.length > 0;
+    }
+
+    /** Level caps of the Hardcore Nuzlocke read in the ROM ({"gyms": [8 levels], "league": level}), or null. */
+    public Map<String, Object> levelCaps() {
+        return levelCaps;
     }
 
     /**

@@ -291,6 +291,10 @@ public final class Rooms {
                 "crc", Json.str(game, "crc"));
         String mode = Json.str(body, "mode");
         r.mode = mode != null && Room.MODES.contains(mode) ? mode : "soullink";
+        if (Json.num(game, "gen", 0) > 0 && Json.num(game, "gen", 0) < Room.minGen(r.mode)) {
+            throw new Http.Fail(400, "Le " + r.runName() + " se joue avec un jeu de la " + Room.minGen(r.mode)
+                    + "e génération ou plus (la 1re génération n'a pas de Pokémon chromatiques).");
+        }
         r.maxPlayers = (int) Math.max(Room.minPlayers(r.mode), Math.min(Room.maxPlayers(r.mode),
                 Json.num(body, "maxPlayers", Math.max(2, Room.minPlayers(r.mode)))));
         // a room for one player is never listed: nobody could join it
@@ -597,8 +601,8 @@ public final class Rooms {
             Room.Out out = new Room.Out();
             out.log(null, "launch", "L'aventure commence ! " + r.members.size() + " joueur(s) sur " + r.gameName() + ".", null);
             if (r.rule("startWithBalls")) {
-                out.log(null, "info", r.nuzlocke()
-                        ? "Le Nuzlocke de chaque joueur commence à sa première Poké Ball : d'ici là, un Pokémon K.O. ne meurt pas."
+                out.log(null, "info", r.individual()
+                        ? "Le " + r.runName() + " de chaque joueur commence à sa première Poké Ball : d'ici là, un Pokémon K.O. ne meurt pas."
                         : "Le Soul Link commencera vraiment quand chaque joueur aura une Poké Ball : "
                         + "d'ici là, un Pokémon K.O. ne meurt pas.", null);
             }
@@ -678,6 +682,10 @@ public final class Rooms {
         synchronized (r) {
             Room.Member m = r.member(user.id);
             Room.Out out = new Room.Out();
+            // what the game shows right now (field, dialogue, battle), from the position it sends to the room
+            Map<String, Object> seen = ghosts.get(r.id + "/" + m.userId);
+            Object shown = seen == null || System.currentTimeMillis() - Json.num(seen, "at", 0) > 10_000 ? null : seen.get("st");
+            m.shown = shown == null ? null : shown.toString();
             for (Object o : events) {
                 Map<String, Object> ev = Json.obj(o);
                 if (ev != null) {
@@ -685,8 +693,6 @@ public final class Rooms {
                 }
             }
             // an encounter the tracker believes in while the game shows the field is no battle (see battleFromGame)
-            Map<String, Object> seen = ghosts.get(r.id + "/" + m.userId);
-            Object shown = seen == null || System.currentTimeMillis() - Json.num(seen, "at", 0) > 10_000 ? null : seen.get("st");
             if ("free".equals(shown) || "dialogue".equals(shown)) {
                 m.live.remove("battle");
             }

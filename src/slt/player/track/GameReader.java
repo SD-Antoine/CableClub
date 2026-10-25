@@ -57,6 +57,15 @@ public interface GameReader {
     }
 
     /**
+     * Writes moving a living Pokémon from the party to the PC (Sololocke: one Pokémon in the team), in the first free
+     * place from the first box, never the dead box; null when unsupported or not safe right now. Generations 1 and 2
+     * have only the current box.
+     */
+    default List<Write> store(Mem m, Mon mon) {
+        return deposit(m, mon);
+    }
+
+    /**
      * Trade between partners: the bytes of party Pokémon {@code uid}, everything the
      * partner's game (same game) needs to hold it, or null when not in the party / unsupported.
      */
@@ -80,6 +89,14 @@ public interface GameReader {
      * 4-5: same ids as Showdown), gender, happiness, shiny; null when unknown.
      */
     default java.util.Map<String, Object> battleSet(Mem m, Mon mon) {
+        return null;
+    }
+
+    /**
+     * Hardcore Nuzlocke: writes setting the game's battle style to "Set" (no switch offered after the foe's Pokémon is
+     * knocked out), empty when it already is, null when the options are not found in this game.
+     */
+    default List<Write> setBattleStyle(Mem m) {
         return null;
     }
 
