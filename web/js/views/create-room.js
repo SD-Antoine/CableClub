@@ -3,7 +3,7 @@
 import { h, mount, keepScroll, modal, btn, field, seg, icon, errorToast, switchEl } from '../ui.js';
 import { local, srv } from '../api.js';
 import { store } from '../store.js';
-import { LANG, GEN_LABEL, support, gameName } from '../data/games.js';
+import { GAMES, LANG, GEN_SHORT, support, gameName } from '../data/games.js';
 import { ruleDefaults, playerChoices, MODE_PLAYERS, modeAvailable, modeName, MODE_MIN_GEN } from '../data/rules.js';
 import { defaultRando } from '../data/rando.js';
 import { rulesEditor, randoEditor } from './parts.js';
@@ -64,15 +64,24 @@ export async function openCreateRoom(mode = 'soullink') {
           : 'Ajoutez d’abord les ROMs de vos jeux (copies de vos cartouches).'),
         h('div', { class: 'mt' }, btn('Ouvrir « Mes ROMs »', () => { m.close(); location.hash = '#/roms'; }, { kind: 'primary' })));
     }
-    const byGen = {};
-    for (const r of library) (byGen[r.gen] ||= []).push(r);
+    // the generation first, then one line per game of it (the file name only tells two copies of a game apart)
+    const gens = [...new Set(library.map((r) => Number(r.gen)))].sort();
+    const order = Object.keys(GAMES);
+    const roms = library.filter((r) => Number(r.gen) === gen())
+      .sort((a, b) => order.indexOf(a.gameId) - order.indexOf(b.gameId) || String(a.lang).localeCompare(String(b.lang)));
+    const twin = (r) => roms.some((x) => x !== r && x.gameId === r.gameId && x.lang === r.lang);
+    // the end of the file name is what tells two copies apart (« …Enhanced)_apfix.nds »)
+    const tail = (file) => (file.length > 32 ? `…${file.slice(-31)}` : file);
+    const pick = (r) => { st.romId = r.id; st.rando = null; draw(); };
     const name = h('input', { class: 'input', placeholder: `${user?.name || 'Ma'} salle`, value: st.name, oninput: (e) => { st.name = e.target.value; } });
     return h('div', { class: 'stack l' },
-      h('div', { class: 'stack' }, Object.keys(byGen).sort().map((g) => h('div', null,
-        h('div', { class: 'tiny faint mb', style: { marginBottom: '6px' } }, GEN_LABEL[g]),
-        h('div', { class: 'grid3' }, byGen[g].map((r) => h('button', { type: 'button', class: ['choice', st.romId === r.id && 'selected'],
-          onclick: () => { st.romId = r.id; st.rando = null; draw(); } },
-        h('div', { class: 'grow' }, h('b', null, gameName(r.gameId)), h('small', null, `${LANG[r.lang] || r.lang} · ${r.file}`)))))))),
+      h('div', { class: 'stack' },
+        gens.length > 1 ? field('Génération', seg(gens.map((g) => [g, GEN_SHORT[g]]), gen(),
+          (g) => pick(library.find((r) => Number(r.gen) === g)))) : null,
+        h('div', { class: 'pick-list' }, roms.map((r) => h('button', { type: 'button', class: ['pick', st.romId === r.id && 'selected'], onclick: () => pick(r) },
+          h('span', { class: 'pick-dot' }),
+          h('span', { class: 'grow' }, h('b', null, gameName(r.gameId)), twin(r) ? h('small', { title: r.file }, tail(r.file)) : null),
+          h('span', { class: 'chip' }, LANG[r.lang] || r.lang))))),
       rom() ? h('p', { class: 'tiny faint' }, icon('info'), ' ', support(gen(), mode)) : null,
       h('div', { class: 'grid2' },
         field('Nom de la salle', name),

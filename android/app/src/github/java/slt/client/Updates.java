@@ -159,9 +159,20 @@ final class Updates {
             download(rel.apkUrl(), apk, rel.apkSize(), progress);
             if (rel.shaUrl() != null) {
                 progress.accept("Vérification du fichier…");
-                Net.Response r = http.send("GET", rel.shaUrl(), Map.of("User-Agent", "CableClub-Android/" + Version.VERSION), null, 30_000);
-                String expected = r.text().trim().split("\\s+")[0].toLowerCase(Locale.ROOT);
-                if (r.status() != 200 || !expected.equals(sha256(apk))) {
+                // the .sha256 file is sent from another address too (the app's HTTP client does not follow redirects)
+                String expected;
+                HttpURLConnection sha = open(rel.shaUrl());
+                try (InputStream in = sha.getInputStream()) {
+                    java.io.ByteArrayOutputStream text = new java.io.ByteArrayOutputStream();
+                    byte[] buf = new byte[512];
+                    for (int n; text.size() < 4096 && (n = in.read(buf)) > 0; ) {
+                        text.write(buf, 0, n);
+                    }
+                    expected = text.toString("UTF-8").trim().split("\\s+")[0].toLowerCase(Locale.ROOT);
+                } finally {
+                    sha.disconnect();
+                }
+                if (!expected.equals(sha256(apk))) {
                     throw new IOException("Le fichier téléchargé est abîmé (empreinte différente) : réessayez.");
                 }
             }
@@ -194,11 +205,10 @@ final class Updates {
         app.hub.send("update", s);
     }
 
-    private void download(String url, Path target, long size, Consumer<String> progress) throws IOException {
-        // GitHub sends the file from another address: follow it
-        HttpURLConnection c = null;
+    /** A file of a release, open for reading: GitHub sends it from another address, which is followed. */
+    private static HttpURLConnection open(String url) throws IOException {
         for (int hop = 0; hop < 5; hop++) {
-            c = (HttpURLConnection) new URL(url).openConnection();
+            HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
             c.setInstanceFollowRedirects(false);
             c.setConnectTimeout(15_000);
             c.setReadTimeout(60_000);
@@ -213,8 +223,13 @@ final class Updates {
                 c.disconnect();
                 throw new IOException("Téléchargement refusé par GitHub (" + code + ")");
             }
-            break;
+            return c;
         }
+        throw new IOException("Téléchargement impossible : trop de redirections");
+    }
+
+    private void download(String url, Path target, long size, Consumer<String> progress) throws IOException {
+        HttpURLConnection c = open(url);
         long total = size > 0 ? size : c.getContentLengthLong();
         long done = 0;
         long shown = -1;

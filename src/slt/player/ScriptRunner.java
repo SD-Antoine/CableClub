@@ -198,6 +198,27 @@ final class ScriptRunner {
                     // far the image itself scrolled: the position must follow the image the player sees
                     trace(t[1], Integer.parseInt(t[2]));
                     break;
+                case "watch": {
+                    // watch BUTTON FRAMES: holds a button (NONE: none) and prints every change of what the presence
+                    // reads (map, position, field, free, state), image by image: what the others would see
+                    if (presence == null) {
+                        throw new IllegalStateException("watch : faire « presence on » d'abord");
+                    }
+                    input.mask = mask(t[1]);
+                    String last = null;
+                    for (int i = 0; i < Integer.parseInt(t[2]); i++) {
+                        frames(1);
+                        Presence.Sample s = sample;
+                        String now = s == null ? "aucune" : "carte " + s.map() + " x " + s.x() + " y " + s.y()
+                                + (s.overworld() ? " terrain" : " -") + (s.free() ? " libre" : "") + " " + s.status();
+                        if (!now.equals(last)) {
+                            System.out.println("WATCH image " + frame + " : " + now);
+                            last = now;
+                        }
+                    }
+                    input.mask = 0;
+                    break;
+                }
                 case "trace3d": {
                     // trace3d BUTTON FRAMES NAME: 3D games, where the position read lands with the camera sent with
                     // each image (screenshots NAME-n.png, to compare with the player drawn there)

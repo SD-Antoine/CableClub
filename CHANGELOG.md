@@ -1,5 +1,12 @@
 # Nouveautés de Cable Club (anciennement SLT)
 
+## 0.11.2 — 2026-10-26
+
+- **Mises à jour sur téléphone** : « Mettre à jour » échouait à chaque fois (« empreinte différente ») parce que le fichier de vérification envoyé par GitHub n'était pas lu. C'est corrigé à partir de cette version : installez-la une dernière fois à la main (le fichier `.apk` de la page de téléchargement), les suivantes s'installeront depuis l'application.
+- **1re génération** : en sortant d'une maison, un autre joueur n'apparaît plus un instant à un mauvais endroit avant d'arriver devant la porte (le jeu change de carte quelques images avant de placer le joueur).
+- **Nouvelle salle** : le choix du jeu se fait par génération, puis dans une liste compacte (une ligne par jeu, le nom du fichier seulement quand deux copies du même jeu se ressemblent). Le nom de la salle et le nombre de joueurs restent visibles sans faire défiler.
+- **Sur téléphone** : la fenêtre « Nouvelle salle » ne dépasse plus de l'écran, la barre « Je suis prêt / Lancer l'aventure » du salon n'écrase plus son texte, les règles gardent leur interrupteur à côté de leur titre, les quatre modes sont visibles en haut des salles, et les places libres d'une salle prennent moins de place.
+
 ## 0.11.1 — 2026-10-26
 
 - **1re génération, versions françaises (Rouge, Bleu, Jaune)** : les autres joueurs sont visibles dans le jeu dès le début de la partie. Avant, ils n'apparaissaient qu'une fois le premier Pokémon reçu. Ce premier Pokémon compte maintenant bien comme Pokémon de départ : il était pris pour un Pokémon déjà présent dans la sauvegarde, et sa mort ne comptait pas.

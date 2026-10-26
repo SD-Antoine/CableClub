@@ -493,6 +493,20 @@ textarea.input { height: auto; padding: 10px 12px; resize: vertical; }
 .choice b { display: block; margin-bottom: 2px; font-weight: 600; }
 .choice small { color: var(--muted); font-size: 13px; }
 
+/* a short list to pick one item from (the game of a new room): one line each */
+.pick-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 900px) { .pick-list { grid-template-columns: minmax(0, 1fr); } }
+.pick {
+  display: flex; align-items: center; gap: 10px; min-height: 46px; padding: 8px 12px; border-radius: 10px; width: 100%;
+  border: 1px solid var(--line); background: var(--surface); color: var(--text); text-align: left; cursor: pointer;
+}
+.pick:hover { border-color: var(--line-2); background: var(--surface-2); }
+.pick.selected { border-color: var(--accent); background: var(--accent-soft); }
+.pick b { display: block; font-weight: 600; }
+.pick small { display: block; color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pick-dot { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--line-2); flex: none; }
+.pick.selected .pick-dot { border-color: var(--accent); background: radial-gradient(circle, var(--accent) 0 45%, transparent 50%); }
+
 .theme-swatches { display: flex; gap: 12px; }
 .swatch {
   width: 112px; border-radius: 12px; border: 1px solid var(--line-2); padding: 8px; cursor: pointer; background: none; color: var(--text);
@@ -728,15 +742,28 @@ html.mobile textarea.input { height: auto; }
 html.mobile .card { padding: 14px 16px; }
 html.mobile .room-head { flex-direction: column; gap: 12px; }
 html.mobile .room-head > .row { flex-wrap: wrap; }
-html.mobile .action-bar { flex-wrap: wrap; }
+html.mobile .action-bar { flex-wrap: wrap; gap: 10px; }
+/* the text on its own line, the buttons under it */
+html.mobile .action-bar > .grow { flex-basis: 100%; }
+html.mobile .action-bar > .btn { flex: 1 1 auto; }
+html.mobile .slot { min-height: 0; }
+html.mobile .slot.empty { padding: 10px 16px; }
 html.mobile .table { font-size: 13px; }
 html.mobile .rule-row > .grow { min-width: 0; flex-basis: 100%; }
+/* a switch stays beside its title (a choice goes under the text) */
+html.mobile .rule-row:has(> .switch) { flex-wrap: nowrap; align-items: flex-start; }
+html.mobile .rule-row:has(> .switch) > .grow { flex-basis: auto; }
+html.mobile .rule-row:has(> .switch) > .switch { margin-top: 2px; }
 html.mobile .rule-row .seg { flex-wrap: wrap; }
 html.mobile .keymap { grid-template-columns: 1fr; }
 html.mobile .toasts { left: 10px; right: 10px; bottom: 74px; }
 html.mobile .toast { min-width: 0; max-width: none; }
 html.mobile .modal-back { padding: 10px; align-items: end; }
-html.mobile .modal { max-height: 88vh; }
+/* a dialog never gets wider than the screen: what is too long wraps or scrolls inside it */
+html.mobile .modal { max-height: 88vh; min-width: 0; max-width: 100%; }
+html.mobile .modal-body { overflow-x: hidden; }
+html.mobile .seg { flex-wrap: wrap; max-width: 100%; }
+html.mobile .choice, html.mobile .choice small { overflow-wrap: anywhere; }
 html.mobile .modal-head { padding: 16px 16px 0; }
 html.mobile .modal-body { padding: 14px 16px; }
 html.mobile .modal-foot { padding: 12px 16px 14px; flex-wrap: wrap; }
@@ -775,6 +802,9 @@ html.mobile ::-webkit-scrollbar { width: 0; height: 0; }
 .mode-pill img { width: 22px; height: 22px; border-radius: 5px; }
 .mode-pill.active { color: var(--text); border-color: var(--accent); background: var(--accent-soft); }
 .mode-pill.soon { opacity: .4; }
+/* the four modes all visible (two by two on a narrow screen) rather than a strip cut on the right */
+html.mobile .mode-switch { flex-wrap: wrap; overflow: visible; margin: 0 0 14px; padding: 0; }
+html.mobile .mode-pill { flex: 1 1 calc(50% - 4px); justify-content: flex-start; }
 html.mobile .mode-head { gap: 12px; margin-bottom: 12px; }
 html.mobile .mode-head img { width: 40px; height: 40px; }
 html.mobile .mode-head p { font-size: 13px; }

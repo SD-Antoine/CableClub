@@ -24,6 +24,7 @@ export const GAMES = {
 };
 
 export const GEN_LABEL = { 1: '1re génération', 2: '2e génération', 3: '3e génération', 4: '4e génération', 5: '5e génération' };
+export const GEN_SHORT = { 1: '1re', 2: '2e', 3: '3e', 4: '4e', 5: '5e' };
 export const PLATFORM = { gb: 'Game Boy', gbc: 'Game Boy Color', gba: 'Game Boy Advance', nds: 'Nintendo DS' };
 export const LANG = { fr: 'Français', en: 'Anglais', de: 'Allemand', es: 'Espagnol', it: 'Italien', ja: 'Japonais', ko: 'Coréen' };
 

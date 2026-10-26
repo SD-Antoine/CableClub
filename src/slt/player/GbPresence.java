@@ -24,6 +24,8 @@ import java.util.zip.CRC32;
  * light area at the bottom under a dark line across the screen, a menu a light area on the right
  * of a dark column.
  * Fade (gen 1): the background palette BGP differs from its usual value 0xE4.
+ * Doors and stairs: the game sets the new map a few images before the player's new coordinates (gen 1: about 8
+ * images, then the fade): the coordinates of the old map are not taken for the new one (see {@link MapChange}).
  * </pre>
  */
 final class GbPresence implements Presence {
@@ -49,6 +51,7 @@ final class GbPresence implements Presence {
     private String spritePng;
     private int anchorX = 72;
     private int anchorY = 76;
+    private final MapChange mapChange = new MapChange();
 
     GbPresence(GbReader reader) {
         this.reader = reader;
@@ -137,6 +140,7 @@ final class GbPresence implements Presence {
         boolean player = !battle && findPlayer(core, false);
         boolean overworld = !battle && player;
 
+        boolean settling = mapChange.pending(map, posX, posY, lastMap, lastPosX, lastPosY, frames || fading);
         boolean moved = posX != lastPosX || posY != lastPosY;
         if (map != lastMap) {
             kx = Integer.MIN_VALUE;
@@ -168,11 +172,11 @@ final class GbPresence implements Presence {
                 fy = 0;
             }
         }
-        boolean free = overworld && !frames && !fading;
+        boolean free = overworld && !frames && !fading && !settling;
         if (free) {
             findPlayer(core, true);
         }
-        if (overworld && !fading) {
+        if (overworld && !fading && !settling) {
             fieldMap = map;
             fieldX = posX * 16 + fx;
             fieldY = posY * 16 + fy;
@@ -184,7 +188,7 @@ final class GbPresence implements Presence {
             status = "menu";
         } else if (textBox) {
             status = "dialogue";
-        } else if (frames || fading) {
+        } else if (frames || fading || settling) {
             status = "busy";
         } else {
             status = "free";
