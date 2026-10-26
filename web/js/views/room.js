@@ -105,10 +105,14 @@ export async function renderRoom(container, roomId, { history = false } = {}) {
     const friends = store.friends.friends.filter((f) => !room.members.some((m) => m.userId === f.id));
     const list = h('div', { class: 'list' }, friends.length ? friends.map((f) => {
       const invited = (room.invites || []).includes(f.id);
-      const b = btn(invited ? 'Invité' : 'Inviter', (e) => act(e.currentTarget, async () => {
-        await srv.post(`/rooms/${roomId}/invite`, { userId: f.id });
-        e.currentTarget.textContent = 'Invité';
-      }), { kind: 'small', disabled: invited });
+      // the button is kept before the request: once it has been awaited, the event no longer has a currentTarget
+      const b = btn(invited ? 'Invité' : 'Inviter', async (e) => {
+        const el = e.currentTarget;
+        if (await act(el, () => srv.post(`/rooms/${roomId}/invite`, { userId: f.id }).then(() => true))) {
+          el.textContent = 'Invité';
+          el.disabled = true;
+        }
+      }, { kind: 'small', disabled: invited });
       return h('div', { class: 'list-item' }, avatar(f.name, 2, { size: 's', online: f.online, id: f.id, pic: f.avatar }),
         h('div', { class: 'grow' }, h('b', null, f.name), h('div', { class: 'tiny muted' }, f.online ? 'En ligne' : 'Hors ligne')), b);
     }) : h('p', { class: 'muted' }, 'Aucun ami à inviter. Ajoutez des amis depuis la page « Amis ».'));

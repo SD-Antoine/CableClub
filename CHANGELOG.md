@@ -1,5 +1,10 @@
 # Nouveautés de Cable Club (anciennement SLT)
 
+## 0.11.1 — 2026-10-26
+
+- **1re génération, versions françaises (Rouge, Bleu, Jaune)** : les autres joueurs sont visibles dans le jeu dès le début de la partie. Avant, ils n'apparaissaient qu'une fois le premier Pokémon reçu. Ce premier Pokémon compte maintenant bien comme Pokémon de départ : il était pris pour un Pokémon déjà présent dans la sauvegarde, et sa mort ne comptait pas.
+- **Inviter un joueur** dans une salle (ou depuis la page Amis) n'affiche plus d'erreur : l'invitation partait pourtant bien.
+
 ## 0.11.0 — 2026-10-25
 
 - **Les règles d'honneur sont appliquées par Cable Club** (modes Nuzlocke, Sololocke et Shinylocke, générations 1 à 5) : ce sont maintenant les « Règles classiques du Nuzlocke ». Un objet interdit quitte le sac dès que le joueur reprend la main sur le terrain (hors menus, dialogues et combats), et chaque changement est noté dans le journal de la salle.

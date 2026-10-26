@@ -645,7 +645,11 @@ public final class GbReader implements GameReader {
         return best;
     }
 
-    /** The usual address first (all Western versions), then a scan of bank 1. */
+    /**
+     * The usual address first (English versions), then a scan of bank 1 for a party with Pokémon. Gen 1 before the
+     * first Pokémon (the French versions move the block by 5 bytes): the empty party (count 0, then 0xFF) right after
+     * the player's name, near the usual address — else the position of the player stays unknown until the starter.
+     */
     private long locate(byte[] d) {
         int usual = layout.party - (int) WRAM;
         if (partyAt(d, usual) != null) {
@@ -657,7 +661,30 @@ public final class GbReader implements GameReader {
                 return WRAM + p;
             }
         }
+        if (layout.gen == 1) {
+            for (int s = 0; s <= 0x20; s++) {
+                for (int p : new int[]{usual + s, usual - s}) {
+                    if (p >= 11 && p + 2 <= d.length && d[p] == 0 && (d[p + 1] & 0xFF) == 0xFF && playerName(d, p - 11)) {
+                        return WRAM + p;
+                    }
+                }
+            }
+        }
         return -1;
+    }
+
+    /** Gen 1 name (player): 1 to 7 letters of the game's characters (0x7F and up), then the 0x50 terminator. */
+    private static boolean playerName(byte[] d, int o) {
+        for (int i = 0; i < 8; i++) {
+            int c = d[o + i] & 0xFF;
+            if (c == 0x50) {
+                return i > 0;
+            }
+            if (c < 0x7F) {
+                return false;
+            }
+        }
+        return false;
     }
 
     /** Address of the current box (gen 1: work RAM next to the party; gen 2: cartridge RAM). */

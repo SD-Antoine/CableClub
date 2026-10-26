@@ -43,11 +43,13 @@ export function renderFriends(container) {
       title: `Inviter ${friend.name}`,
       body: rooms.length ? h('div', { class: 'list' }, rooms.map((r) => h('div', { class: 'list-item' },
         h('div', { class: 'grow' }, h('b', null, r.name), h('div', { class: 'tiny muted' }, `${(r.members || []).length}/${r.maxPlayers} joueur(s)`)),
-        btn('Inviter', (e) => act(e.currentTarget, async () => {
-          await srv.post(`/rooms/${r.id}/invite`, { userId: friend.id });
-          e.currentTarget.textContent = 'Invité';
-          e.currentTarget.disabled = true;
-        }), { kind: 'small primary' }))))
+        btn('Inviter', async (e) => {
+          const el = e.currentTarget; // gone from the event once the request has been awaited
+          if (await act(el, () => srv.post(`/rooms/${r.id}/invite`, { userId: friend.id }).then(() => true))) {
+            el.textContent = 'Invité';
+            el.disabled = true;
+          }
+        }, { kind: 'small primary' }))))
         : h('p', { class: 'muted' }, 'Vous n’avez pas de salle en préparation. Créez-en une depuis « Salles ».'),
     });
   }
