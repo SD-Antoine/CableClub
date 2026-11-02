@@ -1009,7 +1009,8 @@ public final class Room {
         Map<String, String> before = new LinkedHashMap<>(m.park);
         m.park.clear();
         List<Object> party = Json.arr(m.live.get("party"));
-        if (party == null || !individual() || !started(m)) {
+        Mode.RunLogic run = Mode.forRoom(this).run();
+        if (party == null || !run.parksTeam() || !started(m)) {
             return;
         }
         List<String> alive = new ArrayList<>();
@@ -1032,7 +1033,7 @@ public final class Room {
         }
         String lowest = alive.stream().min(java.util.Comparator.comparingInt(u -> levelOf(m, u))).orElse(alive.get(0));
         String kept = null;
-        if (sololocke() && "auto".equals(ruleText("soloParty"))) {
+        if (run.soloTeam(this)) {
             String keep = m.soloUid != null && fit.contains(m.soloUid) ? m.soloUid
                     : !fit.isEmpty() ? fit.get(0) : m.soloUid != null && alive.contains(m.soloUid) ? m.soloUid : lowest;
             m.soloUid = keep;
@@ -1105,7 +1106,7 @@ public final class Room {
      * unknown, Champion beaten).
      */
     int levelCap(Member m) {
-        if (!individual() || !rule("hardcore") || m.capGyms == null || "champion".equals(m.status)) {
+        if (!Mode.forRoom(this).run().hardcore(this) || m.capGyms == null || "champion".equals(m.status)) {
             return -1;
         }
         int b = Math.max(0, m.stats.badges);
@@ -1282,7 +1283,7 @@ public final class Room {
 
     /** Hardcore: an item of the bag used in a battle (held items and Poké Balls are allowed). */
     private void foul(Member m, String name, int qty, Out out) {
-        if (!individual() || !rule("hardcore") || !started(m) || "wiped".equals(m.status) || "champion".equals(m.status)) {
+        if (!Mode.forRoom(this).run().hardcore(this) || !started(m) || "wiped".equals(m.status) || "champion".equals(m.status)) {
             return;
         }
         m.stats.fouls++;
@@ -1399,7 +1400,8 @@ public final class Room {
         }
         // the classic rules applied in the game while the player's run goes on: items taken out of the bag (by
         // category, see ItemRules), held items back in it, Fly forgotten
-        boolean classic = individual() && "running".equals(state) && "playing".equals(m.status);
+        Mode.RunLogic run = Mode.forRoom(this).run();
+        boolean classic = run.classicRules() && "running".equals(state) && "playing".equals(m.status);
         List<Object> ban = new ArrayList<>();
         if (classic) {
             for (String[] b : new String[][]{{"honorNoHealItems", "heal"}, {"honorNoRepel", "repel"},
@@ -1418,7 +1420,7 @@ public final class Room {
                 "park", new ArrayList<Object>(m.park.keySet()), "parkWhy", new LinkedHashMap<String, Object>(m.park),
                 // Hardcore: the level cap of the player right now; Hardcore or "Mode Défini": the battle style "Set"
                 // imposed in their game
-                "levelCap", (long) levelCap(m), "setMode", individual() && (rule("hardcore") || rule("honorSetMode")),
+                "levelCap", (long) levelCap(m), "setMode", run.hardcore(this) || (run.classicRules() && rule("honorSetMode")),
                 "ban", ban, "noHeld", classic && rule("honorNoHeldItems"), "noFly", classic && rule("honorNoFly"),
                 "saveStates", rule("saveStates"), "state", state, "open", adventureOpen, "trade", tradeDirective(m));
     }

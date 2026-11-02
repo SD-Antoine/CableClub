@@ -128,6 +128,18 @@ final class Mode {
 
         /** The whole team of the player is knocked out (already written in the journal). */
         void whiteout(Room r, Room.Member m, Room.Out out);
+
+        /** Whether living Pokémon of the team may be sent to the PC (Sololocke, Hardcore level cap): own runs only. */
+        boolean parksTeam();
+
+        /** Sololocke "les autres vont au PC": one living Pokémon in the team. */
+        boolean soloTeam(Room r);
+
+        /** The Hardcore option applies (level cap, no items in battle, a team knocked out loses): own runs only. */
+        boolean hardcore(Room r);
+
+        /** The classic rules are applied in the games (items, Fly, battle style "Set"): own runs only. */
+        boolean classicRules();
     }
 
     private static final EncounterLogic SOUL_LINK = new SoulLinkEncounters();
@@ -633,6 +645,26 @@ final class Mode {
                 r.finish("defeat", "L'équipe de " + m.name + " est tombée.", out);
             }
         }
+
+        @Override
+        public boolean parksTeam() {
+            return false;
+        }
+
+        @Override
+        public boolean soloTeam(Room r) {
+            return false;
+        }
+
+        @Override
+        public boolean hardcore(Room r) {
+            return false;
+        }
+
+        @Override
+        public boolean classicRules() {
+            return false;
+        }
     }
 
     /** Each player's own run (Nuzlocke, Shinylocke): a death is the player's alone; a team knocked out loses the run. */
@@ -660,6 +692,26 @@ final class Mode {
             }
         }
 
+        @Override
+        public boolean parksTeam() {
+            return true;
+        }
+
+        @Override
+        public boolean soloTeam(Room r) {
+            return false;
+        }
+
+        @Override
+        public boolean hardcore(Room r) {
+            return r.rule("hardcore");
+        }
+
+        @Override
+        public boolean classicRules() {
+            return true;
+        }
+
         /** Hardcore: a whiteout loses the run, whatever the other rules say. */
         static boolean hardcoreWipe(Room r, Room.Member m, Room.Out out) {
             if (!r.rule("hardcore") || !r.started(m) || "wiped".equals(m.status) || "champion".equals(m.status)) {
@@ -684,6 +736,11 @@ final class Mode {
         public void whiteout(Room r, Room.Member m, Room.Out out) {
             // the death of the Pokémon already decided (soloFallen), unless Hardcore loses the run here
             hardcoreWipe(r, m, out);
+        }
+
+        @Override
+        public boolean soloTeam(Room r) {
+            return "auto".equals(r.ruleText("soloParty"));
         }
     }
 }
