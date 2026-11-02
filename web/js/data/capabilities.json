@@ -1,0 +1,48 @@
+{
+  "about": "What Cable Club can do in each game (point 1d of the evolution plan). Read by the server (slt.server.Capabilities) and by the interface (web/js/data/capabilities.js): one source for both. A generation gives the defaults, a game may change them. A rule or a mode lists the capabilities it needs; without one of them it is not offered for that game (the server refuses to turn the rule on, or to create the room).",
+  "capabilities": {
+    "shinies": {
+      "label": "Pokémon chromatiques",
+      "missing": "pas de Pokémon chromatiques en 1re génération"
+    },
+    "heldItems": {
+      "label": "objets tenus",
+      "missing": "pas d’objets tenus en 1re génération"
+    },
+    "trainerBattles": {
+      "label": "combats de dresseurs lus dans le jeu",
+      "missing": "le jeu ne signale pas les combats de dresseurs à Cable Club"
+    },
+    "autoEnd": {
+      "label": "victoire contre le Maître détectée dans le jeu",
+      "missing": "le jeu ne signale pas la victoire contre le Maître : le chef de salle termine l’aventure"
+    },
+    "presence": {
+      "label": "partenaires visibles dans le jeu",
+      "missing": "les partenaires ne sont visibles que sur les écrans de la salle"
+    }
+  },
+  "deathBox": {
+    "currentBox": "morts rangés dans la boîte actuelle du PC",
+    "namedBox": "boîte MORTS",
+    "namedBoxOnMapChange": "boîte MORTS (au changement de lieu)"
+  },
+  "generations": {
+    "1": { "shinies": false, "heldItems": false, "trainerBattles": true, "autoEnd": true, "presence": true, "deathBox": "currentBox" },
+    "2": { "shinies": true, "heldItems": true, "trainerBattles": true, "autoEnd": true, "presence": true, "deathBox": "currentBox" },
+    "3": { "shinies": true, "heldItems": true, "trainerBattles": true, "autoEnd": true, "presence": true, "deathBox": "namedBox" },
+    "4": { "shinies": true, "heldItems": true, "trainerBattles": false, "autoEnd": true, "presence": true, "deathBox": "namedBoxOnMapChange" },
+    "5": { "shinies": true, "heldItems": true, "trainerBattles": false, "autoEnd": true, "presence": true, "deathBox": "namedBoxOnMapChange" }
+  },
+  "games": {
+    "gold": { "trainerBattles": false },
+    "silver": { "trainerBattles": false }
+  },
+  "modes": {
+    "shinylocke": ["shinies"]
+  },
+  "rules": {
+    "shinyClause": ["shinies"],
+    "honorNoHeldItems": ["heldItems"]
+  }
+}

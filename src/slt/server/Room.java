@@ -39,11 +39,6 @@ public final class Room {
         return "soullink".equals(mode) ? 5 : 10;
     }
 
-    /** The first generation a mode can be played in: the Shinylocke needs shinies (none in generation 1). */
-    public static int minGen(String mode) {
-        return "shinylocke".equals(mode) ? 2 : 1;
-    }
-
     /**
      * The classic rules of the Nuzlocke, applied by Cable Club in the games (their keys keep the "honor" of the time the
      * players kept to them on their honour): items taken out of the bag, held items back in it, Fly forgotten, battle
@@ -518,6 +513,37 @@ public final class Room {
     /** Do the deaths count for this player? Soul Link: once everybody has a Poké Ball; Nuzlocke: once they have theirs. */
     boolean started(Member m) {
         return Mode.forRoom(this).run().started(this, m);
+    }
+
+    /**
+     * The leader changes rules: only the rules of the room's mode count; a rule written in the ROM changes only in the
+     * lobby; a rule the game cannot apply is never turned on (see {@link Capabilities}). Returns the rules changed.
+     */
+    List<String> changeRules(Member leader, String leaderName, Map<String, Object> asked, Out out) {
+        List<String> changed = new ArrayList<>();
+        for (Map.Entry<String, Object> e : asked.entrySet()) {
+            if (!defaultRules(mode).containsKey(e.getKey())) {
+                continue;
+            }
+            Object before = rules.get(e.getKey());
+            if (before == null ? e.getValue() != null : !before.equals(e.getValue())) {
+                if (ROM_RULES.contains(e.getKey()) && !"lobby".equals(state)) {
+                    throw new Http.Fail(409, "Cette règle est écrite dans la ROM de la salle : elle ne peut plus changer une fois l'aventure lancée.");
+                }
+                if (Boolean.TRUE.equals(e.getValue())) {
+                    String missing = Capabilities.missingForRule(e.getKey(), Json.str(game, "gameId"), (int) Json.num(game, "gen", 0));
+                    if (missing != null) {
+                        throw new Http.Fail(409, "Règle indisponible avec " + gameName() + " : " + missing + ".");
+                    }
+                }
+                rules.put(e.getKey(), e.getValue());
+                changed.add(e.getKey());
+            }
+        }
+        if (!changed.isEmpty() && !"lobby".equals(state)) {
+            out.log(leader, "rules", leaderName + " modifie les règles : " + String.join(", ", changed), null);
+        }
+        return changed;
     }
 
     /** The adventure starts (the leader launched it; {@link Rooms} checked the players and their ROMs). */

@@ -291,9 +291,10 @@ public final class Rooms {
                 "crc", Json.str(game, "crc"));
         String mode = Json.str(body, "mode");
         r.mode = mode != null && Room.MODES.contains(mode) ? mode : "soullink";
-        if (Json.num(game, "gen", 0) > 0 && Json.num(game, "gen", 0) < Room.minGen(r.mode)) {
-            throw new Http.Fail(400, "Le " + r.runName() + " se joue avec un jeu de la " + Room.minGen(r.mode)
-                    + "e génération ou plus (la 1re génération n'a pas de Pokémon chromatiques).");
+        // the mode needs what the game can do (Shinylocke: shinies, none in generation 1)
+        String missing = Capabilities.missingForMode(r.mode, gameId, (int) Json.num(game, "gen", 0));
+        if (missing != null) {
+            throw new Http.Fail(400, "Le " + r.runName() + " n'est pas disponible avec " + r.gameName() + " : " + missing + ".");
         }
         r.maxPlayers = (int) Math.max(Room.minPlayers(r.mode), Math.min(Room.maxPlayers(r.mode),
                 Json.num(body, "maxPlayers", Math.max(2, Room.minPlayers(r.mode)))));
@@ -352,23 +353,7 @@ public final class Rooms {
             }
             Map<String, Object> rules = Json.obj(body.get("rules"));
             if (rules != null) {
-                List<String> changed = new ArrayList<>();
-                for (Map.Entry<String, Object> e : rules.entrySet()) {
-                    if (!Room.defaultRules(r.mode).containsKey(e.getKey())) {
-                        continue;
-                    }
-                    Object before = r.rules.get(e.getKey());
-                    if (before == null ? e.getValue() != null : !before.equals(e.getValue())) {
-                        if (Room.ROM_RULES.contains(e.getKey()) && !"lobby".equals(r.state)) {
-                            throw new Http.Fail(409, "Cette règle est écrite dans la ROM de la salle : elle ne peut plus changer une fois l'aventure lancée.");
-                        }
-                        r.rules.put(e.getKey(), e.getValue());
-                        changed.add(e.getKey());
-                    }
-                }
-                if (!changed.isEmpty() && !"lobby".equals(r.state)) {
-                    out.log(r.member(user.id), "rules", user.display + " modifie les règles : " + String.join(", ", changed), null);
-                }
+                List<String> changed = r.changeRules(r.member(user.id), user.display, rules, out);
                 if (changed.stream().anyMatch(Room.ROM_RULES::contains)) {
                     // a rule of the ROM (no evolution): every generated ROM is now outdated
                     for (Room.Member m : r.members) {

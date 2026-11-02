@@ -31,10 +31,14 @@ $javacArgs = @('-encoding', 'UTF-8', '--release', '21', '--enable-preview', '-Xl
 if ($LASTEXITCODE -ne 0) { throw 'Compilation du harnais impossible' }
 
 $java = Join-Path $JavaHome 'bin\java.exe'
-# the event-schema check first (point 1b), then the scenarios
-& $java '--enable-preview' '-Dstdout.encoding=UTF-8' '-cp' $Classes 'slt.server.EventSchemaTest'
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-$javaArgs = @('--enable-preview', '-Dstdout.encoding=UTF-8', '-cp', $Classes, 'slt.server.RoomReplay',
+# the capabilities of the games are read from web\js\data (point 1d), whatever the current directory
+$web = "-Dslt.web=$(Join-Path $Root 'web')"
+# the event-schema and capabilities checks first (points 1b, 1d), then the scenarios
+foreach ($check in @('slt.server.EventSchemaTest', 'slt.server.CapabilitiesTest')) {
+    & $java '--enable-preview' '-Dstdout.encoding=UTF-8' $web '-cp' $Classes $check
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+}
+$javaArgs = @('--enable-preview', '-Dstdout.encoding=UTF-8', $web, '-cp', $Classes, 'slt.server.RoomReplay',
     (Join-Path $PSScriptRoot 'golden'))
 if ($Update) { $javaArgs += '--update' }
 & $java @javaArgs

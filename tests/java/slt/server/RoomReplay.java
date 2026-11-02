@@ -355,28 +355,12 @@ public final class RoomReplay {
         r.launch(out);
     }
 
-    /** The rules part of Rooms.settings. */
+    /** The rules part of Rooms.settings: the room's own rule change. */
     private static void rules(Room r, Room.Member leader, Map<String, Object> rules, Room.Out out) {
         if (rules == null) {
             throw new Bad("étape sans règles");
         }
-        List<String> changed = new ArrayList<>();
-        for (Map.Entry<String, Object> e : rules.entrySet()) {
-            if (!Room.defaultRules(r.mode).containsKey(e.getKey())) {
-                continue;
-            }
-            Object before = r.rules.get(e.getKey());
-            if (before == null ? e.getValue() != null : !before.equals(e.getValue())) {
-                if (Room.ROM_RULES.contains(e.getKey()) && !"lobby".equals(r.state)) {
-                    throw new Http.Fail(409, "Cette règle est écrite dans la ROM de la salle : elle ne peut plus changer une fois l'aventure lancée.");
-                }
-                r.rules.put(e.getKey(), e.getValue());
-                changed.add(e.getKey());
-            }
-        }
-        if (!changed.isEmpty() && !"lobby".equals(r.state)) {
-            out.log(leader, "rules", leader.name + " modifie les règles : " + String.join(", ", changed), null);
-        }
+        r.changeRules(leader, leader.name, rules, out);
     }
 
     // ------------------------------------------------------------------ output
