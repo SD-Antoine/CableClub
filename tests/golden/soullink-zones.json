@@ -1,0 +1,67 @@
+{
+  "title": "Soul Link à deux : zone annulée, objets rendus, doublon, chromatique, légendaire, Pokémon offert",
+  "mode": "soullink",
+  "game": {"id": "rubis-fr", "name": "Pokémon Rubis", "gen": 3},
+  "rules": {"naming": "free"},
+  "players": [
+    {"id": "alice", "name": "Alice", "families": {"253": 252, "254": 252, "256": 255, "257": 255, "259": 258, "260": 258, "262": 261, "264": 263, "266": 265, "267": 265, "268": 265, "269": 265, "271": 270, "272": 270, "274": 273, "275": 273, "277": 276, "279": 278}},
+    {"id": "bob", "name": "Bob", "families": {"253": 252, "254": 252, "256": 255, "257": 255, "259": 258, "260": 258, "262": 261, "264": 263, "266": 265, "267": 265, "268": 265, "269": 265, "271": 270, "272": 270, "274": 273, "275": 273, "277": 276, "279": 278}}
+  ],
+  "steps": [
+    {"do": "launch"},
+    {"by": "alice", "note": "Poké Balls et Pokémon de départ", "events": [
+      {"type": "balls", "has": true},
+      {"type": "capture", "uid": "1001", "species": 252, "speciesName": "Arcko", "level": 5, "nickname": "ARCKO", "zone": "Route 101", "origin": "new", "inParty": true, "fainted": false, "shiny": false}]},
+    {"by": "bob", "note": "nommage libre : le lien se forme tout de suite", "events": [
+      {"type": "balls", "has": true},
+      {"type": "capture", "uid": "2001", "species": 258, "speciesName": "Gobou", "level": 5, "nickname": "GOBOU", "zone": "Route 101", "origin": "new", "inParty": true, "fainted": false, "shiny": false}]},
+    {"by": "alice", "note": "Alice met K.O. le premier Pokémon de la Route 102 : zone annulée", "events": [
+      {"type": "location", "map": 17, "zone": "Route 102"},
+      {"type": "encounter", "phase": "start", "uid": "1002", "species": 265, "speciesName": "Chenipotte", "level": 3, "zone": "Route 102", "shiny": false, "balls": 5},
+      {"type": "encounter", "phase": "end", "outcome": "failed", "wildFainted": true, "uid": "1002", "species": 265, "speciesName": "Chenipotte", "level": 3, "zone": "Route 102", "shiny": false, "balls": 5}]},
+    {"by": "bob", "note": "Bob capture quand même sur la Route 102 : relâché, sa Poké Ball rendue", "events": [
+      {"type": "location", "map": 17, "zone": "Route 102"},
+      {"type": "encounter", "phase": "start", "uid": "2002", "species": 270, "speciesName": "Nénupiot", "level": 4, "zone": "Route 102", "shiny": false, "balls": 5},
+      {"type": "items", "changes": [{"item": 4, "name": "Poké Ball", "delta": -1}], "money": 0, "battle": true, "fight": true},
+      {"type": "capture", "uid": "2002", "species": 270, "speciesName": "Nénupiot", "level": 4, "nickname": "NENUPIOT", "zone": "Route 102", "origin": "wild", "inParty": true, "fainted": false, "shiny": false}]},
+    {"by": "bob", "do": "ack", "ids": ["1"], "note": "le jeu de Bob a rendu la Poké Ball"},
+    {"by": "alice", "note": "fuite (la zone reste ouverte), puis capture sur la Route 103", "events": [
+      {"type": "location", "map": 18, "zone": "Route 103"},
+      {"type": "encounter", "phase": "start", "uid": "1003", "species": 263, "speciesName": "Zigzaton", "level": 4, "zone": "Route 103", "shiny": false, "balls": 5},
+      {"type": "encounter", "phase": "end", "outcome": "failed", "wildFainted": false, "uid": "1003", "species": 263, "speciesName": "Zigzaton", "level": 4, "zone": "Route 103", "shiny": false, "balls": 5},
+      {"type": "encounter", "phase": "start", "uid": "1004", "species": 278, "speciesName": "Goélise", "level": 5, "zone": "Route 103", "shiny": false, "balls": 5},
+      {"type": "capture", "uid": "1004", "species": 278, "speciesName": "Goélise", "level": 5, "nickname": "GOELISE", "zone": "Route 103", "origin": "wild", "inParty": true, "fainted": false, "shiny": false}]},
+    {"by": "bob", "note": "doublon de la lignée d'Arcko (à Alice), puis la même espèce qu'Alice dans la même zone", "events": [
+      {"type": "location", "map": 18, "zone": "Route 103"},
+      {"type": "encounter", "phase": "start", "uid": "2003", "species": 253, "speciesName": "Massko", "level": 6, "zone": "Route 103", "shiny": false, "balls": 4},
+      {"type": "encounter", "phase": "end", "outcome": "failed", "wildFainted": false, "uid": "2003", "species": 253, "speciesName": "Massko", "level": 6, "zone": "Route 103", "shiny": false, "balls": 4},
+      {"type": "encounter", "phase": "start", "uid": "2004", "species": 278, "speciesName": "Goélise", "level": 6, "zone": "Route 103", "shiny": false, "balls": 4},
+      {"type": "capture", "uid": "2004", "species": 278, "speciesName": "Goélise", "level": 6, "nickname": "GOELISE", "zone": "Route 103", "origin": "wild", "inParty": true, "fainted": false, "shiny": false}]},
+    {"by": "alice", "note": "chromatique : capture libre sans lien, puis un doublon capturé quand même", "events": [
+      {"type": "location", "map": 19, "zone": "Route 104"},
+      {"type": "encounter", "phase": "start", "uid": "1005", "species": 276, "speciesName": "Nirondelle", "level": 6, "zone": "Route 104", "shiny": true, "balls": 5},
+      {"type": "capture", "uid": "1005", "species": 276, "speciesName": "Nirondelle", "level": 6, "nickname": "NIRONDELLE", "zone": "Route 104", "origin": "wild", "inParty": true, "fainted": false, "shiny": true},
+      {"type": "encounter", "phase": "start", "uid": "1006", "species": 279, "speciesName": "Bekipan", "level": 22, "zone": "Route 104", "shiny": false, "balls": 4},
+      {"type": "capture", "uid": "1006", "species": 279, "speciesName": "Bekipan", "level": 22, "nickname": "BEKIPAN", "zone": "Route 104", "origin": "wild", "inParty": false, "fainted": false, "shiny": false}]},
+    {"do": "rules", "rules": {"legendaries": false, "honorNoEvolution": true}, "note": "légendaires interdits (la règle des Nuzlocke n'existe pas ici)"},
+    {"by": "alice", "note": "légendaire capturé malgré la règle", "events": [
+      {"type": "encounter", "phase": "start", "uid": "1007", "species": 380, "speciesName": "Latias", "level": 40, "zone": "Route 104", "shiny": false, "balls": 3},
+      {"type": "capture", "uid": "1007", "species": 380, "speciesName": "Latias", "level": 40, "nickname": "LATIAS", "zone": "Route 104", "origin": "wild", "inParty": false, "fainted": false, "shiny": false}]},
+    {"by": "alice", "note": "Pokémon offert interdit, puis autorisé (lien sur sa zone), puis déjà dans la sauvegarde", "events": [
+      {"type": "capture", "uid": "1008", "species": 280, "speciesName": "Tarsal", "level": 5, "nickname": "TARSAL", "zone": "Route 104", "origin": "new", "inParty": false, "fainted": false, "shiny": false}]},
+    {"do": "rules", "rules": {"giftPokemon": true}},
+    {"by": "alice", "events": [
+      {"type": "capture", "uid": "1009", "species": 285, "speciesName": "Balignon", "level": 10, "nickname": "BALIGNON", "zone": "Route 104", "origin": "trade", "inParty": false, "fainted": false, "shiny": false},
+      {"type": "capture", "uid": "1010", "species": 263, "speciesName": "Zigzaton", "level": 2, "nickname": "ZIGZATON", "zone": "Route 102", "origin": "trade", "inParty": false, "fainted": false, "shiny": false},
+      {"type": "capture", "uid": "1011", "species": 129, "speciesName": "Magicarpe", "level": 5, "nickname": "MAGICARPE", "zone": "Lieu inconnu", "origin": "existing", "inParty": false, "fainted": false, "shiny": false}]},
+    {"by": "alice", "note": "retour sur la Route 103 : zone déjà utilisée", "events": [
+      {"type": "location", "map": 18, "zone": "Route 103"},
+      {"type": "encounter", "phase": "start", "uid": "1012", "species": 261, "speciesName": "Medhyèna", "level": 5, "zone": "Route 103", "shiny": false, "balls": 3},
+      {"type": "capture", "uid": "1012", "species": 261, "speciesName": "Medhyèna", "level": 5, "nickname": "MEDHYENA", "zone": "Route 103", "origin": "wild", "inParty": false, "fainted": false, "shiny": false}]},
+    {"by": "bob", "note": "le Pokémon déjà dans la sauvegarde ne meurt pas, le chromatique sans lien meurt seul", "events": [
+      {"type": "capture", "uid": "2005", "species": 129, "speciesName": "Magicarpe", "level": 5, "nickname": "MAGICARPE", "zone": "Lieu inconnu", "origin": "existing", "inParty": false, "fainted": false, "shiny": false},
+      {"type": "faint", "uid": "2005", "species": 129, "speciesName": "Magicarpe", "level": 5, "nickname": "MAGICARPE", "zone": "Route 103", "doomed": false}]},
+    {"by": "alice", "events": [
+      {"type": "faint", "uid": "1005", "species": 276, "speciesName": "Nirondelle", "level": 6, "nickname": "NIRONDELLE", "zone": "Route 104", "doomed": false}]}
+  ]
+}

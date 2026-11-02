@@ -1,0 +1,31 @@
+{
+  "title": "Soul Link à deux : fin quand chaque joueur bat le Maître de la Ligue",
+  "mode": "soullink",
+  "game": {"id": "rouge-fr", "name": "Pokémon Rouge", "gen": 1},
+  "players": [
+    {"id": "alice", "name": "Alice", "families": {"2": 1, "3": 1, "5": 4, "6": 4, "8": 7, "9": 7, "17": 16, "18": 16, "20": 19}},
+    {"id": "bob", "name": "Bob", "families": {"2": 1, "3": 1, "5": 4, "6": 4, "8": 7, "9": 7, "17": 16, "18": 16, "20": 19}}
+  ],
+  "steps": [
+    {"do": "launch"},
+    {"by": "alice", "events": [
+      {"type": "capture", "uid": "1001", "species": 4, "speciesName": "Salamèche", "level": 5, "nickname": "SALAMECHE", "zone": "Bourg Palette", "origin": "new", "inParty": true, "fainted": false, "shiny": false},
+      {"type": "balls", "has": true}]},
+    {"by": "bob", "events": [
+      {"type": "capture", "uid": "2001", "species": 1, "speciesName": "Bulbizarre", "level": 5, "nickname": "BULBIZARRE", "zone": "Bourg Palette", "origin": "new", "inParty": true, "fainted": false, "shiny": false},
+      {"type": "balls", "has": true}]},
+    {"do": "name", "zone": "depart", "nickname": "Duo"},
+    {"by": "alice", "note": "Alice bat le Maître : la salle attend Bob", "events": [
+      {"type": "badges", "count": 8},
+      {"type": "battle", "phase": "start", "kind": "trainer", "size": 6},
+      {"type": "battle", "phase": "end", "kind": "trainer", "outcome": "won"},
+      {"type": "champion"}]},
+    {"by": "alice", "note": "le même événement une seconde fois", "events": [
+      {"type": "champion"}]},
+    {"by": "bob", "note": "Bob bat le Maître : victoire", "events": [
+      {"type": "champion"}]},
+    {"by": "bob", "note": "après la fin : ignoré", "events": [
+      {"type": "faint", "uid": "2001", "species": 1, "speciesName": "Bulbizarre", "level": 60, "nickname": "Duo", "zone": "Plateau Indigo", "doomed": false}]},
+    {"do": "launch", "note": "relancer une aventure finie"}
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "title": "Nuzlocke Hardcore à deux : plafonds de niveau, objets en combat, équipe K.O.",
+  "mode": "nuzlocke",
+  "game": {"id": "emeraude-fr", "name": "Pokémon Émeraude", "gen": 3},
+  "rules": {"hardcore": true, "hardcoreItems": "report"},
+  "players": [
+    {"id": "alice", "name": "Alice", "families": {"256": 255, "257": 255, "259": 258, "260": 258, "262": 261, "264": 263}},
+    {"id": "bob", "name": "Bob", "families": {"256": 255, "257": 255, "259": 258, "260": 258, "262": 261, "264": 263}}
+  ],
+  "steps": [
+    {"do": "launch", "note": "style Défini imposé, pas encore de plafond connu"},
+    {"by": "alice", "note": "les niveaux des champions lus dans la ROM d'Alice : plafond 15", "events": [
+      {"type": "capture", "uid": "1001", "species": 255, "speciesName": "Poussifeu", "level": 5, "nickname": "POUSSIFEU", "zone": "Route 101", "origin": "new", "inParty": true, "fainted": false, "shiny": false},
+      {"type": "balls", "has": true},
+      {"type": "party", "uids": ["1001"]},
+      {"type": "caps", "gyms": [15, 19, 24, 29, 31, 33, 42, 46], "league": 58},
+      {"type": "caps", "gyms": [15, 19, 24, 29, 31, 33, 42, 46], "league": 58}]},
+    {"by": "alice", "note": "Poussifeu dépasse le plafond mais reste seul dans l'équipe", "events": [
+      {"type": "update", "uid": "1001", "species": 255, "speciesName": "Poussifeu", "level": 16, "nickname": "POUSSIFEU", "evolved": false}]},
+    {"by": "alice", "note": "une capture sous le plafond : Poussifeu part au PC", "events": [
+      {"type": "location", "map": 16, "zone": "Route 101"},
+      {"type": "encounter", "phase": "start", "uid": "1002", "species": 261, "speciesName": "Medhyèna", "level": 4, "zone": "Route 101", "shiny": false, "balls": 5},
+      {"type": "items", "changes": [{"item": 4, "name": "Poké Ball", "delta": -1}], "money": 0, "battle": true, "fight": true},
+      {"type": "capture", "uid": "1002", "species": 261, "speciesName": "Medhyèna", "level": 4, "nickname": "MEDHYENA", "zone": "Route 101", "origin": "wild", "inParty": true, "fainted": false, "shiny": false},
+      {"type": "party", "uids": ["1001", "1002"]}]},
+    {"by": "alice", "note": "premier badge : plafond 19, Poussifeu revient", "events": [
+      {"type": "badges", "count": 1}]},
+    {"by": "alice", "note": "Potion en combat : signalée", "events": [
+      {"type": "battle", "phase": "start", "kind": "trainer", "size": 2},
+      {"type": "items", "changes": [{"item": 13, "name": "Potion", "delta": -1}], "money": 0, "battle": true, "fight": true},
+      {"type": "battle", "phase": "end", "kind": "trainer", "outcome": "won"}]},
+    {"by": "bob", "note": "jeu DS : l'écran montre un combat, l'objet compte", "shown": "battle", "events": [
+      {"type": "capture", "uid": "2001", "species": 258, "speciesName": "Gobou", "level": 5, "nickname": "GOBOU", "zone": "Route 101", "origin": "new", "inParty": true, "fainted": false, "shiny": false},
+      {"type": "balls", "has": true},
+      {"type": "items", "changes": [{"item": 22, "name": "Super Potion", "delta": -1}], "money": 0, "battle": true}]},
+    {"by": "bob", "note": "jeu DS : l'écran montre le terrain, l'objet ne compte pas", "shown": "free", "events": [
+      {"type": "items", "changes": [{"item": 22, "name": "Super Potion", "delta": -1}], "money": 0, "battle": true}]},
+    {"do": "rules", "rules": {"hardcoreItems": "lose"}, "note": "désormais un objet en combat fait perdre"},
+    {"by": "bob", "note": "une Poké Ball reste permise, une Potion fait perdre Bob", "events": [
+      {"type": "items", "changes": [{"item": 4, "name": "Poké Ball", "delta": -1}], "money": 0, "battle": true, "fight": true},
+      {"type": "items", "changes": [{"item": 13, "name": "Potion", "delta": -1}], "money": 0, "battle": true, "fight": true}]},
+    {"by": "alice", "note": "équipe d'Alice K.O. : perdu, tout le monde a terminé", "events": [
+      {"type": "faint", "uid": "1001", "species": 256, "speciesName": "Galifeu", "level": 19, "nickname": "POUSSIFEU", "zone": "Route 104", "doomed": false},
+      {"type": "whiteout"}]}
+  ]
+}

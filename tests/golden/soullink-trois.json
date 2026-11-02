@@ -1,0 +1,39 @@
+{
+  "title": "Soul Link à trois : début immédiat, nommage libre, fin à la main, équipe K.O.",
+  "mode": "soullink",
+  "game": {"id": "cristal-fr", "name": "Pokémon Cristal", "gen": 2},
+  "rules": {"startWithBalls": false, "naming": "free", "autoEnd": false, "deathBox": false, "saveStates": true},
+  "players": [
+    {"id": "alice", "name": "Alice", "families": {"153": 152, "154": 152, "156": 155, "157": 155, "159": 158, "160": 158, "162": 161, "164": 163, "17": 16, "18": 16, "20": 19}},
+    {"id": "bob", "name": "Bob", "families": {"153": 152, "154": 152, "156": 155, "157": 155, "159": 158, "160": 158, "162": 161, "164": 163, "17": 16, "18": 16, "20": 19}},
+    {"id": "carol", "name": "Carol", "families": {"153": 152, "154": 152, "156": 155, "157": 155, "159": 158, "160": 158, "162": 161, "164": 163, "17": 16, "18": 16, "20": 19}}
+  ],
+  "steps": [
+    {"do": "launch", "note": "sans attendre les Poké Balls : le Soul Link commence tout de suite"},
+    {"by": "alice", "events": [
+      {"type": "capture", "uid": "1001", "species": 155, "speciesName": "Héricendre", "level": 5, "nickname": "HERICENDRE", "zone": "Bourg Geon", "origin": "new", "inParty": true, "fainted": false, "shiny": false}]},
+    {"by": "bob", "events": [
+      {"type": "capture", "uid": "2001", "species": 158, "speciesName": "Kaiminus", "level": 5, "nickname": "KAIMINUS", "zone": "Bourg Geon", "origin": "new", "inParty": true, "fainted": false, "shiny": false}]},
+    {"by": "carol", "note": "le troisième Pokémon de départ forme le lien", "events": [
+      {"type": "capture", "uid": "3001", "species": 152, "speciesName": "Germignon", "level": 5, "nickname": "GERMIGNON", "zone": "Bourg Geon", "origin": "new", "inParty": true, "fainted": false, "shiny": false}]},
+    {"by": "alice", "note": "capture sans Poké Ball reçue : la rencontre compte quand même", "events": [
+      {"type": "location", "map": 3, "zone": "Route 29"},
+      {"type": "encounter", "phase": "start", "uid": "1002", "species": 161, "speciesName": "Fouinette", "level": 2, "zone": "Route 29", "shiny": false, "balls": 0},
+      {"type": "capture", "uid": "1002", "species": 161, "speciesName": "Fouinette", "level": 2, "nickname": "FOUINETTE", "zone": "Route 29", "origin": "wild", "inParty": true, "fainted": false, "shiny": false}]},
+    {"by": "bob", "note": "un K.O. tue tout de suite : la Fouinette d'Alice n'a pas encore de partenaire", "events": [
+      {"type": "location", "map": 3, "zone": "Route 29"},
+      {"type": "encounter", "phase": "start", "uid": "2002", "species": 16, "speciesName": "Roucool", "level": 3, "zone": "Route 29", "shiny": false, "balls": 5},
+      {"type": "capture", "uid": "2002", "species": 16, "speciesName": "Roucool", "level": 3, "nickname": "ROUCOOL", "zone": "Route 29", "origin": "wild", "inParty": true, "fainted": false, "shiny": false},
+      {"type": "faint", "uid": "2002", "species": 16, "speciesName": "Roucool", "level": 3, "nickname": "ROUCOOL", "zone": "Route 29", "doomed": false}]},
+    {"by": "carol", "note": "lien déjà perdu : le Pokémon de Carol est mort d'office", "events": [
+      {"type": "location", "map": 3, "zone": "Route 29"},
+      {"type": "encounter", "phase": "start", "uid": "3002", "species": 19, "speciesName": "Rattata", "level": 3, "zone": "Route 29", "shiny": false, "balls": 5},
+      {"type": "capture", "uid": "3002", "species": 19, "speciesName": "Rattata", "level": 3, "nickname": "RATTATA", "zone": "Route 29", "origin": "wild", "inParty": true, "fainted": false, "shiny": false}]},
+    {"by": "carol", "note": "fin automatique désactivée : la victoire de Carol ne termine rien", "events": [
+      {"type": "champion"}]},
+    {"by": "alice", "note": "équipe d'Alice entièrement K.O. : défaite", "events": [
+      {"type": "faint", "uid": "1001", "species": 155, "speciesName": "Héricendre", "level": 14, "nickname": "HERICENDRE", "zone": "Route 30", "doomed": false},
+      {"type": "whiteout"}]},
+    {"do": "end", "outcome": "victory", "note": "trop tard : déjà finie"}
+  ]
+}

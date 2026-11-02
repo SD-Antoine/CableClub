@@ -1,0 +1,392 @@
+# Nuzlocke à deux : première rencontre, Poké Balls, Pokémon offert, objets, fin quand chacun a terminé
+mode nuzlocke, Pokémon Rouge, génération 1, joueurs alice (chef), bob
+règles {"shinyClause":false,"dupesClause":false,"giftPokemon":true,"legendaries":true,"naming":"free","pauseForNaming":false,"deathBox":true,"refundCancelled":false,"wipeEndsRun":true,"endWhen":"all","autoEnd":true,"startWithBalls":true,"saveStates":false,"honorNoHealItems":false,"honorNoHeldItems":false,"honorNoMultiExp":false,"honorNoMasterBall":false,"honorNoEvolution":false,"honorNoFly":false,"honorNoRepel":false,"honorSetMode":false,"honorCsException":false,"honorNotepad":false,"hardcore":false,"hardcoreItems":"report"}
+
+1. alice (chef) : launch
+  journal launch : L'aventure commence ! 2 joueur(s) sur Pokémon Rouge.
+  journal info : Le Nuzlocke de chaque joueur commence à sa première Poké Ball : d'ici là, un Pokémon K.O. ne meurt pas.
+  directives [alice] room="salle", doomed=[], release=[], nicknames={}, pause=null, refunds=[], deathBox=true, shinyNum=0, shinyRate=0, park=[], parkWhy={}, levelCap=-1, setMode=false, ban=[], noHeld=false, noFly=false, saveStates=false, state="running", open=true, trade=null
+  directives [bob] room="salle", doomed=[], release=[], nicknames={}, pause=null, refunds=[], deathBox=true, shinyNum=0, shinyRate=0, park=[], parkWhy={}, levelCap=-1, setMode=false, ban=[], noHeld=false, noFly=false, saveStates=false, state="running", open=true, trade=null
+
+2. alice : capture, party — Pokémon de départ
+  journal capture [alice] : Alice capture BULBIZARRE (Bulbizarre) N.5 — Pokémon de départ  {"species":1,"speciesName":"Bulbizarre","level":5,"shiny":false,"bonus":true}
+
+3. alice : location, encounter start, faint, encounter end, whiteout — avant la première Poké Ball : rien ne compte
+  journal zone [alice] : Alice entre dans Route 1  {"zone":"Route 1"}
+  journal encounter [alice] : Alice rencontre Rattata N.3 (Route 1)  {"species":19,"speciesName":"Rattata","level":3,"zone":"Route 1","shiny":false,"kind":"noballs"}
+  journal faint [alice] : BULBIZARRE (Bulbizarre) de Alice est K.O., sans conséquence : le Nuzlocke n'a pas encore commencé.
+  journal flee [alice] : Alice quitte le combat contre Rattata (Route 1)  {"zone":"Route 1"}
+  journal whiteout [alice] : L'équipe de Alice est entièrement K.O.
+  avis [alice] info : Pas encore de Poké Ball : cette rencontre ne compte pas pour le Nuzlocke.
+  avis [alice] info : BULBIZARRE (Bulbizarre) est K.O. mais ne meurt pas : le Nuzlocke commence à votre première Poké Ball.
+
+4. alice : items, balls — achat des Poké Balls
+  journal buy [alice] : Alice achète 5× POKé BALL  {"item":"POKé BALL","qty":5}
+  journal balls [alice] : Alice a ses premières Poké Balls
+
+5. alice : location, encounter start, encounter end, encounter start, items, capture — la première rencontre de la Route 1 s'enfuit : pas de seconde chance
+  journal encounter [alice] : Alice rencontre Roucool N.3 (Route 1)  {"species":16,"speciesName":"Roucool","level":3,"zone":"Route 1","shiny":false,"kind":"zone"}
+  journal flee [alice] : Alice quitte le combat contre Roucool, première rencontre de Route 1 : pas de seconde chance ici  {"zone":"Route 1"}
+  journal encounter [alice] : Alice rencontre Rattata N.2 (Route 1)  {"species":19,"speciesName":"Rattata","level":2,"zone":"Route 1","shiny":false,"kind":"used"}
+  journal item [alice] : Alice utilise 1× POKé BALL en combat  {"item":"POKé BALL","qty":1,"battle":true}
+  journal release [alice] : RATTATA (Rattata) de Alice est relâché (zone déjà utilisée)
+  avis [alice] info : Première rencontre de Route 1 : c'est votre seule chance ici (fuir ou le battre l'épuise).
+  avis [alice] warn : Route 1 : vous y avez déjà rencontré un Pokémon. Capture interdite.
+  avis [alice] warn : Capture non autorisée (zone déjà utilisée) : ce Pokémon sera retiré de l'équipe.
+  directives [alice] doomed=["1004"], release=["1004"]
+
+6. alice : location, encounter start, items, capture, party, items, items, update — première rencontre de la Route 22 capturée, objets
+  journal zone [alice] : Alice entre dans Route 22  {"zone":"Route 22"}
+  journal encounter [alice] : Alice rencontre Piafabec N.4 (Route 22)  {"species":21,"speciesName":"Piafabec","level":4,"zone":"Route 22","shiny":false,"kind":"zone"}
+  journal item [alice] : Alice utilise 1× POKé BALL en combat  {"item":"POKé BALL","qty":1,"battle":true}
+  journal capture [alice] : Alice capture PIAFABEC (Piafabec) N.4 (Route 22)  {"zone":"Route 22","species":21,"speciesName":"Piafabec","level":4,"shiny":false}
+  journal item [alice] : Alice utilise 1× POTION  {"item":"POTION","qty":1,"battle":false}
+  journal sell [alice] : Alice vend 2× POTION  {"item":"POTION","qty":2}
+  avis [alice] info : Première rencontre de Route 22 : c'est votre seule chance ici (fuir ou le battre l'épuise).
+
+7. alice : capture — Pokémon offert : gardé, sans zone
+  journal capture [alice] : Alice capture PIKACHU (Pikachu) N.10 — Pokémon offert  {"species":25,"speciesName":"Pikachu","level":10,"shiny":false,"bonus":true}
+
+8. alice (chef) : rules — règle écrite dans la ROM : refusée une fois lancée
+  refus 409 : Cette règle est écrite dans la ROM de la salle : elle ne peut plus changer une fois l'aventure lancée.
+
+9. alice : hm — l'exception pour les CS n'est pas active
+  refus 409 : L'exception pour les CS n'est pas active dans cette salle.
+
+10. bob : capture, balls, location, encounter start, capture — Bob : sa propre première rencontre de la Route 1
+  journal capture [bob] : Bob capture CARAPUCE (Carapuce) N.5 — Pokémon de départ  {"species":7,"speciesName":"Carapuce","level":5,"shiny":false,"bonus":true}
+  journal balls [bob] : Bob a ses premières Poké Balls
+  journal zone [bob] : Bob entre dans Route 1  {"zone":"Route 1"}
+  journal encounter [bob] : Bob rencontre Rattata N.3 (Route 1)  {"species":19,"speciesName":"Rattata","level":3,"zone":"Route 1","shiny":false,"kind":"zone"}
+  journal capture [bob] : Bob capture RATTATA (Rattata) N.3 (Route 1)  {"zone":"Route 1","species":19,"speciesName":"Rattata","level":3,"shiny":false}
+  avis [bob] info : Première rencontre de Route 1 : c'est votre seule chance ici (fuir ou le battre l'épuise).
+
+11. bob : champion — Bob bat le Maître : Alice joue encore
+  journal champion [bob] : 🏆 Bob bat le Maître de la Ligue !
+
+12. alice : faint, faint, faint, whiteout — l'équipe d'Alice tombe : Nuzlocke perdu, tout le monde a terminé
+  journal death [alice] : ☠ PIAFABEC (Piafabec) de Alice est mort (Route 22)
+  journal death [alice] : ☠ BULBIZARRE (Bulbizarre) de Alice est mort (Départ)
+  journal death [alice] : ☠ PIKACHU (Pikachu) de Alice est mort (Centre Pokémon)
+  journal whiteout [alice] : L'équipe de Alice est entièrement K.O.
+  journal wipe [alice] : ☠ Alice a perdu son Nuzlocke : toute son équipe est tombée.
+  journal end : Nuzlocke réussi ! Tous les joueurs ont terminé leur Nuzlocke.  {"outcome":"victory"}
+  fin de l'aventure
+  directives [alice] doomed=["1001","1004","1005","1006"], pause={"reason":"ended","text":"Le Nuzlocke est terminé."}, state="finished", open=false
+  directives [bob] pause={"reason":"ended","text":"Le Nuzlocke est terminé."}, state="finished", open=false
+
+État final
+  {
+    "version": 1,
+    "id": "salle",
+    "code": "CODE01",
+    "name": "Nuzlocke à deux : première rencontre, Poké Balls, Pokémon offert, objets, fin quand chacun a terminé",
+    "mode": "nuzlocke",
+    "visibility": "private",
+    "leaderId": "alice",
+    "createdAt": 0,
+    "launchedAt": 0,
+    "game": {"gameId":"rouge-fr","name":"Pokémon Rouge","gen":1},
+    "maxPlayers": 2,
+    "state": "finished",
+    "adventureOpen": false,
+    "linkStarted": true,
+    "rules": {
+      "shinyClause": false,
+      "dupesClause": false,
+      "giftPokemon": true,
+      "legendaries": true,
+      "naming": "free",
+      "pauseForNaming": false,
+      "deathBox": true,
+      "refundCancelled": false,
+      "wipeEndsRun": true,
+      "endWhen": "all",
+      "autoEnd": true,
+      "startWithBalls": true,
+      "saveStates": false,
+      "honorNoHealItems": false,
+      "honorNoHeldItems": false,
+      "honorNoMultiExp": false,
+      "honorNoMasterBall": false,
+      "honorNoEvolution": false,
+      "honorNoFly": false,
+      "honorNoRepel": false,
+      "honorSetMode": false,
+      "honorCsException": false,
+      "honorNotepad": false,
+      "hardcore": false,
+      "hardcoreItems": "report"
+    },
+    "rando": {},
+    "members": [
+      {
+        "userId": "alice",
+        "name": "Alice",
+        "joinedAt": 0,
+        "slot": 1,
+        "ready": true,
+        "rom": {"status":"ready"},
+        "families": {"2":1,"3":1,"5":4,"6":4,"8":7,"9":7,"11":10,"12":10,"17":16,"18":16,"20":19,"22":21,"26":25},
+        "status": "wiped",
+        "mons": {
+          "1001": {
+            "uid": "1001",
+            "species": 1,
+            "speciesName": "Bulbizarre",
+            "level": 5,
+            "nickname": "BULBIZARRE",
+            "zoneKey": null,
+            "zone": "Départ",
+            "origin": "new",
+            "shiny": false,
+            "bonus": true,
+            "status": "dead",
+            "reason": "K.O.",
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          },
+          "1004": {
+            "uid": "1004",
+            "species": 19,
+            "speciesName": "Rattata",
+            "level": 2,
+            "nickname": "RATTATA",
+            "zoneKey": null,
+            "zone": "Route 1",
+            "origin": "wild",
+            "shiny": false,
+            "bonus": false,
+            "status": "released",
+            "reason": "interdit : zone déjà utilisée",
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          },
+          "1005": {
+            "uid": "1005",
+            "species": 21,
+            "speciesName": "Piafabec",
+            "level": 9,
+            "nickname": "PIAFABEC",
+            "zoneKey": "route 22",
+            "zone": "Route 22",
+            "origin": "wild",
+            "shiny": false,
+            "bonus": false,
+            "status": "dead",
+            "reason": "K.O.",
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          },
+          "1006": {
+            "uid": "1006",
+            "species": 25,
+            "speciesName": "Pikachu",
+            "level": 10,
+            "nickname": "PIKACHU",
+            "zoneKey": null,
+            "zone": "Centre Pokémon",
+            "origin": "trade",
+            "shiny": false,
+            "bonus": true,
+            "status": "dead",
+            "reason": "K.O.",
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          }
+        },
+        "refunds": [],
+        "stats": {
+          "captures": 3,
+          "deaths": 3,
+          "wildKills": 0,
+          "shinies": 0,
+          "encounters": 4,
+          "trainersBeaten": 0,
+          "badges": 0,
+          "fouls": 0,
+          "itemsBattle": {"POKé BALL":2},
+          "itemsField": {"POTION":1},
+          "bought": {"POKé BALL":5}
+        },
+        "lastZone": "Route 22",
+        "hasBalls": true,
+        "soloUid": null,
+        "capGyms": null,
+        "capLeague": 0,
+        "hmNext": false
+      },
+      {
+        "userId": "bob",
+        "name": "Bob",
+        "joinedAt": 0,
+        "slot": 2,
+        "ready": true,
+        "rom": {"status":"ready"},
+        "families": {"2":1,"3":1,"5":4,"6":4,"8":7,"9":7,"11":10,"12":10,"17":16,"18":16,"20":19,"22":21,"26":25},
+        "status": "champion",
+        "mons": {
+          "2001": {
+            "uid": "2001",
+            "species": 7,
+            "speciesName": "Carapuce",
+            "level": 5,
+            "nickname": "CARAPUCE",
+            "zoneKey": null,
+            "zone": "Départ",
+            "origin": "new",
+            "shiny": false,
+            "bonus": true,
+            "status": "alive",
+            "reason": null,
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          },
+          "2002": {
+            "uid": "2002",
+            "species": 19,
+            "speciesName": "Rattata",
+            "level": 3,
+            "nickname": "RATTATA",
+            "zoneKey": "route 1",
+            "zone": "Route 1",
+            "origin": "wild",
+            "shiny": false,
+            "bonus": false,
+            "status": "alive",
+            "reason": null,
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          }
+        },
+        "refunds": [],
+        "stats": {
+          "captures": 2,
+          "deaths": 0,
+          "wildKills": 0,
+          "shinies": 0,
+          "encounters": 1,
+          "trainersBeaten": 0,
+          "badges": 0,
+          "fouls": 0,
+          "itemsBattle": {},
+          "itemsField": {},
+          "bought": {}
+        },
+        "lastZone": "Route 1",
+        "hasBalls": true,
+        "soloUid": null,
+        "capGyms": null,
+        "capLeague": 0,
+        "hmNext": false
+      }
+    ],
+    "invites": [],
+    "history": [],
+    "zones": [
+      {
+        "key": "route 1",
+        "name": "Route 1",
+        "status": "open",
+        "nickname": null,
+        "firstAt": 0,
+        "entries": {
+          "alice": {
+            "result": "fled",
+            "uid": "1003",
+            "species": 16,
+            "speciesName": "Roucool",
+            "level": 3,
+            "shiny": false,
+            "at": 0,
+            "items": {},
+            "itemNames": {}
+          },
+          "bob": {
+            "result": "caught",
+            "uid": "2002",
+            "species": 19,
+            "speciesName": "Rattata",
+            "level": 3,
+            "shiny": false,
+            "at": 0,
+            "items": {},
+            "itemNames": {}
+          }
+        }
+      },
+      {
+        "key": "route 22",
+        "name": "Route 22",
+        "status": "open",
+        "nickname": null,
+        "firstAt": 0,
+        "entries": {
+          "alice": {
+            "result": "caught",
+            "uid": "1005",
+            "species": 21,
+            "speciesName": "Piafabec",
+            "level": 4,
+            "shiny": false,
+            "at": 0,
+            "items": {"4":1},
+            "itemNames": {"4":"POKé BALL"}
+          }
+        }
+      }
+    ],
+    "namingQueue": [],
+    "ended": {
+      "at": 0,
+      "outcome": "victory",
+      "reason": "Tous les joueurs ont terminé leur Nuzlocke.",
+      "summary": [
+        {
+          "captures": 3,
+          "deaths": 3,
+          "wildKills": 0,
+          "shinies": 0,
+          "encounters": 4,
+          "trainersBeaten": 0,
+          "badges": 0,
+          "fouls": 0,
+          "itemsBattle": {"POKé BALL":2},
+          "itemsField": {"POTION":1},
+          "bought": {"POKé BALL":5},
+          "userId": "alice",
+          "name": "Alice",
+          "status": "wiped",
+          "alive": 0
+        },
+        {
+          "captures": 2,
+          "deaths": 0,
+          "wildKills": 0,
+          "shinies": 0,
+          "encounters": 1,
+          "trainersBeaten": 0,
+          "badges": 0,
+          "fouls": 0,
+          "itemsBattle": {},
+          "itemsField": {},
+          "bought": {},
+          "userId": "bob",
+          "name": "Bob",
+          "status": "champion",
+          "alive": 2
+        }
+      ]
+    },
+    "logSeq": 0,
+    "refundSeq": 0,
+    "trades": []
+  }
+Vue en direct [alice] {"party":["1001","1005"],"at":0,"zone":"Route 22"}
+Vue en direct [bob] {"zone":"Route 1"}

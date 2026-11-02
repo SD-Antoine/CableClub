@@ -1,0 +1,454 @@
+# Soul Link à trois : début immédiat, nommage libre, fin à la main, équipe K.O.
+mode soullink, Pokémon Cristal, génération 2, joueurs alice (chef), bob, carol
+règles {"shinyClause":true,"dupesClause":true,"giftPokemon":false,"legendaries":true,"naming":"free","pauseForNaming":true,"deathBox":false,"refundCancelled":true,"wipeEndsRun":true,"endWhen":"all","autoEnd":false,"startWithBalls":false,"saveStates":true}
+
+1. alice (chef) : launch — sans attendre les Poké Balls : le Soul Link commence tout de suite
+  journal launch : L'aventure commence ! 3 joueur(s) sur Pokémon Cristal.
+  journal start : Le Soul Link commence : un Pokémon K.O. est mort.
+  avis [alice] warn : Le Soul Link commence : désormais, un Pokémon K.O. est mort, avec son âme liée.
+  avis [bob] warn : Le Soul Link commence : désormais, un Pokémon K.O. est mort, avec son âme liée.
+  avis [carol] warn : Le Soul Link commence : désormais, un Pokémon K.O. est mort, avec son âme liée.
+  directives [alice] room="salle", doomed=[], release=[], nicknames={}, pause=null, refunds=[], deathBox=false, shinyNum=0, shinyRate=0, park=[], parkWhy={}, levelCap=-1, setMode=false, ban=[], noHeld=false, noFly=false, saveStates=true, state="running", open=true, trade=null
+  directives [bob] room="salle", doomed=[], release=[], nicknames={}, pause=null, refunds=[], deathBox=false, shinyNum=0, shinyRate=0, park=[], parkWhy={}, levelCap=-1, setMode=false, ban=[], noHeld=false, noFly=false, saveStates=true, state="running", open=true, trade=null
+  directives [carol] room="salle", doomed=[], release=[], nicknames={}, pause=null, refunds=[], deathBox=false, shinyNum=0, shinyRate=0, park=[], parkWhy={}, levelCap=-1, setMode=false, ban=[], noHeld=false, noFly=false, saveStates=true, state="running", open=true, trade=null
+
+2. alice : capture
+  journal capture [alice] : Alice capture HERICENDRE (Héricendre) N.5 (Départ)  {"zone":"Départ","species":155,"speciesName":"Héricendre","level":5,"shiny":false}
+
+3. bob : capture
+  journal capture [bob] : Bob capture KAIMINUS (Kaiminus) N.5 (Départ)  {"zone":"Départ","species":158,"speciesName":"Kaiminus","level":5,"shiny":false}
+
+4. carol : capture — le troisième Pokémon de départ forme le lien
+  journal capture [carol] : Carol capture GERMIGNON (Germignon) N.5 (Départ)  {"zone":"Départ","species":152,"speciesName":"Germignon","level":5,"shiny":false}
+  journal link : Lien formé : Départ
+
+5. alice : location, encounter start, capture — capture sans Poké Ball reçue : la rencontre compte quand même
+  journal zone [alice] : Alice entre dans Route 29  {"zone":"Route 29"}
+  journal encounter [alice] : Alice rencontre Fouinette N.2 (Route 29)  {"species":161,"speciesName":"Fouinette","level":2,"zone":"Route 29","shiny":false,"kind":"zone"}
+  journal capture [alice] : Alice capture FOUINETTE (Fouinette) N.2 (Route 29)  {"zone":"Route 29","species":161,"speciesName":"Fouinette","level":2,"shiny":false}
+  avis [alice] info : Première rencontre de Route 29 : elle compte pour le Soul Link.
+
+6. bob : location, encounter start, capture, faint — un K.O. tue tout de suite : la Fouinette d'Alice n'a pas encore de partenaire
+  journal zone [bob] : Bob entre dans Route 29 — déjà capturée par un partenaire  {"zone":"Route 29"}
+  journal encounter [bob] : Bob rencontre Roucool N.3 (Route 29)  {"species":16,"speciesName":"Roucool","level":3,"zone":"Route 29","shiny":false,"kind":"zone"}
+  journal capture [bob] : Bob capture ROUCOOL (Roucool) N.3 (Route 29)  {"zone":"Route 29","species":16,"speciesName":"Roucool","level":3,"shiny":false}
+  journal death [bob] : ☠ ROUCOOL (Roucool) de Bob est mort (Route 29)
+  journal death [alice] : ☠ FOUINETTE (Fouinette) de Alice meurt avec son âme liée
+  avis [bob] info : Première rencontre de Route 29 : elle compte pour le Soul Link.
+  avis [alice] danger : FOUINETTE (Fouinette) est mort : son âme liée de Bob est tombée.
+  directives [alice] doomed=["1002"]
+  directives [bob] doomed=["2002"]
+
+7. carol : location, encounter start, capture — lien déjà perdu : le Pokémon de Carol est mort d'office
+  journal zone [carol] : Carol entre dans Route 29 — lien perdu  {"zone":"Route 29"}
+  journal encounter [carol] : Carol rencontre Rattata N.3 (Route 29)  {"species":19,"speciesName":"Rattata","level":3,"zone":"Route 29","shiny":false,"kind":"zone"}
+  journal capture [carol] : Carol capture RATTATA (Rattata) N.3 (Route 29)  {"zone":"Route 29","species":19,"speciesName":"Rattata","level":3,"shiny":false}
+  journal death [carol] : RATTATA (Rattata) rejoint ses âmes liées : le lien de Route 29 était déjà perdu.
+  avis [carol] info : Première rencontre de Route 29 : elle compte pour le Soul Link.
+  avis [carol] warn : Le lien de Route 29 était déjà perdu : ce Pokémon est mort d'office.
+  directives [carol] doomed=["3002"]
+
+8. carol : champion — fin automatique désactivée : la victoire de Carol ne termine rien
+  journal champion [carol] : 🏆 Carol bat le Maître de la Ligue !
+
+9. alice : faint, whiteout — équipe d'Alice entièrement K.O. : défaite
+  journal death [alice] : ☠ HERICENDRE (Héricendre) de Alice est mort (Départ)
+  journal death [bob] : ☠ KAIMINUS (Kaiminus) de Bob meurt avec son âme liée
+  journal death [carol] : ☠ GERMIGNON (Germignon) de Carol meurt avec son âme liée
+  journal whiteout [alice] : L'équipe de Alice est entièrement K.O.
+  journal end : Soul Link perdu. L'équipe de Alice est tombée.  {"outcome":"defeat"}
+  avis [bob] danger : KAIMINUS (Kaiminus) est mort : son âme liée de Alice est tombée.
+  avis [carol] danger : GERMIGNON (Germignon) est mort : son âme liée de Alice est tombée.
+  fin de l'aventure
+  directives [alice] doomed=["1001","1002"], pause={"reason":"ended","text":"Le Soul Link est terminé."}, state="finished", open=false
+  directives [bob] doomed=["2001","2002"], pause={"reason":"ended","text":"Le Soul Link est terminé."}, state="finished", open=false
+  directives [carol] doomed=["3001","3002"], pause={"reason":"ended","text":"Le Soul Link est terminé."}, state="finished", open=false
+
+10. alice (chef) : end — trop tard : déjà finie
+
+État final
+  {
+    "version": 1,
+    "id": "salle",
+    "code": "CODE01",
+    "name": "Soul Link à trois : début immédiat, nommage libre, fin à la main, équipe K.O.",
+    "mode": "soullink",
+    "visibility": "private",
+    "leaderId": "alice",
+    "createdAt": 0,
+    "launchedAt": 0,
+    "game": {"gameId":"cristal-fr","name":"Pokémon Cristal","gen":2},
+    "maxPlayers": 3,
+    "state": "finished",
+    "adventureOpen": false,
+    "linkStarted": true,
+    "rules": {
+      "shinyClause": true,
+      "dupesClause": true,
+      "giftPokemon": false,
+      "legendaries": true,
+      "naming": "free",
+      "pauseForNaming": true,
+      "deathBox": false,
+      "refundCancelled": true,
+      "wipeEndsRun": true,
+      "endWhen": "all",
+      "autoEnd": false,
+      "startWithBalls": false,
+      "saveStates": true
+    },
+    "rando": {},
+    "members": [
+      {
+        "userId": "alice",
+        "name": "Alice",
+        "joinedAt": 0,
+        "slot": 1,
+        "ready": true,
+        "rom": {"status":"ready"},
+        "families": {"17":16,"18":16,"20":19,"153":152,"154":152,"156":155,"157":155,"159":158,"160":158,"162":161,"164":163},
+        "status": "wiped",
+        "mons": {
+          "1001": {
+            "uid": "1001",
+            "species": 155,
+            "speciesName": "Héricendre",
+            "level": 5,
+            "nickname": "HERICENDRE",
+            "zoneKey": "depart",
+            "zone": "Départ",
+            "origin": "new",
+            "shiny": false,
+            "bonus": false,
+            "status": "dead",
+            "reason": "K.O.",
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          },
+          "1002": {
+            "uid": "1002",
+            "species": 161,
+            "speciesName": "Fouinette",
+            "level": 2,
+            "nickname": "FOUINETTE",
+            "zoneKey": "route 29",
+            "zone": "Route 29",
+            "origin": "wild",
+            "shiny": false,
+            "bonus": false,
+            "status": "dead",
+            "reason": "âme liée à ROUCOOL (Roucool)",
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          }
+        },
+        "refunds": [],
+        "stats": {
+          "captures": 2,
+          "deaths": 1,
+          "wildKills": 0,
+          "shinies": 0,
+          "encounters": 1,
+          "trainersBeaten": 0,
+          "badges": 0,
+          "fouls": 0,
+          "itemsBattle": {},
+          "itemsField": {},
+          "bought": {}
+        },
+        "lastZone": "Route 29",
+        "hasBalls": true,
+        "soloUid": null,
+        "capGyms": null,
+        "capLeague": 0,
+        "hmNext": false
+      },
+      {
+        "userId": "bob",
+        "name": "Bob",
+        "joinedAt": 0,
+        "slot": 2,
+        "ready": true,
+        "rom": {"status":"ready"},
+        "families": {"17":16,"18":16,"20":19,"153":152,"154":152,"156":155,"157":155,"159":158,"160":158,"162":161,"164":163},
+        "status": "playing",
+        "mons": {
+          "2001": {
+            "uid": "2001",
+            "species": 158,
+            "speciesName": "Kaiminus",
+            "level": 5,
+            "nickname": "KAIMINUS",
+            "zoneKey": "depart",
+            "zone": "Départ",
+            "origin": "new",
+            "shiny": false,
+            "bonus": false,
+            "status": "dead",
+            "reason": "âme liée à HERICENDRE (Héricendre)",
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          },
+          "2002": {
+            "uid": "2002",
+            "species": 16,
+            "speciesName": "Roucool",
+            "level": 3,
+            "nickname": "ROUCOOL",
+            "zoneKey": "route 29",
+            "zone": "Route 29",
+            "origin": "wild",
+            "shiny": false,
+            "bonus": false,
+            "status": "dead",
+            "reason": "K.O.",
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          }
+        },
+        "refunds": [],
+        "stats": {
+          "captures": 2,
+          "deaths": 1,
+          "wildKills": 0,
+          "shinies": 0,
+          "encounters": 1,
+          "trainersBeaten": 0,
+          "badges": 0,
+          "fouls": 0,
+          "itemsBattle": {},
+          "itemsField": {},
+          "bought": {}
+        },
+        "lastZone": "Route 29",
+        "hasBalls": true,
+        "soloUid": null,
+        "capGyms": null,
+        "capLeague": 0,
+        "hmNext": false
+      },
+      {
+        "userId": "carol",
+        "name": "Carol",
+        "joinedAt": 0,
+        "slot": 3,
+        "ready": true,
+        "rom": {"status":"ready"},
+        "families": {"17":16,"18":16,"20":19,"153":152,"154":152,"156":155,"157":155,"159":158,"160":158,"162":161,"164":163},
+        "status": "champion",
+        "mons": {
+          "3001": {
+            "uid": "3001",
+            "species": 152,
+            "speciesName": "Germignon",
+            "level": 5,
+            "nickname": "GERMIGNON",
+            "zoneKey": "depart",
+            "zone": "Départ",
+            "origin": "new",
+            "shiny": false,
+            "bonus": false,
+            "status": "dead",
+            "reason": "âme liée à HERICENDRE (Héricendre)",
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          },
+          "3002": {
+            "uid": "3002",
+            "species": 19,
+            "speciesName": "Rattata",
+            "level": 3,
+            "nickname": "RATTATA",
+            "zoneKey": "route 29",
+            "zone": "Route 29",
+            "origin": "wild",
+            "shiny": false,
+            "bonus": false,
+            "status": "dead",
+            "reason": "lien déjà perdu",
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          }
+        },
+        "refunds": [],
+        "stats": {
+          "captures": 2,
+          "deaths": 0,
+          "wildKills": 0,
+          "shinies": 0,
+          "encounters": 1,
+          "trainersBeaten": 0,
+          "badges": 0,
+          "fouls": 0,
+          "itemsBattle": {},
+          "itemsField": {},
+          "bought": {}
+        },
+        "lastZone": "Route 29",
+        "hasBalls": true,
+        "soloUid": null,
+        "capGyms": null,
+        "capLeague": 0,
+        "hmNext": false
+      }
+    ],
+    "invites": [],
+    "history": [],
+    "zones": [
+      {
+        "key": "depart",
+        "name": "Départ",
+        "status": "dead",
+        "nickname": null,
+        "firstAt": 0,
+        "entries": {
+          "alice": {
+            "result": "caught",
+            "uid": "1001",
+            "species": 155,
+            "speciesName": "Héricendre",
+            "level": 5,
+            "shiny": false,
+            "at": 0,
+            "items": {},
+            "itemNames": {}
+          },
+          "bob": {
+            "result": "caught",
+            "uid": "2001",
+            "species": 158,
+            "speciesName": "Kaiminus",
+            "level": 5,
+            "shiny": false,
+            "at": 0,
+            "items": {},
+            "itemNames": {}
+          },
+          "carol": {
+            "result": "caught",
+            "uid": "3001",
+            "species": 152,
+            "speciesName": "Germignon",
+            "level": 5,
+            "shiny": false,
+            "at": 0,
+            "items": {},
+            "itemNames": {}
+          }
+        }
+      },
+      {
+        "key": "route 29",
+        "name": "Route 29",
+        "status": "dead",
+        "nickname": null,
+        "firstAt": 0,
+        "entries": {
+          "alice": {
+            "result": "caught",
+            "uid": "1002",
+            "species": 161,
+            "speciesName": "Fouinette",
+            "level": 2,
+            "shiny": false,
+            "at": 0,
+            "items": {},
+            "itemNames": {}
+          },
+          "bob": {
+            "result": "caught",
+            "uid": "2002",
+            "species": 16,
+            "speciesName": "Roucool",
+            "level": 3,
+            "shiny": false,
+            "at": 0,
+            "items": {},
+            "itemNames": {}
+          },
+          "carol": {
+            "result": "caught",
+            "uid": "3002",
+            "species": 19,
+            "speciesName": "Rattata",
+            "level": 3,
+            "shiny": false,
+            "at": 0,
+            "items": {},
+            "itemNames": {}
+          }
+        }
+      }
+    ],
+    "namingQueue": [],
+    "ended": {
+      "at": 0,
+      "outcome": "defeat",
+      "reason": "L'équipe de Alice est tombée.",
+      "summary": [
+        {
+          "captures": 2,
+          "deaths": 1,
+          "wildKills": 0,
+          "shinies": 0,
+          "encounters": 1,
+          "trainersBeaten": 0,
+          "badges": 0,
+          "fouls": 0,
+          "itemsBattle": {},
+          "itemsField": {},
+          "bought": {},
+          "userId": "alice",
+          "name": "Alice",
+          "status": "wiped",
+          "alive": 0
+        },
+        {
+          "captures": 2,
+          "deaths": 1,
+          "wildKills": 0,
+          "shinies": 0,
+          "encounters": 1,
+          "trainersBeaten": 0,
+          "badges": 0,
+          "fouls": 0,
+          "itemsBattle": {},
+          "itemsField": {},
+          "bought": {},
+          "userId": "bob",
+          "name": "Bob",
+          "status": "playing",
+          "alive": 0
+        },
+        {
+          "captures": 2,
+          "deaths": 0,
+          "wildKills": 0,
+          "shinies": 0,
+          "encounters": 1,
+          "trainersBeaten": 0,
+          "badges": 0,
+          "fouls": 0,
+          "itemsBattle": {},
+          "itemsField": {},
+          "bought": {},
+          "userId": "carol",
+          "name": "Carol",
+          "status": "champion",
+          "alive": 0
+        }
+      ]
+    },
+    "logSeq": 0,
+    "refundSeq": 0,
+    "trades": []
+  }
+Vue en direct [alice] {"zone":"Route 29"}
+Vue en direct [bob] {"zone":"Route 29"}
+Vue en direct [carol] {"zone":"Route 29"}

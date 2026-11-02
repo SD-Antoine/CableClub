@@ -1,0 +1,57 @@
+{
+  "title": "Nuzlocke à deux : première rencontre, Poké Balls, Pokémon offert, objets, fin quand chacun a terminé",
+  "mode": "nuzlocke",
+  "game": {"id": "rouge-fr", "name": "Pokémon Rouge", "gen": 1},
+  "players": [
+    {"id": "alice", "name": "Alice", "families": {"2": 1, "3": 1, "5": 4, "6": 4, "8": 7, "9": 7, "11": 10, "12": 10, "17": 16, "18": 16, "20": 19, "22": 21, "26": 25}},
+    {"id": "bob", "name": "Bob", "families": {"2": 1, "3": 1, "5": 4, "6": 4, "8": 7, "9": 7, "11": 10, "12": 10, "17": 16, "18": 16, "20": 19, "22": 21, "26": 25}}
+  ],
+  "steps": [
+    {"do": "launch"},
+    {"by": "alice", "note": "Pokémon de départ", "events": [
+      {"type": "capture", "uid": "1001", "species": 1, "speciesName": "Bulbizarre", "level": 5, "nickname": "BULBIZARRE", "zone": "Bourg Palette", "origin": "new", "inParty": true, "fainted": false, "shiny": false},
+      {"type": "party", "uids": ["1001"]}]},
+    {"by": "alice", "note": "avant la première Poké Ball : rien ne compte", "events": [
+      {"type": "location", "map": 12, "zone": "Route 1"},
+      {"type": "encounter", "phase": "start", "uid": "1002", "species": 19, "speciesName": "Rattata", "level": 3, "zone": "Route 1", "shiny": false, "balls": 0},
+      {"type": "faint", "uid": "1001", "species": 1, "speciesName": "Bulbizarre", "level": 5, "nickname": "BULBIZARRE", "zone": "Route 1", "doomed": false},
+      {"type": "encounter", "phase": "end", "outcome": "failed", "wildFainted": false, "uid": "1002", "species": 19, "speciesName": "Rattata", "level": 3, "zone": "Route 1", "shiny": false, "balls": 0},
+      {"type": "whiteout"}]},
+    {"by": "alice", "note": "achat des Poké Balls", "events": [
+      {"type": "items", "changes": [{"item": 4, "name": "POKé BALL", "delta": 5}], "money": -1000, "battle": false, "fight": false},
+      {"type": "balls", "has": true}]},
+    {"by": "alice", "note": "la première rencontre de la Route 1 s'enfuit : pas de seconde chance", "events": [
+      {"type": "location", "map": 12, "zone": "Route 1"},
+      {"type": "encounter", "phase": "start", "uid": "1003", "species": 16, "speciesName": "Roucool", "level": 3, "zone": "Route 1", "shiny": false, "balls": 5},
+      {"type": "encounter", "phase": "end", "outcome": "failed", "wildFainted": false, "uid": "1003", "species": 16, "speciesName": "Roucool", "level": 3, "zone": "Route 1", "shiny": false, "balls": 5},
+      {"type": "encounter", "phase": "start", "uid": "1004", "species": 19, "speciesName": "Rattata", "level": 2, "zone": "Route 1", "shiny": false, "balls": 5},
+      {"type": "items", "changes": [{"item": 4, "name": "POKé BALL", "delta": -1}], "money": 0, "battle": true, "fight": true},
+      {"type": "capture", "uid": "1004", "species": 19, "speciesName": "Rattata", "level": 2, "nickname": "RATTATA", "zone": "Route 1", "origin": "wild", "inParty": true, "fainted": false, "shiny": false}]},
+    {"by": "alice", "note": "première rencontre de la Route 22 capturée, objets", "events": [
+      {"type": "location", "map": 33, "zone": "Route 22"},
+      {"type": "encounter", "phase": "start", "uid": "1005", "species": 21, "speciesName": "Piafabec", "level": 4, "zone": "Route 22", "shiny": false, "balls": 4},
+      {"type": "items", "changes": [{"item": 4, "name": "POKé BALL", "delta": -1}], "money": 0, "battle": true, "fight": true},
+      {"type": "capture", "uid": "1005", "species": 21, "speciesName": "Piafabec", "level": 4, "nickname": "PIAFABEC", "zone": "Route 22", "origin": "wild", "inParty": true, "fainted": false, "shiny": false},
+      {"type": "party", "uids": ["1001", "1005"]},
+      {"type": "items", "changes": [{"item": 20, "name": "POTION", "delta": -1}], "money": 0, "battle": false, "fight": false},
+      {"type": "items", "changes": [{"item": 20, "name": "POTION", "delta": -2}], "money": 600, "battle": false, "fight": false},
+      {"type": "update", "uid": "1005", "species": 21, "speciesName": "Piafabec", "level": 9, "nickname": "PIAFABEC", "evolved": false}]},
+    {"by": "alice", "note": "Pokémon offert : gardé, sans zone", "events": [
+      {"type": "capture", "uid": "1006", "species": 25, "speciesName": "Pikachu", "level": 10, "nickname": "PIKACHU", "zone": "Centre Pokémon", "origin": "trade", "inParty": true, "fainted": false, "shiny": false}]},
+    {"do": "rules", "rules": {"honorNoEvolution": true}, "note": "règle écrite dans la ROM : refusée une fois lancée"},
+    {"by": "alice", "do": "hm", "on": true, "note": "l'exception pour les CS n'est pas active"},
+    {"by": "bob", "note": "Bob : sa propre première rencontre de la Route 1", "events": [
+      {"type": "capture", "uid": "2001", "species": 7, "speciesName": "Carapuce", "level": 5, "nickname": "CARAPUCE", "zone": "Bourg Palette", "origin": "new", "inParty": true, "fainted": false, "shiny": false},
+      {"type": "balls", "has": true},
+      {"type": "location", "map": 12, "zone": "Route 1"},
+      {"type": "encounter", "phase": "start", "uid": "2002", "species": 19, "speciesName": "Rattata", "level": 3, "zone": "Route 1", "shiny": false, "balls": 5},
+      {"type": "capture", "uid": "2002", "species": 19, "speciesName": "Rattata", "level": 3, "nickname": "RATTATA", "zone": "Route 1", "origin": "wild", "inParty": true, "fainted": false, "shiny": false}]},
+    {"by": "bob", "note": "Bob bat le Maître : Alice joue encore", "events": [
+      {"type": "champion"}]},
+    {"by": "alice", "note": "l'équipe d'Alice tombe : Nuzlocke perdu, tout le monde a terminé", "events": [
+      {"type": "faint", "uid": "1005", "species": 22, "speciesName": "Rapasdepic", "level": 24, "nickname": "PIAFABEC", "zone": "Route 3", "doomed": false},
+      {"type": "faint", "uid": "1001", "species": 1, "speciesName": "Bulbizarre", "level": 20, "nickname": "BULBIZARRE", "zone": "Route 3", "doomed": false},
+      {"type": "faint", "uid": "1006", "species": 25, "speciesName": "Pikachu", "level": 20, "nickname": "PIKACHU", "zone": "Route 3", "doomed": false},
+      {"type": "whiteout"}]}
+  ]
+}

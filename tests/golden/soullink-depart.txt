@@ -1,0 +1,385 @@
+# Soul Link à deux : départ, Poké Balls, nommage, mort partagée
+mode soullink, Pokémon Rubis, génération 3, joueurs alice (chef), bob
+règles {"shinyClause":true,"dupesClause":true,"giftPokemon":false,"legendaries":true,"naming":"leader","pauseForNaming":true,"deathBox":true,"refundCancelled":true,"wipeEndsRun":true,"endWhen":"all","autoEnd":true,"startWithBalls":true,"saveStates":false}
+
+1. alice : location — avant le lancement : ignoré
+  directives [alice] room="salle", doomed=[], release=[], nicknames={}, pause=null, refunds=[], deathBox=true, shinyNum=0, shinyRate=0, park=[], parkWhy={}, levelCap=-1, setMode=false, ban=[], noHeld=false, noFly=false, saveStates=false, state="lobby", open=false, trade=null
+  directives [bob] room="salle", doomed=[], release=[], nicknames={}, pause=null, refunds=[], deathBox=true, shinyNum=0, shinyRate=0, park=[], parkWhy={}, levelCap=-1, setMode=false, ban=[], noHeld=false, noFly=false, saveStates=false, state="lobby", open=false, trade=null
+
+2. alice (chef) : launch
+  journal launch : L'aventure commence ! 2 joueur(s) sur Pokémon Rubis.
+  journal info : Le Soul Link commencera vraiment quand chaque joueur aura une Poké Ball : d'ici là, un Pokémon K.O. ne meurt pas.
+  directives [alice] state="running", open=true
+  directives [bob] state="running", open=true
+
+3. alice : location, capture, party — Pokémon de départ d'Alice
+  journal zone [alice] : Alice entre dans Route 101  {"zone":"Route 101"}
+  journal capture [alice] : Alice capture GOBOU (Gobou) N.5 (Départ)  {"zone":"Départ","species":258,"speciesName":"Gobou","level":5,"shiny":false}
+
+4. bob : capture, party — Pokémon de départ de Bob : le lien du départ attend son nom
+  journal capture [bob] : Bob capture POUSSIFEU (Poussifeu) N.5 (Départ)  {"zone":"Départ","species":255,"speciesName":"Poussifeu","level":5,"shiny":false}
+  journal link : Tout le monde a capturé son Pokémon de Départ : le chef de salle choisit son nom.
+  directives [alice] pause={"reason":"naming","zone":"depart","zoneName":"Départ","text":"Le chef de salle choisit le nom du lien de Départ."}
+  directives [bob] pause={"reason":"naming","zone":"depart","zoneName":"Départ","text":"Le chef de salle choisit le nom du lien de Départ."}
+
+5. alice (chef) : name — surnom trop long
+  refus 400 : Le surnom doit faire de 1 à 10 caractères.
+
+6. alice (chef) : name
+  journal name : Lien de Départ nommé « Duo »  {"zone":"Départ","nickname":"Duo"}
+  directives [alice] nicknames={"1001":"Duo"}, pause=null
+  directives [bob] nicknames={"2001":"Duo"}, pause=null
+
+7. alice : balls — Alice a des Poké Balls, pas encore Bob
+  journal balls [alice] : Alice a ses premières Poké Balls
+
+8. bob : battle start, faint, battle end, whiteout — K.O. avant le vrai début : sans conséquence
+  journal battle [bob] : Bob lance un combat contre un dresseur
+  journal faint [bob] : Duo (Poussifeu) de Bob est K.O., sans conséquence : le Soul Link n'a pas encore commencé.
+  journal loss [bob] : Bob perd le combat contre un dresseur
+  journal whiteout [bob] : L'équipe de Bob est entièrement K.O.
+  avis [bob] info : Duo (Poussifeu) est K.O. mais ne meurt pas : le Soul Link commence quand chaque joueur a une Poké Ball.
+
+9. alice : encounter start, items, capture, party — première rencontre d'Alice sur la Route 101
+  journal encounter [alice] : Alice rencontre Zigzaton N.3 (Route 101)  {"species":263,"speciesName":"Zigzaton","level":3,"zone":"Route 101","shiny":false,"kind":"zone"}
+  journal item [alice] : Alice utilise 1× Poké Ball en combat  {"item":"Poké Ball","qty":1,"battle":true}
+  journal capture [alice] : Alice capture ZIGZATON (Zigzaton) N.3 (Route 101)  {"zone":"Route 101","species":263,"speciesName":"Zigzaton","level":3,"shiny":false}
+  avis [alice] info : Première rencontre de Route 101 : elle compte pour le Soul Link.
+
+10. bob : items, balls — Bob reçoit ses Poké Balls : le Soul Link commence
+  journal obtain [bob] : Bob obtient 5× Poké Ball  {"item":"Poké Ball","qty":5}
+  journal balls [bob] : Bob a ses premières Poké Balls
+  journal start : Tout le monde a des Poké Balls : le Soul Link commence vraiment. Désormais, un Pokémon K.O. est mort.
+  avis [alice] warn : Le Soul Link commence : désormais, un Pokémon K.O. est mort, avec son âme liée.
+  avis [bob] warn : Le Soul Link commence : désormais, un Pokémon K.O. est mort, avec son âme liée.
+
+11. bob : location, encounter start, items, capture — Bob capture sur la Route 101 : lien complet, pause pour le nom
+  journal zone [bob] : Bob entre dans Route 101 — déjà capturée par un partenaire  {"zone":"Route 101"}
+  journal encounter [bob] : Bob rencontre Medhyèna N.2 (Route 101)  {"species":261,"speciesName":"Medhyèna","level":2,"zone":"Route 101","shiny":false,"kind":"zone"}
+  journal item [bob] : Bob utilise 1× Poké Ball en combat  {"item":"Poké Ball","qty":1,"battle":true}
+  journal capture [bob] : Bob capture MEDHYENA (Medhyèna) N.2 (Route 101)  {"zone":"Route 101","species":261,"speciesName":"Medhyèna","level":2,"shiny":false}
+  journal link : Tout le monde a capturé son Pokémon de Route 101 : le chef de salle choisit son nom.
+  avis [bob] info : Première rencontre de Route 101 : elle compte pour le Soul Link.
+  directives [alice] pause={"reason":"naming","zone":"route 101","zoneName":"Route 101","text":"Le chef de salle choisit le nom du lien de Route 101."}
+  directives [bob] pause={"reason":"naming","zone":"route 101","zoneName":"Route 101","text":"Le chef de salle choisit le nom du lien de Route 101."}
+
+12. alice (chef) : adventure — le chef ferme l'aventure
+  journal close [alice] : Le chef de salle ferme l'aventure : pause pour tout le monde.
+  directives [alice] pause={"reason":"closed","text":"L'aventure est fermée par le chef de salle."}, open=false
+  directives [bob] pause={"reason":"closed","text":"L'aventure est fermée par le chef de salle."}, open=false
+
+13. alice (chef) : name
+  journal name : Lien de Route 101 nommé « Croc »  {"zone":"Route 101","nickname":"Croc"}
+  directives [alice] nicknames={"1001":"Duo","1002":"Croc"}
+  directives [bob] nicknames={"2001":"Duo","2002":"Croc"}
+
+14. alice (chef) : adventure
+  journal open [alice] : Le chef de salle ouvre l'aventure : à vos manettes !
+  directives [alice] pause=null, open=true
+  directives [bob] pause=null, open=true
+
+15. alice : update — évolution
+  journal evolution [alice] : Croc (Zigzaton) de Alice évolue en Linéon
+
+16. alice : battle start, faint, battle end — Croc d'Alice tombe : celui de Bob meurt avec lui
+  journal battle [alice] : Alice lance un combat contre un dresseur
+  journal death [alice] : ☠ Croc (Linéon) de Alice est mort (Route 101)
+  journal death [bob] : ☠ Croc (Medhyèna) de Bob meurt avec son âme liée
+  journal win [alice] : Alice gagne le combat contre un dresseur
+  avis [bob] danger : Croc (Medhyèna) est mort : son âme liée de Alice est tombée.
+  directives [alice] doomed=["1002"]
+  directives [bob] doomed=["2002"]
+
+17. bob : faint — le K.O. d'un Pokémon déjà mort ne change rien
+
+18. alice : badges, badges — badge (le même deux fois)
+  journal badge [alice] : Alice obtient son 1er badge  {"count":1}
+
+19. alice (chef) : end — le chef arrête l'aventure
+  journal end : Soul Link abandonné. Aventure arrêtée par le chef de salle.  {"outcome":"abandon"}
+  fin de l'aventure
+  directives [alice] pause={"reason":"ended","text":"Le Soul Link est terminé."}, state="abandoned", open=false
+  directives [bob] pause={"reason":"ended","text":"Le Soul Link est terminé."}, state="abandoned", open=false
+
+20. bob : location — après la fin : ignoré
+
+État final
+  {
+    "version": 1,
+    "id": "salle",
+    "code": "CODE01",
+    "name": "Soul Link à deux : départ, Poké Balls, nommage, mort partagée",
+    "mode": "soullink",
+    "visibility": "private",
+    "leaderId": "alice",
+    "createdAt": 0,
+    "launchedAt": 0,
+    "game": {"gameId":"rubis-fr","name":"Pokémon Rubis","gen":3},
+    "maxPlayers": 2,
+    "state": "abandoned",
+    "adventureOpen": false,
+    "linkStarted": true,
+    "rules": {
+      "shinyClause": true,
+      "dupesClause": true,
+      "giftPokemon": false,
+      "legendaries": true,
+      "naming": "leader",
+      "pauseForNaming": true,
+      "deathBox": true,
+      "refundCancelled": true,
+      "wipeEndsRun": true,
+      "endWhen": "all",
+      "autoEnd": true,
+      "startWithBalls": true,
+      "saveStates": false
+    },
+    "rando": {},
+    "members": [
+      {
+        "userId": "alice",
+        "name": "Alice",
+        "joinedAt": 0,
+        "slot": 1,
+        "ready": true,
+        "rom": {"status":"ready"},
+        "families": {"253":252,"254":252,"256":255,"257":255,"259":258,"260":258,"262":261,"264":263,"266":265,"267":265,"268":265,"269":265,"271":270,"272":270,"274":273,"275":273,"277":276,"279":278},
+        "status": "playing",
+        "mons": {
+          "1001": {
+            "uid": "1001",
+            "species": 258,
+            "speciesName": "Gobou",
+            "level": 5,
+            "nickname": "Duo",
+            "zoneKey": "depart",
+            "zone": "Départ",
+            "origin": "new",
+            "shiny": false,
+            "bonus": false,
+            "status": "alive",
+            "reason": null,
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          },
+          "1002": {
+            "uid": "1002",
+            "species": 264,
+            "speciesName": "Linéon",
+            "level": 20,
+            "nickname": "Croc",
+            "zoneKey": "route 101",
+            "zone": "Route 101",
+            "origin": "wild",
+            "shiny": false,
+            "bonus": false,
+            "status": "dead",
+            "reason": "K.O.",
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          }
+        },
+        "refunds": [],
+        "stats": {
+          "captures": 2,
+          "deaths": 1,
+          "wildKills": 0,
+          "shinies": 0,
+          "encounters": 1,
+          "trainersBeaten": 1,
+          "badges": 1,
+          "fouls": 0,
+          "itemsBattle": {"Poké Ball":1},
+          "itemsField": {},
+          "bought": {}
+        },
+        "lastZone": "Route 101",
+        "hasBalls": true,
+        "soloUid": null,
+        "capGyms": null,
+        "capLeague": 0,
+        "hmNext": false
+      },
+      {
+        "userId": "bob",
+        "name": "Bob",
+        "joinedAt": 0,
+        "slot": 2,
+        "ready": true,
+        "rom": {"status":"ready"},
+        "families": {"253":252,"254":252,"256":255,"257":255,"259":258,"260":258,"262":261,"264":263,"266":265,"267":265,"268":265,"269":265,"271":270,"272":270,"274":273,"275":273,"277":276,"279":278},
+        "status": "playing",
+        "mons": {
+          "2001": {
+            "uid": "2001",
+            "species": 255,
+            "speciesName": "Poussifeu",
+            "level": 5,
+            "nickname": "Duo",
+            "zoneKey": "depart",
+            "zone": "Départ",
+            "origin": "new",
+            "shiny": false,
+            "bonus": false,
+            "status": "alive",
+            "reason": null,
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          },
+          "2002": {
+            "uid": "2002",
+            "species": 261,
+            "speciesName": "Medhyèna",
+            "level": 2,
+            "nickname": "Croc",
+            "zoneKey": "route 101",
+            "zone": "Route 101",
+            "origin": "wild",
+            "shiny": false,
+            "bonus": false,
+            "status": "dead",
+            "reason": "âme liée à Croc (Linéon)",
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          }
+        },
+        "refunds": [],
+        "stats": {
+          "captures": 2,
+          "deaths": 0,
+          "wildKills": 0,
+          "shinies": 0,
+          "encounters": 1,
+          "trainersBeaten": 0,
+          "badges": 0,
+          "fouls": 0,
+          "itemsBattle": {"Poké Ball":1},
+          "itemsField": {},
+          "bought": {}
+        },
+        "lastZone": "Route 101",
+        "hasBalls": true,
+        "soloUid": null,
+        "capGyms": null,
+        "capLeague": 0,
+        "hmNext": false
+      }
+    ],
+    "invites": [],
+    "history": [],
+    "zones": [
+      {
+        "key": "depart",
+        "name": "Départ",
+        "status": "linked",
+        "nickname": "Duo",
+        "firstAt": 0,
+        "entries": {
+          "alice": {
+            "result": "caught",
+            "uid": "1001",
+            "species": 258,
+            "speciesName": "Gobou",
+            "level": 5,
+            "shiny": false,
+            "at": 0,
+            "items": {},
+            "itemNames": {}
+          },
+          "bob": {
+            "result": "caught",
+            "uid": "2001",
+            "species": 255,
+            "speciesName": "Poussifeu",
+            "level": 5,
+            "shiny": false,
+            "at": 0,
+            "items": {},
+            "itemNames": {}
+          }
+        }
+      },
+      {
+        "key": "route 101",
+        "name": "Route 101",
+        "status": "dead",
+        "nickname": "Croc",
+        "firstAt": 0,
+        "entries": {
+          "alice": {
+            "result": "caught",
+            "uid": "1002",
+            "species": 263,
+            "speciesName": "Zigzaton",
+            "level": 3,
+            "shiny": false,
+            "at": 0,
+            "items": {"4":1},
+            "itemNames": {"4":"Poké Ball"}
+          },
+          "bob": {
+            "result": "caught",
+            "uid": "2002",
+            "species": 261,
+            "speciesName": "Medhyèna",
+            "level": 2,
+            "shiny": false,
+            "at": 0,
+            "items": {"4":1},
+            "itemNames": {"4":"Poké Ball"}
+          }
+        }
+      }
+    ],
+    "namingQueue": [],
+    "ended": {
+      "at": 0,
+      "outcome": "abandon",
+      "reason": "Aventure arrêtée par le chef de salle.",
+      "summary": [
+        {
+          "captures": 2,
+          "deaths": 1,
+          "wildKills": 0,
+          "shinies": 0,
+          "encounters": 1,
+          "trainersBeaten": 1,
+          "badges": 1,
+          "fouls": 0,
+          "itemsBattle": {"Poké Ball":1},
+          "itemsField": {},
+          "bought": {},
+          "userId": "alice",
+          "name": "Alice",
+          "status": "playing",
+          "alive": 1
+        },
+        {
+          "captures": 2,
+          "deaths": 0,
+          "wildKills": 0,
+          "shinies": 0,
+          "encounters": 1,
+          "trainersBeaten": 0,
+          "badges": 0,
+          "fouls": 0,
+          "itemsBattle": {"Poké Ball":1},
+          "itemsField": {},
+          "bought": {},
+          "userId": "bob",
+          "name": "Bob",
+          "status": "playing",
+          "alive": 1
+        }
+      ]
+    },
+    "logSeq": 0,
+    "refundSeq": 0,
+    "trades": []
+  }
+Vue en direct [alice] {"zone":"Route 101","party":["1001","1002"],"at":0}
+Vue en direct [bob] {"party":["2001"],"at":0,"zone":"Route 101"}

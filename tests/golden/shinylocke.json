@@ -1,0 +1,45 @@
+{
+  "title": "Shinylocke : seuls les chromatiques, un par zone, doublons, Pokémon offerts, légendaire",
+  "mode": "shinylocke",
+  "game": {"id": "cristal-fr", "name": "Pokémon Cristal", "gen": 2},
+  "rules": {"oneShinyPerZone": true, "dupesClause": true, "endWhen": "first"},
+  "rando": {"shinyNum": 64},
+  "players": [
+    {"id": "alice", "name": "Alice", "families": {"153": 152, "154": 152, "156": 155, "157": 155, "159": 158, "160": 158, "162": 161, "164": 163, "166": 165, "168": 167, "17": 16, "18": 16, "20": 19}}
+  ],
+  "steps": [
+    {"do": "launch", "note": "le taux de chromatiques de la salle est dans les directives"},
+    {"by": "alice", "note": "Pokémon de départ, rencontre sans Poké Ball", "events": [
+      {"type": "capture", "uid": "1001", "species": 155, "speciesName": "Héricendre", "level": 5, "nickname": "HERICENDRE", "zone": "Bourg Geon", "origin": "new", "inParty": true, "fainted": false, "shiny": false},
+      {"type": "location", "map": 3, "zone": "Route 29"},
+      {"type": "encounter", "phase": "start", "uid": "1002", "species": 161, "speciesName": "Fouinette", "level": 2, "zone": "Route 29", "shiny": false, "balls": 0},
+      {"type": "encounter", "phase": "end", "outcome": "failed", "wildFainted": false, "uid": "1002", "species": 161, "speciesName": "Fouinette", "level": 2, "zone": "Route 29", "shiny": false, "balls": 0}]},
+    {"by": "alice", "note": "pas chromatique : mis K.O., puis capturé quand même", "events": [
+      {"type": "balls", "has": true},
+      {"type": "encounter", "phase": "start", "uid": "1003", "species": 16, "speciesName": "Roucool", "level": 2, "zone": "Route 29", "shiny": false, "balls": 5},
+      {"type": "encounter", "phase": "end", "outcome": "failed", "wildFainted": true, "uid": "1003", "species": 16, "speciesName": "Roucool", "level": 2, "zone": "Route 29", "shiny": false, "balls": 5},
+      {"type": "encounter", "phase": "start", "uid": "1004", "species": 161, "speciesName": "Fouinette", "level": 3, "zone": "Route 29", "shiny": false, "balls": 5},
+      {"type": "capture", "uid": "1004", "species": 161, "speciesName": "Fouinette", "level": 3, "nickname": "FOUINETTE", "zone": "Route 29", "origin": "wild", "inParty": true, "fainted": false, "shiny": false}]},
+    {"by": "alice", "note": "un chromatique : capture de la zone, puis un second dans la même zone", "events": [
+      {"type": "encounter", "phase": "start", "uid": "1005", "species": 163, "speciesName": "Hoothoot", "level": 3, "zone": "Route 29", "shiny": true, "balls": 4},
+      {"type": "capture", "uid": "1005", "species": 163, "speciesName": "Hoothoot", "level": 3, "nickname": "HOOTHOOT", "zone": "Route 29", "origin": "wild", "inParty": true, "fainted": false, "shiny": true},
+      {"type": "encounter", "phase": "start", "uid": "1006", "species": 19, "speciesName": "Rattata", "level": 3, "zone": "Route 29", "shiny": true, "balls": 3},
+      {"type": "capture", "uid": "1006", "species": 19, "speciesName": "Rattata", "level": 3, "nickname": "RATTATA", "zone": "Route 29", "origin": "wild", "inParty": true, "fainted": false, "shiny": true}]},
+    {"by": "alice", "note": "retour sur la Route 29, puis un doublon chromatique sur la Route 30", "events": [
+      {"type": "location", "map": 4, "zone": "Route 30"},
+      {"type": "location", "map": 3, "zone": "Route 29"},
+      {"type": "location", "map": 4, "zone": "Route 30"},
+      {"type": "encounter", "phase": "start", "uid": "1007", "species": 164, "speciesName": "Noarfang", "level": 9, "zone": "Route 30", "shiny": true, "balls": 2},
+      {"type": "capture", "uid": "1007", "species": 164, "speciesName": "Noarfang", "level": 9, "nickname": "NOARFANG", "zone": "Route 30", "origin": "wild", "inParty": true, "fainted": false, "shiny": true}]},
+    {"by": "alice", "note": "Pokémon offerts : refusé s'il n'est pas chromatique, gardé sinon", "events": [
+      {"type": "capture", "uid": "1008", "species": 175, "speciesName": "Togepi", "level": 5, "nickname": "TOGEPI", "zone": "Ville Griotte", "origin": "new", "inParty": true, "fainted": false, "shiny": false},
+      {"type": "capture", "uid": "1009", "species": 133, "speciesName": "Évoli", "level": 20, "nickname": "EVOLI", "zone": "Doublonville", "origin": "new", "inParty": true, "fainted": false, "shiny": true}]},
+    {"do": "rules", "rules": {"legendaries": false}},
+    {"by": "alice", "note": "légendaire chromatique interdit", "events": [
+      {"type": "location", "map": 20, "zone": "Route 36"},
+      {"type": "encounter", "phase": "start", "uid": "1010", "species": 243, "speciesName": "Raikou", "level": 40, "zone": "Route 36", "shiny": true, "balls": 2},
+      {"type": "encounter", "phase": "end", "outcome": "failed", "wildFainted": false, "uid": "1010", "species": 243, "speciesName": "Raikou", "level": 40, "zone": "Route 36", "shiny": true, "balls": 2}]},
+    {"by": "alice", "note": "victoire : le premier qui bat le Maître termine la salle", "events": [
+      {"type": "champion"}]}
+  ]
+}

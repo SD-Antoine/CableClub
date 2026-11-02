@@ -1,0 +1,300 @@
+# Nuzlocke Hardcore à deux : plafonds de niveau, objets en combat, équipe K.O.
+mode nuzlocke, Pokémon Émeraude, génération 3, joueurs alice (chef), bob
+règles {"shinyClause":false,"dupesClause":false,"giftPokemon":true,"legendaries":true,"naming":"free","pauseForNaming":false,"deathBox":true,"refundCancelled":false,"wipeEndsRun":true,"endWhen":"all","autoEnd":true,"startWithBalls":true,"saveStates":false,"honorNoHealItems":false,"honorNoHeldItems":false,"honorNoMultiExp":false,"honorNoMasterBall":false,"honorNoEvolution":false,"honorNoFly":false,"honorNoRepel":false,"honorSetMode":false,"honorCsException":false,"honorNotepad":false,"hardcore":true,"hardcoreItems":"report"}
+
+1. alice (chef) : launch — style Défini imposé, pas encore de plafond connu
+  journal launch : L'aventure commence ! 2 joueur(s) sur Pokémon Émeraude.
+  journal info : Le Nuzlocke de chaque joueur commence à sa première Poké Ball : d'ici là, un Pokémon K.O. ne meurt pas.
+  directives [alice] room="salle", doomed=[], release=[], nicknames={}, pause=null, refunds=[], deathBox=true, shinyNum=0, shinyRate=0, park=[], parkWhy={}, levelCap=-1, setMode=true, ban=[], noHeld=false, noFly=false, saveStates=false, state="running", open=true, trade=null
+  directives [bob] room="salle", doomed=[], release=[], nicknames={}, pause=null, refunds=[], deathBox=true, shinyNum=0, shinyRate=0, park=[], parkWhy={}, levelCap=-1, setMode=true, ban=[], noHeld=false, noFly=false, saveStates=false, state="running", open=true, trade=null
+
+2. alice : capture, balls, party, caps, caps — les niveaux des champions lus dans la ROM d'Alice : plafond 15
+  journal capture [alice] : Alice capture POUSSIFEU (Poussifeu) N.5 — Pokémon de départ  {"species":255,"speciesName":"Poussifeu","level":5,"shiny":false,"bonus":true}
+  journal balls [alice] : Alice a ses premières Poké Balls
+  directives [alice] levelCap=15
+
+3. alice : update — Poussifeu dépasse le plafond mais reste seul dans l'équipe
+  avis [alice] warn : Hardcore : toute l'équipe dépasse le plafond de niveau (15) : POUSSIFEU (Poussifeu) reste seul dans l'équipe.
+
+4. alice : location, encounter start, items, capture, party — une capture sous le plafond : Poussifeu part au PC
+  journal zone [alice] : Alice entre dans Route 101  {"zone":"Route 101"}
+  journal encounter [alice] : Alice rencontre Medhyèna N.4 (Route 101)  {"species":261,"speciesName":"Medhyèna","level":4,"zone":"Route 101","shiny":false,"kind":"zone"}
+  journal item [alice] : Alice utilise 1× Poké Ball en combat  {"item":"Poké Ball","qty":1,"battle":true}
+  journal capture [alice] : Alice capture MEDHYENA (Medhyèna) N.4 (Route 101)  {"zone":"Route 101","species":261,"speciesName":"Medhyèna","level":4,"shiny":false}
+  journal cap [alice] : POUSSIFEU (Poussifeu) de Alice dépasse le plafond de niveau (16 > 15) : envoyé au PC
+  avis [alice] info : Première rencontre de Route 101 : c'est votre seule chance ici (fuir ou le battre l'épuise).
+  avis [alice] warn : Hardcore : POUSSIFEU (Poussifeu) (niv. 16) dépasse le plafond de niveau (15) : il va au PC jusqu'au prochain badge.
+  directives [alice] park=["1001"], parkWhy={"1001":"cap"}
+
+5. alice : badges — premier badge : plafond 19, Poussifeu revient
+  journal badge [alice] : Alice obtient son 1er badge  {"count":1}
+  avis [alice] info : Hardcore : nouveau plafond de niveau, 19.
+  directives [alice] park=[], parkWhy={}, levelCap=19
+
+6. alice : battle start, items, battle end — Potion en combat : signalée
+  journal battle [alice] : Alice lance un combat contre un dresseur
+  journal item [alice] : Alice utilise 1× Potion en combat  {"item":"Potion","qty":1,"battle":true}
+  journal foul [alice] : ⚠ Hardcore : Alice utilise 1× Potion en combat (interdit)
+  journal win [alice] : Alice gagne le combat contre un dresseur
+  avis [alice] warn : Hardcore : pas d'objets en combat. Potion est signalé à la salle.
+
+7. bob : capture, balls, items (écran : battle) — jeu DS : l'écran montre un combat, l'objet compte
+  journal capture [bob] : Bob capture GOBOU (Gobou) N.5 — Pokémon de départ  {"species":258,"speciesName":"Gobou","level":5,"shiny":false,"bonus":true}
+  journal balls [bob] : Bob a ses premières Poké Balls
+  journal item [bob] : Bob utilise 1× Super Potion en combat  {"item":"Super Potion","qty":1,"battle":true}
+  journal foul [bob] : ⚠ Hardcore : Bob utilise 1× Super Potion en combat (interdit)
+  avis [bob] warn : Hardcore : pas d'objets en combat. Super Potion est signalé à la salle.
+
+8. bob : items (écran : free) — jeu DS : l'écran montre le terrain, l'objet ne compte pas
+  journal item [bob] : Bob utilise 1× Super Potion en combat  {"item":"Super Potion","qty":1,"battle":true}
+
+9. alice (chef) : rules — désormais un objet en combat fait perdre
+  journal rules [alice] : Alice modifie les règles : hardcoreItems
+
+10. bob : items, items — une Poké Ball reste permise, une Potion fait perdre Bob
+  journal item [bob] : Bob utilise 1× Poké Ball en combat  {"item":"Poké Ball","qty":1,"battle":true}
+  journal item [bob] : Bob utilise 1× Potion en combat  {"item":"Potion","qty":1,"battle":true}
+  journal wipe [bob] : ☠ Bob a perdu son Nuzlocke Hardcore : 1× Potion utilisé en combat.
+
+11. alice : faint, whiteout — équipe d'Alice K.O. : perdu, tout le monde a terminé
+  journal death [alice] : ☠ POUSSIFEU (Poussifeu) de Alice est mort (Départ)
+  journal whiteout [alice] : L'équipe de Alice est entièrement K.O.
+  journal wipe [alice] : ☠ Alice a perdu son Nuzlocke Hardcore : toute son équipe est tombée.
+  journal end : Nuzlocke perdu. Toutes les équipes sont tombées.  {"outcome":"defeat"}
+  fin de l'aventure
+  directives [alice] doomed=["1001"], pause={"reason":"ended","text":"Le Nuzlocke est terminé."}, state="finished", open=false
+  directives [bob] pause={"reason":"ended","text":"Le Nuzlocke est terminé."}, state="finished", open=false
+
+État final
+  {
+    "version": 1,
+    "id": "salle",
+    "code": "CODE01",
+    "name": "Nuzlocke Hardcore à deux : plafonds de niveau, objets en combat, équipe K.O.",
+    "mode": "nuzlocke",
+    "visibility": "private",
+    "leaderId": "alice",
+    "createdAt": 0,
+    "launchedAt": 0,
+    "game": {"gameId":"emeraude-fr","name":"Pokémon Émeraude","gen":3},
+    "maxPlayers": 2,
+    "state": "finished",
+    "adventureOpen": false,
+    "linkStarted": true,
+    "rules": {
+      "shinyClause": false,
+      "dupesClause": false,
+      "giftPokemon": true,
+      "legendaries": true,
+      "naming": "free",
+      "pauseForNaming": false,
+      "deathBox": true,
+      "refundCancelled": false,
+      "wipeEndsRun": true,
+      "endWhen": "all",
+      "autoEnd": true,
+      "startWithBalls": true,
+      "saveStates": false,
+      "honorNoHealItems": false,
+      "honorNoHeldItems": false,
+      "honorNoMultiExp": false,
+      "honorNoMasterBall": false,
+      "honorNoEvolution": false,
+      "honorNoFly": false,
+      "honorNoRepel": false,
+      "honorSetMode": false,
+      "honorCsException": false,
+      "honorNotepad": false,
+      "hardcore": true,
+      "hardcoreItems": "lose"
+    },
+    "rando": {},
+    "members": [
+      {
+        "userId": "alice",
+        "name": "Alice",
+        "joinedAt": 0,
+        "slot": 1,
+        "ready": true,
+        "rom": {"status":"ready"},
+        "families": {"256":255,"257":255,"259":258,"260":258,"262":261,"264":263},
+        "status": "wiped",
+        "mons": {
+          "1001": {
+            "uid": "1001",
+            "species": 255,
+            "speciesName": "Poussifeu",
+            "level": 16,
+            "nickname": "POUSSIFEU",
+            "zoneKey": null,
+            "zone": "Départ",
+            "origin": "new",
+            "shiny": false,
+            "bonus": true,
+            "status": "dead",
+            "reason": "K.O.",
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          },
+          "1002": {
+            "uid": "1002",
+            "species": 261,
+            "speciesName": "Medhyèna",
+            "level": 4,
+            "nickname": "MEDHYENA",
+            "zoneKey": "route 101",
+            "zone": "Route 101",
+            "origin": "wild",
+            "shiny": false,
+            "bonus": false,
+            "status": "alive",
+            "reason": null,
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          }
+        },
+        "refunds": [],
+        "stats": {
+          "captures": 2,
+          "deaths": 1,
+          "wildKills": 0,
+          "shinies": 0,
+          "encounters": 1,
+          "trainersBeaten": 1,
+          "badges": 1,
+          "fouls": 1,
+          "itemsBattle": {"Poké Ball":1,"Potion":1},
+          "itemsField": {},
+          "bought": {}
+        },
+        "lastZone": "Route 101",
+        "hasBalls": true,
+        "soloUid": null,
+        "capGyms": [15,19,24,29,31,33,42,46],
+        "capLeague": 58,
+        "hmNext": false
+      },
+      {
+        "userId": "bob",
+        "name": "Bob",
+        "joinedAt": 0,
+        "slot": 2,
+        "ready": true,
+        "rom": {"status":"ready"},
+        "families": {"256":255,"257":255,"259":258,"260":258,"262":261,"264":263},
+        "status": "wiped",
+        "mons": {
+          "2001": {
+            "uid": "2001",
+            "species": 258,
+            "speciesName": "Gobou",
+            "level": 5,
+            "nickname": "GOBOU",
+            "zoneKey": null,
+            "zone": "Départ",
+            "origin": "new",
+            "shiny": false,
+            "bonus": true,
+            "status": "alive",
+            "reason": null,
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          }
+        },
+        "refunds": [],
+        "stats": {
+          "captures": 1,
+          "deaths": 0,
+          "wildKills": 0,
+          "shinies": 0,
+          "encounters": 0,
+          "trainersBeaten": 0,
+          "badges": 0,
+          "fouls": 2,
+          "itemsBattle": {"Poké Ball":1,"Potion":1,"Super Potion":2},
+          "itemsField": {},
+          "bought": {}
+        },
+        "lastZone": null,
+        "hasBalls": true,
+        "soloUid": null,
+        "capGyms": null,
+        "capLeague": 0,
+        "hmNext": false
+      }
+    ],
+    "invites": [],
+    "history": [],
+    "zones": [
+      {
+        "key": "route 101",
+        "name": "Route 101",
+        "status": "open",
+        "nickname": null,
+        "firstAt": 0,
+        "entries": {
+          "alice": {
+            "result": "caught",
+            "uid": "1002",
+            "species": 261,
+            "speciesName": "Medhyèna",
+            "level": 4,
+            "shiny": false,
+            "at": 0,
+            "items": {"4":1},
+            "itemNames": {"4":"Poké Ball"}
+          }
+        }
+      }
+    ],
+    "namingQueue": [],
+    "ended": {
+      "at": 0,
+      "outcome": "defeat",
+      "reason": "Toutes les équipes sont tombées.",
+      "summary": [
+        {
+          "captures": 2,
+          "deaths": 1,
+          "wildKills": 0,
+          "shinies": 0,
+          "encounters": 1,
+          "trainersBeaten": 1,
+          "badges": 1,
+          "fouls": 1,
+          "itemsBattle": {"Poké Ball":1,"Potion":1},
+          "itemsField": {},
+          "bought": {},
+          "userId": "alice",
+          "name": "Alice",
+          "status": "wiped",
+          "alive": 1
+        },
+        {
+          "captures": 1,
+          "deaths": 0,
+          "wildKills": 0,
+          "shinies": 0,
+          "encounters": 0,
+          "trainersBeaten": 0,
+          "badges": 0,
+          "fouls": 2,
+          "itemsBattle": {"Poké Ball":1,"Potion":1,"Super Potion":2},
+          "itemsField": {},
+          "bought": {},
+          "userId": "bob",
+          "name": "Bob",
+          "status": "wiped",
+          "alive": 1
+        }
+      ]
+    },
+    "logSeq": 0,
+    "refundSeq": 0,
+    "trades": []
+  }
+Vue en direct [alice] {"party":["1001","1002"],"at":0,"zone":"Route 101"}
+Vue en direct [bob] {}

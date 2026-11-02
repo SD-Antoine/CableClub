@@ -1,0 +1,264 @@
+# Soul Link à deux : fin quand chaque joueur bat le Maître de la Ligue
+mode soullink, Pokémon Rouge, génération 1, joueurs alice (chef), bob
+règles {"shinyClause":true,"dupesClause":true,"giftPokemon":false,"legendaries":true,"naming":"leader","pauseForNaming":true,"deathBox":true,"refundCancelled":true,"wipeEndsRun":true,"endWhen":"all","autoEnd":true,"startWithBalls":true,"saveStates":false}
+
+1. alice (chef) : launch
+  journal launch : L'aventure commence ! 2 joueur(s) sur Pokémon Rouge.
+  journal info : Le Soul Link commencera vraiment quand chaque joueur aura une Poké Ball : d'ici là, un Pokémon K.O. ne meurt pas.
+  directives [alice] room="salle", doomed=[], release=[], nicknames={}, pause=null, refunds=[], deathBox=true, shinyNum=0, shinyRate=0, park=[], parkWhy={}, levelCap=-1, setMode=false, ban=[], noHeld=false, noFly=false, saveStates=false, state="running", open=true, trade=null
+  directives [bob] room="salle", doomed=[], release=[], nicknames={}, pause=null, refunds=[], deathBox=true, shinyNum=0, shinyRate=0, park=[], parkWhy={}, levelCap=-1, setMode=false, ban=[], noHeld=false, noFly=false, saveStates=false, state="running", open=true, trade=null
+
+2. alice : capture, balls
+  journal capture [alice] : Alice capture SALAMECHE (Salamèche) N.5 (Départ)  {"zone":"Départ","species":4,"speciesName":"Salamèche","level":5,"shiny":false}
+  journal balls [alice] : Alice a ses premières Poké Balls
+
+3. bob : capture, balls
+  journal capture [bob] : Bob capture BULBIZARRE (Bulbizarre) N.5 (Départ)  {"zone":"Départ","species":1,"speciesName":"Bulbizarre","level":5,"shiny":false}
+  journal link : Tout le monde a capturé son Pokémon de Départ : le chef de salle choisit son nom.
+  journal balls [bob] : Bob a ses premières Poké Balls
+  journal start : Tout le monde a des Poké Balls : le Soul Link commence vraiment. Désormais, un Pokémon K.O. est mort.
+  avis [alice] warn : Le Soul Link commence : désormais, un Pokémon K.O. est mort, avec son âme liée.
+  avis [bob] warn : Le Soul Link commence : désormais, un Pokémon K.O. est mort, avec son âme liée.
+  directives [alice] pause={"reason":"naming","zone":"depart","zoneName":"Départ","text":"Le chef de salle choisit le nom du lien de Départ."}
+  directives [bob] pause={"reason":"naming","zone":"depart","zoneName":"Départ","text":"Le chef de salle choisit le nom du lien de Départ."}
+
+4. alice (chef) : name
+  journal name : Lien de Départ nommé « Duo »  {"zone":"Départ","nickname":"Duo"}
+  directives [alice] nicknames={"1001":"Duo"}, pause=null
+  directives [bob] nicknames={"2001":"Duo"}, pause=null
+
+5. alice : badges, battle start, battle end, champion — Alice bat le Maître : la salle attend Bob
+  journal badge [alice] : Alice obtient son 8e badge  {"count":8}
+  journal battle [alice] : Alice lance un combat contre un dresseur
+  journal win [alice] : Alice gagne le combat contre un dresseur
+  journal champion [alice] : 🏆 Alice bat le Maître de la Ligue !
+
+6. alice : champion — le même événement une seconde fois
+
+7. bob : champion — Bob bat le Maître : victoire
+  journal champion [bob] : 🏆 Bob bat le Maître de la Ligue !
+  journal end : Soul Link réussi ! Bob a battu le Maître de la Ligue.  {"outcome":"victory"}
+  fin de l'aventure
+  directives [alice] pause={"reason":"ended","text":"Le Soul Link est terminé."}, state="finished", open=false
+  directives [bob] pause={"reason":"ended","text":"Le Soul Link est terminé."}, state="finished", open=false
+
+8. bob : faint — après la fin : ignoré
+
+9. alice (chef) : launch — relancer une aventure finie
+  refus 409 : L'aventure est déjà lancée.
+
+État final
+  {
+    "version": 1,
+    "id": "salle",
+    "code": "CODE01",
+    "name": "Soul Link à deux : fin quand chaque joueur bat le Maître de la Ligue",
+    "mode": "soullink",
+    "visibility": "private",
+    "leaderId": "alice",
+    "createdAt": 0,
+    "launchedAt": 0,
+    "game": {"gameId":"rouge-fr","name":"Pokémon Rouge","gen":1},
+    "maxPlayers": 2,
+    "state": "finished",
+    "adventureOpen": false,
+    "linkStarted": true,
+    "rules": {
+      "shinyClause": true,
+      "dupesClause": true,
+      "giftPokemon": false,
+      "legendaries": true,
+      "naming": "leader",
+      "pauseForNaming": true,
+      "deathBox": true,
+      "refundCancelled": true,
+      "wipeEndsRun": true,
+      "endWhen": "all",
+      "autoEnd": true,
+      "startWithBalls": true,
+      "saveStates": false
+    },
+    "rando": {},
+    "members": [
+      {
+        "userId": "alice",
+        "name": "Alice",
+        "joinedAt": 0,
+        "slot": 1,
+        "ready": true,
+        "rom": {"status":"ready"},
+        "families": {"2":1,"3":1,"5":4,"6":4,"8":7,"9":7,"17":16,"18":16,"20":19},
+        "status": "champion",
+        "mons": {
+          "1001": {
+            "uid": "1001",
+            "species": 4,
+            "speciesName": "Salamèche",
+            "level": 5,
+            "nickname": "Duo",
+            "zoneKey": "depart",
+            "zone": "Départ",
+            "origin": "new",
+            "shiny": false,
+            "bonus": false,
+            "status": "alive",
+            "reason": null,
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          }
+        },
+        "refunds": [],
+        "stats": {
+          "captures": 1,
+          "deaths": 0,
+          "wildKills": 0,
+          "shinies": 0,
+          "encounters": 0,
+          "trainersBeaten": 1,
+          "badges": 8,
+          "fouls": 0,
+          "itemsBattle": {},
+          "itemsField": {},
+          "bought": {}
+        },
+        "lastZone": null,
+        "hasBalls": true,
+        "soloUid": null,
+        "capGyms": null,
+        "capLeague": 0,
+        "hmNext": false
+      },
+      {
+        "userId": "bob",
+        "name": "Bob",
+        "joinedAt": 0,
+        "slot": 2,
+        "ready": true,
+        "rom": {"status":"ready"},
+        "families": {"2":1,"3":1,"5":4,"6":4,"8":7,"9":7,"17":16,"18":16,"20":19},
+        "status": "champion",
+        "mons": {
+          "2001": {
+            "uid": "2001",
+            "species": 1,
+            "speciesName": "Bulbizarre",
+            "level": 5,
+            "nickname": "Duo",
+            "zoneKey": "depart",
+            "zone": "Départ",
+            "origin": "new",
+            "shiny": false,
+            "bonus": false,
+            "status": "alive",
+            "reason": null,
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          }
+        },
+        "refunds": [],
+        "stats": {
+          "captures": 1,
+          "deaths": 0,
+          "wildKills": 0,
+          "shinies": 0,
+          "encounters": 0,
+          "trainersBeaten": 0,
+          "badges": 0,
+          "fouls": 0,
+          "itemsBattle": {},
+          "itemsField": {},
+          "bought": {}
+        },
+        "lastZone": null,
+        "hasBalls": true,
+        "soloUid": null,
+        "capGyms": null,
+        "capLeague": 0,
+        "hmNext": false
+      }
+    ],
+    "invites": [],
+    "history": [],
+    "zones": [
+      {
+        "key": "depart",
+        "name": "Départ",
+        "status": "linked",
+        "nickname": "Duo",
+        "firstAt": 0,
+        "entries": {
+          "alice": {
+            "result": "caught",
+            "uid": "1001",
+            "species": 4,
+            "speciesName": "Salamèche",
+            "level": 5,
+            "shiny": false,
+            "at": 0,
+            "items": {},
+            "itemNames": {}
+          },
+          "bob": {
+            "result": "caught",
+            "uid": "2001",
+            "species": 1,
+            "speciesName": "Bulbizarre",
+            "level": 5,
+            "shiny": false,
+            "at": 0,
+            "items": {},
+            "itemNames": {}
+          }
+        }
+      }
+    ],
+    "namingQueue": [],
+    "ended": {
+      "at": 0,
+      "outcome": "victory",
+      "reason": "Bob a battu le Maître de la Ligue.",
+      "summary": [
+        {
+          "captures": 1,
+          "deaths": 0,
+          "wildKills": 0,
+          "shinies": 0,
+          "encounters": 0,
+          "trainersBeaten": 1,
+          "badges": 8,
+          "fouls": 0,
+          "itemsBattle": {},
+          "itemsField": {},
+          "bought": {},
+          "userId": "alice",
+          "name": "Alice",
+          "status": "champion",
+          "alive": 1
+        },
+        {
+          "captures": 1,
+          "deaths": 0,
+          "wildKills": 0,
+          "shinies": 0,
+          "encounters": 0,
+          "trainersBeaten": 0,
+          "badges": 0,
+          "fouls": 0,
+          "itemsBattle": {},
+          "itemsField": {},
+          "bought": {},
+          "userId": "bob",
+          "name": "Bob",
+          "status": "champion",
+          "alive": 1
+        }
+      ]
+    },
+    "logSeq": 0,
+    "refundSeq": 0,
+    "trades": []
+  }
+Vue en direct [alice] {}
+Vue en direct [bob] {}

@@ -272,6 +272,7 @@ src/slt/
     GbPresence, Gen3Presence, Gen5Presence   joueurs visibles en jeu (Gen5Sprites : sprites lus dans la ROM)
     track/              lecteurs mémoire (GbReader, Gen3Reader, NdsReader), TrackerEngine
 web/                    interface (HTML / CSS / JS modules, sans framework)
+tests/                  non-régression de l'arbitre (golden), simulateur de combat
 build.ps1               compilation + dist\CableClub\CableClub.exe (jpackage)
 ```
 
@@ -287,6 +288,21 @@ Prérequis : JDK 21 et git.
 .\run-dev.ps1 -Data data2 -Port 47341   # 2e joueur sur le même PC (tests)
 .\run-dev.ps1 -Server    # serveur seul
 ```
+
+## Tests
+
+```powershell
+.\tests\golden.ps1           # non-régression de l'arbitre (server\Room.java)
+.\tests\golden.ps1 -Update   # réécrit les références : seulement pour un changement de comportement décidé
+node tests\battleteam.test.mjs   # équipes des combats dans le simulateur
+```
+
+`tests\golden\*.json` sont des scénarios (joueurs, règles, puis événements des
+jeux tels que le suivi les envoie) ; le harnais `tests\java\slt\server\RoomReplay.java`
+les rejoue sur une salle et compare ce qu'elle produit (journal, messages aux
+joueurs, directives de chaque jeu, état final) à la référence `.txt` du même nom.
+Une différence est une régression, sauf si le changement de comportement était
+voulu : la référence est alors réécrite avec `-Update` et relue dans le diff.
 
 ## Publier une version
 

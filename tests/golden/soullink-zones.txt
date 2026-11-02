@@ -1,0 +1,561 @@
+# Soul Link à deux : zone annulée, objets rendus, doublon, chromatique, légendaire, Pokémon offert
+mode soullink, Pokémon Rubis, génération 3, joueurs alice (chef), bob
+règles {"shinyClause":true,"dupesClause":true,"giftPokemon":false,"legendaries":true,"naming":"free","pauseForNaming":true,"deathBox":true,"refundCancelled":true,"wipeEndsRun":true,"endWhen":"all","autoEnd":true,"startWithBalls":true,"saveStates":false}
+
+1. alice (chef) : launch
+  journal launch : L'aventure commence ! 2 joueur(s) sur Pokémon Rubis.
+  journal info : Le Soul Link commencera vraiment quand chaque joueur aura une Poké Ball : d'ici là, un Pokémon K.O. ne meurt pas.
+  directives [alice] room="salle", doomed=[], release=[], nicknames={}, pause=null, refunds=[], deathBox=true, shinyNum=0, shinyRate=0, park=[], parkWhy={}, levelCap=-1, setMode=false, ban=[], noHeld=false, noFly=false, saveStates=false, state="running", open=true, trade=null
+  directives [bob] room="salle", doomed=[], release=[], nicknames={}, pause=null, refunds=[], deathBox=true, shinyNum=0, shinyRate=0, park=[], parkWhy={}, levelCap=-1, setMode=false, ban=[], noHeld=false, noFly=false, saveStates=false, state="running", open=true, trade=null
+
+2. alice : balls, capture — Poké Balls et Pokémon de départ
+  journal balls [alice] : Alice a ses premières Poké Balls
+  journal capture [alice] : Alice capture ARCKO (Arcko) N.5 (Départ)  {"zone":"Départ","species":252,"speciesName":"Arcko","level":5,"shiny":false}
+
+3. bob : balls, capture — nommage libre : le lien se forme tout de suite
+  journal balls [bob] : Bob a ses premières Poké Balls
+  journal start : Tout le monde a des Poké Balls : le Soul Link commence vraiment. Désormais, un Pokémon K.O. est mort.
+  journal capture [bob] : Bob capture GOBOU (Gobou) N.5 (Départ)  {"zone":"Départ","species":258,"speciesName":"Gobou","level":5,"shiny":false}
+  journal link : Lien formé : Départ
+  avis [alice] warn : Le Soul Link commence : désormais, un Pokémon K.O. est mort, avec son âme liée.
+  avis [bob] warn : Le Soul Link commence : désormais, un Pokémon K.O. est mort, avec son âme liée.
+
+4. alice : location, encounter start, encounter end — Alice met K.O. le premier Pokémon de la Route 102 : zone annulée
+  journal zone [alice] : Alice entre dans Route 102  {"zone":"Route 102"}
+  journal encounter [alice] : Alice rencontre Chenipotte N.3 (Route 102)  {"species":265,"speciesName":"Chenipotte","level":3,"zone":"Route 102","shiny":false,"kind":"zone"}
+  journal kill [alice] : Alice met K.O. Chenipotte, premier Pokémon de Route 102 : zone annulée  {"zone":"Route 102"}
+  journal cancel : Route 102 est annulée : les Pokémon capturés là sont relâchés.  {"zone":"Route 102"}
+  avis [alice] info : Première rencontre de Route 102 : elle compte pour le Soul Link.
+
+5. bob : location, encounter start, items, capture — Bob capture quand même sur la Route 102 : relâché, sa Poké Ball rendue
+  journal zone [bob] : Bob entre dans Route 102 — zone annulée  {"zone":"Route 102"}
+  journal encounter [bob] : Bob rencontre Nénupiot N.4 (Route 102)  {"species":270,"speciesName":"Nénupiot","level":4,"zone":"Route 102","shiny":false,"kind":"cancelled"}
+  journal item [bob] : Bob utilise 1× Poké Ball en combat  {"item":"Poké Ball","qty":1,"battle":true}
+  journal release [bob] : NENUPIOT (Nénupiot) de Bob est relâché (zone annulée)
+  journal refund [bob] : Bob récupère 1× Poké Ball
+  avis [bob] warn : Route 102 est annulée pour la salle. Capture interdite.
+  avis [bob] warn : Capture non autorisée (zone annulée) : ce Pokémon sera retiré de l'équipe.
+  avis [bob] info : Objets rendus : 1× Poké Ball
+  directives [bob] doomed=["2002"], release=["2002"], refunds=[{"id":"1","item":4,"name":"Poké Ball","qty":1}]
+
+6. bob : ack — le jeu de Bob a rendu la Poké Ball
+  directives [bob] refunds=[]
+
+7. alice : location, encounter start, encounter end, encounter start, capture — fuite (la zone reste ouverte), puis capture sur la Route 103
+  journal zone [alice] : Alice entre dans Route 103  {"zone":"Route 103"}
+  journal encounter [alice] : Alice rencontre Zigzaton N.4 (Route 103)  {"species":263,"speciesName":"Zigzaton","level":4,"zone":"Route 103","shiny":false,"kind":"zone"}
+  journal flee [alice] : Alice quitte le combat contre Zigzaton  {"zone":"Route 103"}
+  journal encounter [alice] : Alice rencontre Goélise N.5 (Route 103)  {"species":278,"speciesName":"Goélise","level":5,"zone":"Route 103","shiny":false,"kind":"zone"}
+  journal capture [alice] : Alice capture GOELISE (Goélise) N.5 (Route 103)  {"zone":"Route 103","species":278,"speciesName":"Goélise","level":5,"shiny":false}
+  avis [alice] info : Première rencontre de Route 103 : elle compte pour le Soul Link.
+  avis [alice] info : Première rencontre de Route 103 : elle compte pour le Soul Link.
+
+8. bob : location, encounter start, encounter end, encounter start, capture — doublon de la lignée d'Arcko (à Alice), puis la même espèce qu'Alice dans la même zone
+  journal zone [bob] : Bob entre dans Route 103 — déjà capturée par un partenaire  {"zone":"Route 103"}
+  journal encounter [bob] : Bob rencontre Massko N.6 (Route 103)  {"species":253,"speciesName":"Massko","level":6,"zone":"Route 103","shiny":false,"kind":"dupe"}
+  journal flee [bob] : Bob quitte le combat contre Massko  {"zone":"Route 103"}
+  journal encounter [bob] : Bob rencontre Goélise N.6 (Route 103)  {"species":278,"speciesName":"Goélise","level":6,"zone":"Route 103","shiny":false,"kind":"zone"}
+  journal capture [bob] : Bob capture GOELISE (Goélise) N.6 (Route 103)  {"zone":"Route 103","species":278,"speciesName":"Goélise","level":6,"shiny":false}
+  journal link : Lien formé : Route 103
+  avis [bob] warn : Doublon : cette lignée d'évolution est déjà dans la salle. Rencontre ignorée, fuyez ou mettez-le K.O.
+  avis [bob] info : Première rencontre de Route 103 : elle compte pour le Soul Link.
+
+9. alice : location, encounter start, capture, encounter start, capture — chromatique : capture libre sans lien, puis un doublon capturé quand même
+  journal zone [alice] : Alice entre dans Route 104  {"zone":"Route 104"}
+  journal encounter [alice] : Alice rencontre Nirondelle N.6 ✨ (Route 104)  {"species":276,"speciesName":"Nirondelle","level":6,"zone":"Route 104","shiny":true,"kind":"shiny"}
+  journal capture [alice] : Alice capture NIRONDELLE (Nirondelle) N.6 — chromatique, sans lien  {"species":276,"speciesName":"Nirondelle","level":6,"shiny":true,"bonus":true}
+  journal encounter [alice] : Alice rencontre Bekipan N.22 (Route 104)  {"species":279,"speciesName":"Bekipan","level":22,"zone":"Route 104","shiny":false,"kind":"dupe"}
+  journal release [alice] : BEKIPAN (Bekipan) de Alice est relâché (doublon)
+  avis [alice] ok : Chromatique ! Capture libre (clause chromatique), sans lien.
+  avis [alice] warn : Doublon : cette lignée d'évolution est déjà dans la salle. Rencontre ignorée, fuyez ou mettez-le K.O.
+  avis [alice] warn : Capture non autorisée (doublon) : ce Pokémon sera retiré de l'équipe.
+  directives [alice] doomed=["1006"], release=["1006"]
+
+10. alice (chef) : rules — légendaires interdits (la règle des Nuzlocke n'existe pas ici)
+  journal rules [alice] : Alice modifie les règles : legendaries
+
+11. alice : encounter start, capture — légendaire capturé malgré la règle
+  journal encounter [alice] : Alice rencontre Latias N.40 (Route 104)  {"species":380,"speciesName":"Latias","level":40,"zone":"Route 104","shiny":false,"kind":"legendary"}
+  journal release [alice] : LATIAS (Latias) de Alice est relâché (légendaire)
+  avis [alice] warn : Légendaire interdit par les règles : ne le capturez pas.
+  avis [alice] warn : Capture non autorisée (légendaire) : ce Pokémon sera retiré de l'équipe.
+  directives [alice] doomed=["1006","1007"], release=["1006","1007"]
+
+12. alice : capture — Pokémon offert interdit, puis autorisé (lien sur sa zone), puis déjà dans la sauvegarde
+  journal release [alice] : TARSAL (Tarsal) de Alice est relâché (Pokémon offert ou échangé)
+  avis [alice] warn : Capture non autorisée (Pokémon offert ou échangé) : ce Pokémon sera retiré de l'équipe.
+  directives [alice] doomed=["1006","1007","1008"], release=["1006","1007","1008"]
+
+13. alice (chef) : rules
+  journal rules [alice] : Alice modifie les règles : giftPokemon
+
+14. alice : capture, capture, capture
+  journal capture [alice] : Alice capture BALIGNON (Balignon) N.10 (Route 104)  {"zone":"Route 104","species":285,"speciesName":"Balignon","level":10,"shiny":false}
+  journal capture [alice] : Alice capture ZIGZATON (Zigzaton) N.2 — Pokémon offert, sans lien  {"species":263,"speciesName":"Zigzaton","level":2,"shiny":false,"bonus":true}
+  journal existing [alice] : Alice a déjà MAGICARPE (Magicarpe)
+
+15. alice : location, encounter start, capture — retour sur la Route 103 : zone déjà utilisée
+  journal zone [alice] : Alice entre dans Route 103 — capture déjà faite ici  {"zone":"Route 103"}
+  journal encounter [alice] : Alice rencontre Medhyèna N.5 (Route 103)  {"species":261,"speciesName":"Medhyèna","level":5,"zone":"Route 103","shiny":false,"kind":"used"}
+  journal release [alice] : MEDHYENA (Medhyèna) de Alice est relâché (zone déjà utilisée)
+  avis [alice] warn : Route 103 : vous y avez déjà capturé ou mis K.O. un Pokémon. Capture interdite.
+  avis [alice] warn : Capture non autorisée (zone déjà utilisée) : ce Pokémon sera retiré de l'équipe.
+  directives [alice] doomed=["1006","1007","1008","1012"], release=["1006","1007","1008","1012"]
+
+16. bob : capture, faint — le Pokémon déjà dans la sauvegarde ne meurt pas, le chromatique sans lien meurt seul
+  journal existing [bob] : Bob a déjà MAGICARPE (Magicarpe)
+
+17. alice : faint
+  journal death [alice] : ☠ NIRONDELLE (Nirondelle) de Alice est mort (Route 104)
+  directives [alice] doomed=["1005","1006","1007","1008","1012"]
+
+État final
+  {
+    "version": 1,
+    "id": "salle",
+    "code": "CODE01",
+    "name": "Soul Link à deux : zone annulée, objets rendus, doublon, chromatique, légendaire, Pokémon offert",
+    "mode": "soullink",
+    "visibility": "private",
+    "leaderId": "alice",
+    "createdAt": 0,
+    "launchedAt": 0,
+    "game": {"gameId":"rubis-fr","name":"Pokémon Rubis","gen":3},
+    "maxPlayers": 2,
+    "state": "running",
+    "adventureOpen": true,
+    "linkStarted": true,
+    "rules": {
+      "shinyClause": true,
+      "dupesClause": true,
+      "giftPokemon": true,
+      "legendaries": false,
+      "naming": "free",
+      "pauseForNaming": true,
+      "deathBox": true,
+      "refundCancelled": true,
+      "wipeEndsRun": true,
+      "endWhen": "all",
+      "autoEnd": true,
+      "startWithBalls": true,
+      "saveStates": false
+    },
+    "rando": {},
+    "members": [
+      {
+        "userId": "alice",
+        "name": "Alice",
+        "joinedAt": 0,
+        "slot": 1,
+        "ready": true,
+        "rom": {"status":"ready"},
+        "families": {"253":252,"254":252,"256":255,"257":255,"259":258,"260":258,"262":261,"264":263,"266":265,"267":265,"268":265,"269":265,"271":270,"272":270,"274":273,"275":273,"277":276,"279":278},
+        "status": "playing",
+        "mons": {
+          "1001": {
+            "uid": "1001",
+            "species": 252,
+            "speciesName": "Arcko",
+            "level": 5,
+            "nickname": "ARCKO",
+            "zoneKey": "depart",
+            "zone": "Départ",
+            "origin": "new",
+            "shiny": false,
+            "bonus": false,
+            "status": "alive",
+            "reason": null,
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          },
+          "1004": {
+            "uid": "1004",
+            "species": 278,
+            "speciesName": "Goélise",
+            "level": 5,
+            "nickname": "GOELISE",
+            "zoneKey": "route 103",
+            "zone": "Route 103",
+            "origin": "wild",
+            "shiny": false,
+            "bonus": false,
+            "status": "alive",
+            "reason": null,
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          },
+          "1005": {
+            "uid": "1005",
+            "species": 276,
+            "speciesName": "Nirondelle",
+            "level": 6,
+            "nickname": "NIRONDELLE",
+            "zoneKey": null,
+            "zone": "Route 104",
+            "origin": "wild",
+            "shiny": true,
+            "bonus": true,
+            "status": "dead",
+            "reason": "K.O.",
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          },
+          "1006": {
+            "uid": "1006",
+            "species": 279,
+            "speciesName": "Bekipan",
+            "level": 22,
+            "nickname": "BEKIPAN",
+            "zoneKey": null,
+            "zone": "Route 104",
+            "origin": "wild",
+            "shiny": false,
+            "bonus": false,
+            "status": "released",
+            "reason": "interdit : doublon",
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          },
+          "1007": {
+            "uid": "1007",
+            "species": 380,
+            "speciesName": "Latias",
+            "level": 40,
+            "nickname": "LATIAS",
+            "zoneKey": null,
+            "zone": "Route 104",
+            "origin": "wild",
+            "shiny": false,
+            "bonus": false,
+            "status": "released",
+            "reason": "interdit : légendaire",
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          },
+          "1008": {
+            "uid": "1008",
+            "species": 280,
+            "speciesName": "Tarsal",
+            "level": 5,
+            "nickname": "TARSAL",
+            "zoneKey": null,
+            "zone": "Route 104",
+            "origin": "new",
+            "shiny": false,
+            "bonus": false,
+            "status": "released",
+            "reason": "interdit : Pokémon offert ou échangé",
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          },
+          "1009": {
+            "uid": "1009",
+            "species": 285,
+            "speciesName": "Balignon",
+            "level": 10,
+            "nickname": "BALIGNON",
+            "zoneKey": "route 104",
+            "zone": "Route 104",
+            "origin": "trade",
+            "shiny": false,
+            "bonus": false,
+            "status": "alive",
+            "reason": null,
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          },
+          "1010": {
+            "uid": "1010",
+            "species": 263,
+            "speciesName": "Zigzaton",
+            "level": 2,
+            "nickname": "ZIGZATON",
+            "zoneKey": null,
+            "zone": "Route 102",
+            "origin": "trade",
+            "shiny": false,
+            "bonus": true,
+            "status": "alive",
+            "reason": null,
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          },
+          "1011": {
+            "uid": "1011",
+            "species": 129,
+            "speciesName": "Magicarpe",
+            "level": 5,
+            "nickname": "MAGICARPE",
+            "zoneKey": null,
+            "zone": "Lieu inconnu",
+            "origin": "existing",
+            "shiny": false,
+            "bonus": false,
+            "status": "alive",
+            "reason": null,
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          },
+          "1012": {
+            "uid": "1012",
+            "species": 261,
+            "speciesName": "Medhyèna",
+            "level": 5,
+            "nickname": "MEDHYENA",
+            "zoneKey": null,
+            "zone": "Route 103",
+            "origin": "wild",
+            "shiny": false,
+            "bonus": false,
+            "status": "released",
+            "reason": "interdit : zone déjà utilisée",
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          }
+        },
+        "refunds": [],
+        "stats": {
+          "captures": 5,
+          "deaths": 1,
+          "wildKills": 1,
+          "shinies": 1,
+          "encounters": 7,
+          "trainersBeaten": 0,
+          "badges": 0,
+          "fouls": 0,
+          "itemsBattle": {},
+          "itemsField": {},
+          "bought": {}
+        },
+        "lastZone": "Route 103",
+        "hasBalls": true,
+        "soloUid": null,
+        "capGyms": null,
+        "capLeague": 0,
+        "hmNext": false
+      },
+      {
+        "userId": "bob",
+        "name": "Bob",
+        "joinedAt": 0,
+        "slot": 2,
+        "ready": true,
+        "rom": {"status":"ready"},
+        "families": {"253":252,"254":252,"256":255,"257":255,"259":258,"260":258,"262":261,"264":263,"266":265,"267":265,"268":265,"269":265,"271":270,"272":270,"274":273,"275":273,"277":276,"279":278},
+        "status": "playing",
+        "mons": {
+          "2001": {
+            "uid": "2001",
+            "species": 258,
+            "speciesName": "Gobou",
+            "level": 5,
+            "nickname": "GOBOU",
+            "zoneKey": "depart",
+            "zone": "Départ",
+            "origin": "new",
+            "shiny": false,
+            "bonus": false,
+            "status": "alive",
+            "reason": null,
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          },
+          "2002": {
+            "uid": "2002",
+            "species": 270,
+            "speciesName": "Nénupiot",
+            "level": 4,
+            "nickname": "NENUPIOT",
+            "zoneKey": null,
+            "zone": "Route 102",
+            "origin": "wild",
+            "shiny": false,
+            "bonus": false,
+            "status": "released",
+            "reason": "interdit : zone annulée",
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          },
+          "2004": {
+            "uid": "2004",
+            "species": 278,
+            "speciesName": "Goélise",
+            "level": 6,
+            "nickname": "GOELISE",
+            "zoneKey": "route 103",
+            "zone": "Route 103",
+            "origin": "wild",
+            "shiny": false,
+            "bonus": false,
+            "status": "alive",
+            "reason": null,
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          },
+          "2005": {
+            "uid": "2005",
+            "species": 129,
+            "speciesName": "Magicarpe",
+            "level": 5,
+            "nickname": "MAGICARPE",
+            "zoneKey": null,
+            "zone": "Lieu inconnu",
+            "origin": "existing",
+            "shiny": false,
+            "bonus": false,
+            "status": "alive",
+            "reason": null,
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          }
+        },
+        "refunds": [],
+        "stats": {
+          "captures": 2,
+          "deaths": 0,
+          "wildKills": 0,
+          "shinies": 0,
+          "encounters": 3,
+          "trainersBeaten": 0,
+          "badges": 0,
+          "fouls": 0,
+          "itemsBattle": {"Poké Ball":1},
+          "itemsField": {},
+          "bought": {}
+        },
+        "lastZone": "Route 103",
+        "hasBalls": true,
+        "soloUid": null,
+        "capGyms": null,
+        "capLeague": 0,
+        "hmNext": false
+      }
+    ],
+    "invites": [],
+    "history": [],
+    "zones": [
+      {
+        "key": "depart",
+        "name": "Départ",
+        "status": "linked",
+        "nickname": null,
+        "firstAt": 0,
+        "entries": {
+          "alice": {
+            "result": "caught",
+            "uid": "1001",
+            "species": 252,
+            "speciesName": "Arcko",
+            "level": 5,
+            "shiny": false,
+            "at": 0,
+            "items": {},
+            "itemNames": {}
+          },
+          "bob": {
+            "result": "caught",
+            "uid": "2001",
+            "species": 258,
+            "speciesName": "Gobou",
+            "level": 5,
+            "shiny": false,
+            "at": 0,
+            "items": {},
+            "itemNames": {}
+          }
+        }
+      },
+      {
+        "key": "route 102",
+        "name": "Route 102",
+        "status": "cancelled",
+        "nickname": null,
+        "firstAt": 0,
+        "entries": {
+          "alice": {
+            "result": "killed",
+            "uid": "1002",
+            "species": 265,
+            "speciesName": "Chenipotte",
+            "level": 3,
+            "shiny": false,
+            "at": 0,
+            "items": {},
+            "itemNames": {}
+          }
+        }
+      },
+      {
+        "key": "route 103",
+        "name": "Route 103",
+        "status": "linked",
+        "nickname": null,
+        "firstAt": 0,
+        "entries": {
+          "alice": {
+            "result": "caught",
+            "uid": "1004",
+            "species": 278,
+            "speciesName": "Goélise",
+            "level": 5,
+            "shiny": false,
+            "at": 0,
+            "items": {},
+            "itemNames": {}
+          },
+          "bob": {
+            "result": "caught",
+            "uid": "2004",
+            "species": 278,
+            "speciesName": "Goélise",
+            "level": 6,
+            "shiny": false,
+            "at": 0,
+            "items": {},
+            "itemNames": {}
+          }
+        }
+      },
+      {
+        "key": "route 104",
+        "name": "Route 104",
+        "status": "waiting",
+        "nickname": null,
+        "firstAt": 0,
+        "entries": {
+          "alice": {
+            "result": "caught",
+            "uid": "1009",
+            "species": 285,
+            "speciesName": "Balignon",
+            "level": 10,
+            "shiny": false,
+            "at": 0,
+            "items": {},
+            "itemNames": {}
+          }
+        }
+      }
+    ],
+    "namingQueue": [],
+    "ended": null,
+    "logSeq": 0,
+    "refundSeq": 1,
+    "trades": []
+  }
+Vue en direct [alice] {"zone":"Route 103"}
+Vue en direct [bob] {"zone":"Route 103"}

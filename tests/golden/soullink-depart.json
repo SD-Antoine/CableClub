@@ -1,0 +1,60 @@
+{
+  "title": "Soul Link à deux : départ, Poké Balls, nommage, mort partagée",
+  "mode": "soullink",
+  "game": {"id": "rubis-fr", "name": "Pokémon Rubis", "gen": 3},
+  "players": [
+    {"id": "alice", "name": "Alice", "families": {"253": 252, "254": 252, "256": 255, "257": 255, "259": 258, "260": 258, "262": 261, "264": 263, "266": 265, "267": 265, "268": 265, "269": 265, "271": 270, "272": 270, "274": 273, "275": 273, "277": 276, "279": 278}},
+    {"id": "bob", "name": "Bob", "families": {"253": 252, "254": 252, "256": 255, "257": 255, "259": 258, "260": 258, "262": 261, "264": 263, "266": 265, "267": 265, "268": 265, "269": 265, "271": 270, "272": 270, "274": 273, "275": 273, "277": 276, "279": 278}}
+  ],
+  "steps": [
+    {"by": "alice", "note": "avant le lancement : ignoré", "events": [
+      {"type": "location", "map": 1, "zone": "Bourg-en-Vol"}]},
+    {"do": "launch"},
+    {"by": "alice", "note": "Pokémon de départ d'Alice", "events": [
+      {"type": "location", "map": 16, "zone": "Route 101"},
+      {"type": "capture", "uid": "1001", "species": 258, "speciesName": "Gobou", "level": 5, "nickname": "GOBOU", "zone": "Route 101", "origin": "new", "inParty": true, "fainted": false, "shiny": false},
+      {"type": "party", "uids": ["1001"]}]},
+    {"by": "bob", "note": "Pokémon de départ de Bob : le lien du départ attend son nom", "events": [
+      {"type": "capture", "uid": "2001", "species": 255, "speciesName": "Poussifeu", "level": 5, "nickname": "POUSSIFEU", "zone": "Route 101", "origin": "new", "inParty": true, "fainted": false, "shiny": false},
+      {"type": "party", "uids": ["2001"]}]},
+    {"do": "name", "zone": "depart", "nickname": "Braises et Flots", "note": "surnom trop long"},
+    {"do": "name", "zone": "depart", "nickname": "Duo"},
+    {"by": "alice", "note": "Alice a des Poké Balls, pas encore Bob", "events": [
+      {"type": "balls", "has": true}]},
+    {"by": "bob", "note": "K.O. avant le vrai début : sans conséquence", "events": [
+      {"type": "battle", "phase": "start", "kind": "trainer", "size": 1},
+      {"type": "faint", "uid": "2001", "species": 255, "speciesName": "Poussifeu", "level": 5, "nickname": "Duo", "zone": "Route 101", "doomed": false},
+      {"type": "battle", "phase": "end", "kind": "trainer", "outcome": "lost"},
+      {"type": "whiteout"}]},
+    {"by": "alice", "note": "première rencontre d'Alice sur la Route 101", "events": [
+      {"type": "encounter", "phase": "start", "uid": "1002", "species": 263, "speciesName": "Zigzaton", "level": 3, "zone": "Route 101", "shiny": false, "balls": 5},
+      {"type": "items", "changes": [{"item": 4, "name": "Poké Ball", "delta": -1}], "money": 0, "battle": true, "fight": true},
+      {"type": "capture", "uid": "1002", "species": 263, "speciesName": "Zigzaton", "level": 3, "nickname": "ZIGZATON", "zone": "Route 101", "origin": "wild", "inParty": true, "fainted": false, "shiny": false},
+      {"type": "party", "uids": ["1001", "1002"]}]},
+    {"by": "bob", "note": "Bob reçoit ses Poké Balls : le Soul Link commence", "events": [
+      {"type": "items", "changes": [{"item": 4, "name": "Poké Ball", "delta": 5}], "money": 0, "battle": false, "fight": false},
+      {"type": "balls", "has": true}]},
+    {"by": "bob", "note": "Bob capture sur la Route 101 : lien complet, pause pour le nom", "events": [
+      {"type": "location", "map": 16, "zone": "Route 101"},
+      {"type": "encounter", "phase": "start", "uid": "2002", "species": 261, "speciesName": "Medhyèna", "level": 2, "zone": "Route 101", "shiny": false, "balls": 5},
+      {"type": "items", "changes": [{"item": 4, "name": "Poké Ball", "delta": -1}], "money": 0, "battle": true, "fight": true},
+      {"type": "capture", "uid": "2002", "species": 261, "speciesName": "Medhyèna", "level": 2, "nickname": "MEDHYENA", "zone": "Route 101", "origin": "wild", "inParty": true, "fainted": false, "shiny": false}]},
+    {"do": "adventure", "open": false, "note": "le chef ferme l'aventure"},
+    {"do": "name", "zone": "route 101", "nickname": "Croc"},
+    {"do": "adventure", "open": true},
+    {"by": "alice", "note": "évolution", "events": [
+      {"type": "update", "uid": "1002", "species": 264, "speciesName": "Linéon", "level": 20, "nickname": "Croc", "evolved": true}]},
+    {"by": "alice", "note": "Croc d'Alice tombe : celui de Bob meurt avec lui", "events": [
+      {"type": "battle", "phase": "start", "kind": "trainer", "size": 2},
+      {"type": "faint", "uid": "1002", "species": 264, "speciesName": "Linéon", "level": 20, "nickname": "Croc", "zone": "Route 104", "doomed": false},
+      {"type": "battle", "phase": "end", "kind": "trainer", "outcome": "won"}]},
+    {"by": "bob", "note": "le K.O. d'un Pokémon déjà mort ne change rien", "events": [
+      {"type": "faint", "uid": "2002", "species": 261, "speciesName": "Medhyèna", "level": 12, "nickname": "Croc", "zone": "Route 104", "doomed": true}]},
+    {"by": "alice", "note": "badge (le même deux fois)", "events": [
+      {"type": "badges", "count": 1},
+      {"type": "badges", "count": 1}]},
+    {"do": "end", "outcome": "abandon", "note": "le chef arrête l'aventure"},
+    {"by": "bob", "note": "après la fin : ignoré", "events": [
+      {"type": "location", "map": 17, "zone": "Route 102"}]}
+  ]
+}

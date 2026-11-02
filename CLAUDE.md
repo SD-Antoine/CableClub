@@ -68,8 +68,13 @@ ROM de salle : `client/RoomRoms.java` la génère **localement** depuis la copie
 .\build-android.ps1 -Debug   # APK de test (signé avec la clé de débogage)
 .\build-android.ps1          # APK des releases GitHub (clé de signature hors dépôt)
 .\build-android.ps1 -Play    # bundle Play Store
-node tests/battleteam.test.mjs   # seul test automatisé pour l'instant
+.\tests\golden.ps1           # non-régression de l'arbitre : scénarios tests\golden\*.json rejoués sur Room
+.\tests\golden.ps1 -Update   # réécrit les références .txt (seulement pour un changement de comportement décidé)
+node tests/battleteam.test.mjs   # équipes des combats dans le simulateur
 ```
+
+Toute modification de `src/slt/server/Room.java` (ou de ce qu'il appelle) passe par `tests\golden.ps1`.
+Une référence réécrite avec `-Update` se relit dans le diff et se justifie dans le message de commit.
 
 Publier une version : numéro dans `Version.java`, section `## x.y.z` dans `CHANGELOG.md`, commit,
 `git tag vx.y.z`, `git push --follow-tags` (`.github/workflows/release.yml` publie la release).

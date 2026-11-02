@@ -1,0 +1,318 @@
+# Shinylocke : seuls les chromatiques, un par zone, doublons, Pokémon offerts, légendaire
+mode shinylocke, Pokémon Cristal, génération 2, joueurs alice (chef)
+règles {"dupesClause":true,"giftPokemon":false,"legendaries":true,"naming":"free","pauseForNaming":false,"deathBox":true,"refundCancelled":false,"wipeEndsRun":true,"endWhen":"first","autoEnd":true,"startWithBalls":true,"saveStates":false,"honorNoHealItems":false,"honorNoHeldItems":false,"honorNoMultiExp":false,"honorNoMasterBall":false,"honorNoEvolution":false,"honorNoFly":false,"honorNoRepel":false,"honorSetMode":false,"honorCsException":false,"honorNotepad":false,"hardcore":false,"hardcoreItems":"report","oneShinyPerZone":true}
+randomisation {"shinyNum":64}
+
+1. alice (chef) : launch — le taux de chromatiques de la salle est dans les directives
+  journal launch : L'aventure commence ! 1 joueur(s) sur Pokémon Cristal.
+  journal info : Le Shinylocke de chaque joueur commence à sa première Poké Ball : d'ici là, un Pokémon K.O. ne meurt pas.
+  directives [alice] room="salle", doomed=[], release=[], nicknames={}, pause=null, refunds=[], deathBox=true, shinyNum=64, shinyRate=128, park=[], parkWhy={}, levelCap=-1, setMode=false, ban=[], noHeld=false, noFly=false, saveStates=false, state="running", open=true, trade=null
+
+2. alice : capture, location, encounter start, encounter end — Pokémon de départ, rencontre sans Poké Ball
+  journal capture [alice] : Alice capture HERICENDRE (Héricendre) N.5 — Pokémon de départ  {"species":155,"speciesName":"Héricendre","level":5,"shiny":false,"bonus":true}
+  journal zone [alice] : Alice entre dans Route 29  {"zone":"Route 29"}
+  journal encounter [alice] : Alice rencontre Fouinette N.2 (Route 29)  {"species":161,"speciesName":"Fouinette","level":2,"zone":"Route 29","shiny":false,"kind":"noballs"}
+  journal flee [alice] : Alice quitte le combat contre Fouinette (Route 29)  {"zone":"Route 29"}
+  avis [alice] info : Pas encore de Poké Ball : cette rencontre ne compte pas pour le Shinylocke.
+
+3. alice : balls, encounter start, encounter end, encounter start, capture — pas chromatique : mis K.O., puis capturé quand même
+  journal balls [alice] : Alice a ses premières Poké Balls
+  journal encounter [alice] : Alice rencontre Roucool N.2 (Route 29)  {"species":16,"speciesName":"Roucool","level":2,"zone":"Route 29","shiny":false,"kind":"notshiny"}
+  journal kill [alice] : Alice met K.O. Roucool (Route 29)  {"zone":"Route 29"}
+  journal encounter [alice] : Alice rencontre Fouinette N.3 (Route 29)  {"species":161,"speciesName":"Fouinette","level":3,"zone":"Route 29","shiny":false,"kind":"notshiny"}
+  journal release [alice] : FOUINETTE (Fouinette) de Alice est relâché (pas chromatique)
+  avis [alice] warn : Capture non autorisée (pas chromatique) : ce Pokémon sera retiré de l'équipe.
+  directives [alice] doomed=["1004"], release=["1004"]
+
+4. alice : encounter start, capture, encounter start, capture — un chromatique : capture de la zone, puis un second dans la même zone
+  journal encounter [alice] : Alice rencontre Hoothoot N.3 ✨ (Route 29)  {"species":163,"speciesName":"Hoothoot","level":3,"zone":"Route 29","shiny":true,"kind":"zone"}
+  journal capture [alice] : Alice capture HOOTHOOT (Hoothoot) N.3 (Route 29)  {"zone":"Route 29","species":163,"speciesName":"Hoothoot","level":3,"shiny":true}
+  journal encounter [alice] : Alice rencontre Rattata N.3 ✨ (Route 29)  {"species":19,"speciesName":"Rattata","level":3,"zone":"Route 29","shiny":true,"kind":"used"}
+  journal release [alice] : RATTATA (Rattata) de Alice est relâché (zone déjà utilisée)
+  avis [alice] ok : Chromatique ! Vous pouvez le capturer.
+  avis [alice] warn : Route 29 : vous y avez déjà capturé un chromatique. Capture interdite.
+  avis [alice] warn : Capture non autorisée (zone déjà utilisée) : ce Pokémon sera retiré de l'équipe.
+  directives [alice] doomed=["1004","1006"], release=["1004","1006"]
+
+5. alice : location, location, location, encounter start, capture — retour sur la Route 29, puis un doublon chromatique sur la Route 30
+  journal zone [alice] : Alice entre dans Route 30  {"zone":"Route 30"}
+  journal zone [alice] : Alice entre dans Route 29 — chromatique déjà capturé ici  {"zone":"Route 29"}
+  journal zone [alice] : Alice entre dans Route 30  {"zone":"Route 30"}
+  journal encounter [alice] : Alice rencontre Noarfang N.9 ✨ (Route 30)  {"species":164,"speciesName":"Noarfang","level":9,"zone":"Route 30","shiny":true,"kind":"dupe"}
+  journal release [alice] : NOARFANG (Noarfang) de Alice est relâché (doublon)
+  avis [alice] warn : Doublon : vous avez déjà cette lignée d'évolution. Rencontre ignorée, fuyez ou mettez-le K.O.
+  avis [alice] warn : Capture non autorisée (doublon) : ce Pokémon sera retiré de l'équipe.
+  directives [alice] doomed=["1004","1006","1007"], release=["1004","1006","1007"]
+
+6. alice : capture, capture — Pokémon offerts : refusé s'il n'est pas chromatique, gardé sinon
+  journal release [alice] : TOGEPI (Togepi) de Alice est relâché (Pokémon offert non chromatique)
+  journal capture [alice] : Alice capture EVOLI (Évoli) N.20 — Pokémon offert chromatique  {"species":133,"speciesName":"Évoli","level":20,"shiny":true,"bonus":true}
+  avis [alice] warn : Capture non autorisée (Pokémon offert non chromatique) : ce Pokémon sera retiré de l'équipe.
+  directives [alice] doomed=["1004","1006","1007","1008"], release=["1004","1006","1007","1008"]
+
+7. alice (chef) : rules
+  journal rules [alice] : Alice modifie les règles : legendaries
+
+8. alice : location, encounter start, encounter end — légendaire chromatique interdit
+  journal zone [alice] : Alice entre dans Route 36  {"zone":"Route 36"}
+  journal encounter [alice] : Alice rencontre Raikou N.40 ✨ (Route 36)  {"species":243,"speciesName":"Raikou","level":40,"zone":"Route 36","shiny":true,"kind":"legendary"}
+  journal flee [alice] : Alice quitte le combat contre Raikou (Route 36)  {"zone":"Route 36"}
+  avis [alice] warn : Légendaire interdit par les règles : ne le capturez pas.
+
+9. alice : champion — victoire : le premier qui bat le Maître termine la salle
+  journal champion [alice] : 🏆 Alice bat le Maître de la Ligue !
+  journal end : Shinylocke réussi ! Alice a battu le Maître de la Ligue.  {"outcome":"victory"}
+  fin de l'aventure
+  directives [alice] pause={"reason":"ended","text":"Le Shinylocke est terminé."}, state="finished", open=false
+
+État final
+  {
+    "version": 1,
+    "id": "salle",
+    "code": "CODE01",
+    "name": "Shinylocke : seuls les chromatiques, un par zone, doublons, Pokémon offerts, légendaire",
+    "mode": "shinylocke",
+    "visibility": "private",
+    "leaderId": "alice",
+    "createdAt": 0,
+    "launchedAt": 0,
+    "game": {"gameId":"cristal-fr","name":"Pokémon Cristal","gen":2},
+    "maxPlayers": 1,
+    "state": "finished",
+    "adventureOpen": false,
+    "linkStarted": true,
+    "rules": {
+      "dupesClause": true,
+      "giftPokemon": false,
+      "legendaries": false,
+      "naming": "free",
+      "pauseForNaming": false,
+      "deathBox": true,
+      "refundCancelled": false,
+      "wipeEndsRun": true,
+      "endWhen": "first",
+      "autoEnd": true,
+      "startWithBalls": true,
+      "saveStates": false,
+      "honorNoHealItems": false,
+      "honorNoHeldItems": false,
+      "honorNoMultiExp": false,
+      "honorNoMasterBall": false,
+      "honorNoEvolution": false,
+      "honorNoFly": false,
+      "honorNoRepel": false,
+      "honorSetMode": false,
+      "honorCsException": false,
+      "honorNotepad": false,
+      "hardcore": false,
+      "hardcoreItems": "report",
+      "oneShinyPerZone": true
+    },
+    "rando": {"shinyNum":64},
+    "members": [
+      {
+        "userId": "alice",
+        "name": "Alice",
+        "joinedAt": 0,
+        "slot": 1,
+        "ready": true,
+        "rom": {"status":"ready"},
+        "families": {"17":16,"18":16,"20":19,"153":152,"154":152,"156":155,"157":155,"159":158,"160":158,"162":161,"164":163,"166":165,"168":167},
+        "status": "champion",
+        "mons": {
+          "1001": {
+            "uid": "1001",
+            "species": 155,
+            "speciesName": "Héricendre",
+            "level": 5,
+            "nickname": "HERICENDRE",
+            "zoneKey": null,
+            "zone": "Départ",
+            "origin": "new",
+            "shiny": false,
+            "bonus": true,
+            "status": "alive",
+            "reason": null,
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          },
+          "1004": {
+            "uid": "1004",
+            "species": 161,
+            "speciesName": "Fouinette",
+            "level": 3,
+            "nickname": "FOUINETTE",
+            "zoneKey": null,
+            "zone": "Route 29",
+            "origin": "wild",
+            "shiny": false,
+            "bonus": false,
+            "status": "released",
+            "reason": "interdit : pas chromatique",
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          },
+          "1005": {
+            "uid": "1005",
+            "species": 163,
+            "speciesName": "Hoothoot",
+            "level": 3,
+            "nickname": "HOOTHOOT",
+            "zoneKey": "route 29",
+            "zone": "Route 29",
+            "origin": "wild",
+            "shiny": true,
+            "bonus": false,
+            "status": "alive",
+            "reason": null,
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          },
+          "1006": {
+            "uid": "1006",
+            "species": 19,
+            "speciesName": "Rattata",
+            "level": 3,
+            "nickname": "RATTATA",
+            "zoneKey": null,
+            "zone": "Route 29",
+            "origin": "wild",
+            "shiny": true,
+            "bonus": false,
+            "status": "released",
+            "reason": "interdit : zone déjà utilisée",
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          },
+          "1007": {
+            "uid": "1007",
+            "species": 164,
+            "speciesName": "Noarfang",
+            "level": 9,
+            "nickname": "NOARFANG",
+            "zoneKey": null,
+            "zone": "Route 30",
+            "origin": "wild",
+            "shiny": true,
+            "bonus": false,
+            "status": "released",
+            "reason": "interdit : doublon",
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          },
+          "1008": {
+            "uid": "1008",
+            "species": 175,
+            "speciesName": "Togepi",
+            "level": 5,
+            "nickname": "TOGEPI",
+            "zoneKey": null,
+            "zone": "Ville Griotte",
+            "origin": "new",
+            "shiny": false,
+            "bonus": false,
+            "status": "released",
+            "reason": "interdit : Pokémon offert non chromatique",
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          },
+          "1009": {
+            "uid": "1009",
+            "species": 133,
+            "speciesName": "Évoli",
+            "level": 20,
+            "nickname": "EVOLI",
+            "zoneKey": null,
+            "zone": "Doublonville",
+            "origin": "new",
+            "shiny": true,
+            "bonus": true,
+            "status": "alive",
+            "reason": null,
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          }
+        },
+        "refunds": [],
+        "stats": {
+          "captures": 3,
+          "deaths": 0,
+          "wildKills": 1,
+          "shinies": 2,
+          "encounters": 7,
+          "trainersBeaten": 0,
+          "badges": 0,
+          "fouls": 0,
+          "itemsBattle": {},
+          "itemsField": {},
+          "bought": {}
+        },
+        "lastZone": "Route 36",
+        "hasBalls": true,
+        "soloUid": null,
+        "capGyms": null,
+        "capLeague": 0,
+        "hmNext": false
+      }
+    ],
+    "invites": [],
+    "history": [],
+    "zones": [
+      {
+        "key": "route 29",
+        "name": "Route 29",
+        "status": "open",
+        "nickname": null,
+        "firstAt": 0,
+        "entries": {
+          "alice": {
+            "result": "caught",
+            "uid": "1005",
+            "species": 163,
+            "speciesName": "Hoothoot",
+            "level": 3,
+            "shiny": true,
+            "at": 0,
+            "items": {},
+            "itemNames": {}
+          }
+        }
+      }
+    ],
+    "namingQueue": [],
+    "ended": {
+      "at": 0,
+      "outcome": "victory",
+      "reason": "Alice a battu le Maître de la Ligue.",
+      "summary": [
+        {
+          "captures": 3,
+          "deaths": 0,
+          "wildKills": 1,
+          "shinies": 2,
+          "encounters": 7,
+          "trainersBeaten": 0,
+          "badges": 0,
+          "fouls": 0,
+          "itemsBattle": {},
+          "itemsField": {},
+          "bought": {},
+          "userId": "alice",
+          "name": "Alice",
+          "status": "champion",
+          "alive": 3
+        }
+      ]
+    },
+    "logSeq": 0,
+    "refundSeq": 0,
+    "trades": []
+  }
+Vue en direct [alice] {"zone":"Route 36"}

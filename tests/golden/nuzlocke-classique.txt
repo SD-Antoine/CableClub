@@ -1,0 +1,313 @@
+# Nuzlocke avec les règles classiques : objets retirés, Vol oublié, équipe pleine, Pokémon de CS
+mode nuzlocke, Pokémon Émeraude, génération 3, joueurs alice (chef)
+règles {"shinyClause":false,"dupesClause":false,"giftPokemon":true,"legendaries":true,"naming":"free","pauseForNaming":false,"deathBox":true,"refundCancelled":false,"wipeEndsRun":true,"endWhen":"all","autoEnd":true,"startWithBalls":true,"saveStates":false,"honorNoHealItems":true,"honorNoHeldItems":true,"honorNoMultiExp":true,"honorNoMasterBall":true,"honorNoEvolution":true,"honorNoFly":true,"honorNoRepel":true,"honorSetMode":true,"honorCsException":true,"honorNotepad":true,"hardcore":false,"hardcoreItems":"report"}
+
+1. alice (chef) : launch — les directives portent les objets interdits, sans objet tenu, sans Vol, style Défini
+  journal launch : L'aventure commence ! 1 joueur(s) sur Pokémon Émeraude.
+  journal info : Le Nuzlocke de chaque joueur commence à sa première Poké Ball : d'ici là, un Pokémon K.O. ne meurt pas.
+  directives [alice] room="salle", doomed=[], release=[], nicknames={}, pause=null, refunds=[], deathBox=true, shinyNum=0, shinyRate=0, park=[], parkWhy={}, levelCap=-1, setMode=true, ban=["heal","repel","masterBall","expShare","fly"], noHeld=true, noFly=true, saveStates=false, state="running", open=true, trade=null
+
+2. alice : capture, balls, party
+  journal capture [alice] : Alice capture ARCKO (Arcko) N.5 — Pokémon de départ  {"species":252,"speciesName":"Arcko","level":5,"shiny":false,"bonus":true}
+  journal balls [alice] : Alice a ses premières Poké Balls
+
+3. alice : removed, held, held, forgot, removed — ce que le jeu d'Alice a appliqué
+  journal rule [alice] : 🚫 3× Potion retiré du sac de Alice (pas d'objets de soin)
+  journal rule [alice] : 🎒 Baie Oran de ARCKO (Arcko) (Alice) remis dans le sac (pas d'objet tenu)
+  journal rule [alice] : 🚫 Multi Exp retiré à ARCKO (Arcko) de Alice (pas de Multi Exp)
+  journal rule [alice] : 🚫 ARCKO (Arcko) de Alice oublie Vol (pas de Vol)
+  journal rule [alice] : 🚫 1× Master Ball retiré du sac de Alice (règles de la salle)
+
+4. alice : location, encounter start, capture — capture partie au PC (équipe pleine) : la chance de la zone est quand même utilisée
+  journal zone [alice] : Alice entre dans Route 101  {"zone":"Route 101"}
+  journal encounter [alice] : Alice rencontre Zigzaton N.3 (Route 101)  {"species":263,"speciesName":"Zigzaton","level":3,"zone":"Route 101","shiny":false,"kind":"zone"}
+  journal capture [alice] : Alice capture ZIGZATON (Zigzaton) N.3 (Route 101)  {"zone":"Route 101","species":263,"speciesName":"Zigzaton","level":3,"shiny":false}
+  journal release [alice] : ZIGZATON (Zigzaton) de Alice est relâché (équipe pleine)
+  avis [alice] info : Première rencontre de Route 101 : c'est votre seule chance ici (fuir ou le battre l'épuise).
+  avis [alice] warn : Capture non autorisée (équipe pleine) : ce Pokémon sera retiré de l'équipe.
+  directives [alice] doomed=["1002"], release=["1002"]
+
+5. alice : hm — la prochaine capture interdite est gardée pour les CS
+  journal hm [alice] : Alice va capturer un Pokémon pour les CS
+  avis [alice] info : Pokémon de CS : votre prochaine capture interdite est gardée pour les CS. Il ne devra jamais gagner d'expérience.
+
+6. alice : encounter start, capture, party — zone déjà utilisée : gardé pour les CS
+  journal encounter [alice] : Alice rencontre Medhyèna N.3 (Route 101)  {"species":261,"speciesName":"Medhyèna","level":3,"zone":"Route 101","shiny":false,"kind":"used"}
+  journal capture [alice] : Alice capture MEDHYENA (Medhyèna) N.3 — Pokémon de CS  {"species":261,"speciesName":"Medhyèna","level":3,"shiny":false,"bonus":true}
+  journal hm [alice] : MEDHYENA (Medhyèna) de Alice est gardé pour les CS : il ne doit jamais gagner d'expérience
+  avis [alice] warn : Route 101 : vous y avez déjà rencontré un Pokémon. Capture interdite.
+  avis [alice] info : MEDHYENA (Medhyèna) est votre Pokémon de CS : s'il gagne de l'expérience (combat, Multi Exp, Super Bonbon), il est relâché.
+
+7. alice : team, team, team — première vue de son expérience, puis la même, puis plus : relâché
+  journal release [alice] : MEDHYENA (Medhyèna) de Alice a gagné de l'expérience : un Pokémon de CS ne combat pas, il est relâché
+  avis [alice] warn : MEDHYENA (Medhyèna) a gagné de l'expérience : un Pokémon de CS ne doit pas combattre. Il est relâché.
+  directives [alice] doomed=["1002","1003"], release=["1002","1003"]
+
+8. alice : hm
+  journal hm [alice] : Alice va capturer un Pokémon pour les CS
+  avis [alice] info : Pokémon de CS : votre prochaine capture interdite est gardée pour les CS. Il ne devra jamais gagner d'expérience.
+
+9. alice : location, encounter start, capture — une première rencontre n'est pas interdite : capture normale, l'exception reste prête
+  journal zone [alice] : Alice entre dans Route 102  {"zone":"Route 102"}
+  journal encounter [alice] : Alice rencontre Nénupiot N.4 (Route 102)  {"species":270,"speciesName":"Nénupiot","level":4,"zone":"Route 102","shiny":false,"kind":"zone"}
+  journal capture [alice] : Alice capture NENUPIOT (Nénupiot) N.4 (Route 102)  {"zone":"Route 102","species":270,"speciesName":"Nénupiot","level":4,"shiny":false}
+  avis [alice] info : Première rencontre de Route 102 : c'est votre seule chance ici (fuir ou le battre l'épuise).
+
+10. alice : encounter start, capture, update — capture interdite gardée pour les CS, puis un niveau gagné : relâché
+  journal encounter [alice] : Alice rencontre Grainipiot N.4 (Route 102)  {"species":273,"speciesName":"Grainipiot","level":4,"zone":"Route 102","shiny":false,"kind":"used"}
+  journal capture [alice] : Alice capture GRAINIPIOT (Grainipiot) N.4 — Pokémon de CS  {"species":273,"speciesName":"Grainipiot","level":4,"shiny":false,"bonus":true}
+  journal hm [alice] : GRAINIPIOT (Grainipiot) de Alice est gardé pour les CS : il ne doit jamais gagner d'expérience
+  journal release [alice] : GRAINIPIOT (Grainipiot) de Alice a gagné de l'expérience : un Pokémon de CS ne combat pas, il est relâché
+  avis [alice] warn : Route 102 : vous y avez déjà rencontré un Pokémon. Capture interdite.
+  avis [alice] info : GRAINIPIOT (Grainipiot) est votre Pokémon de CS : s'il gagne de l'expérience (combat, Multi Exp, Super Bonbon), il est relâché.
+  avis [alice] warn : GRAINIPIOT (Grainipiot) a gagné de l'expérience : un Pokémon de CS ne doit pas combattre. Il est relâché.
+  directives [alice] doomed=["1002","1003","1005"], release=["1002","1003","1005"]
+
+11. alice : hm
+  journal hm [alice] : Alice va capturer un Pokémon pour les CS
+  avis [alice] info : Pokémon de CS : votre prochaine capture interdite est gardée pour les CS. Il ne devra jamais gagner d'expérience.
+
+12. alice : hm — annulé
+  avis [alice] info : Pokémon de CS annulé : les captures interdites sont de nouveau relâchées.
+
+13. alice : hm — déjà annulé : rien
+
+14. alice (chef) : rules — règle écrite dans la ROM : refusée
+  refus 409 : Cette règle est écrite dans la ROM de la salle : elle ne peut plus changer une fois l'aventure lancée.
+
+15. alice (chef) : rules — Vol et Repousse de nouveau permis
+  journal rules [alice] : Alice modifie les règles : honorNoFly, honorNoRepel
+  directives [alice] ban=["heal","masterBall","expShare"], noFly=false
+
+État final
+  {
+    "version": 1,
+    "id": "salle",
+    "code": "CODE01",
+    "name": "Nuzlocke avec les règles classiques : objets retirés, Vol oublié, équipe pleine, Pokémon de CS",
+    "mode": "nuzlocke",
+    "visibility": "private",
+    "leaderId": "alice",
+    "createdAt": 0,
+    "launchedAt": 0,
+    "game": {"gameId":"emeraude-fr","name":"Pokémon Émeraude","gen":3},
+    "maxPlayers": 1,
+    "state": "running",
+    "adventureOpen": true,
+    "linkStarted": true,
+    "rules": {
+      "shinyClause": false,
+      "dupesClause": false,
+      "giftPokemon": true,
+      "legendaries": true,
+      "naming": "free",
+      "pauseForNaming": false,
+      "deathBox": true,
+      "refundCancelled": false,
+      "wipeEndsRun": true,
+      "endWhen": "all",
+      "autoEnd": true,
+      "startWithBalls": true,
+      "saveStates": false,
+      "honorNoHealItems": true,
+      "honorNoHeldItems": true,
+      "honorNoMultiExp": true,
+      "honorNoMasterBall": true,
+      "honorNoEvolution": true,
+      "honorNoFly": false,
+      "honorNoRepel": false,
+      "honorSetMode": true,
+      "honorCsException": true,
+      "honorNotepad": true,
+      "hardcore": false,
+      "hardcoreItems": "report"
+    },
+    "rando": {},
+    "members": [
+      {
+        "userId": "alice",
+        "name": "Alice",
+        "joinedAt": 0,
+        "slot": 1,
+        "ready": true,
+        "rom": {"status":"ready"},
+        "families": {"253":252,"254":252,"262":261,"264":263,"271":270,"272":270,"274":273,"275":273,"277":276,"279":278},
+        "status": "playing",
+        "mons": {
+          "1001": {
+            "uid": "1001",
+            "species": 252,
+            "speciesName": "Arcko",
+            "level": 5,
+            "nickname": "ARCKO",
+            "zoneKey": null,
+            "zone": "Départ",
+            "origin": "new",
+            "shiny": false,
+            "bonus": true,
+            "status": "alive",
+            "reason": null,
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          },
+          "1002": {
+            "uid": "1002",
+            "species": 263,
+            "speciesName": "Zigzaton",
+            "level": 3,
+            "nickname": "ZIGZATON",
+            "zoneKey": "route 101",
+            "zone": "Route 101",
+            "origin": "wild",
+            "shiny": false,
+            "bonus": false,
+            "status": "released",
+            "reason": "interdit : équipe pleine",
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          },
+          "1003": {
+            "uid": "1003",
+            "species": 261,
+            "speciesName": "Medhyèna",
+            "level": 3,
+            "nickname": "MEDHYENA",
+            "zoneKey": null,
+            "zone": "Route 101",
+            "origin": "wild",
+            "shiny": false,
+            "bonus": true,
+            "status": "released",
+            "reason": "Pokémon de CS qui a gagné de l'expérience",
+            "at": 0,
+            "hm": true,
+            "hmExp": 9
+          },
+          "1004": {
+            "uid": "1004",
+            "species": 270,
+            "speciesName": "Nénupiot",
+            "level": 4,
+            "nickname": "NENUPIOT",
+            "zoneKey": "route 102",
+            "zone": "Route 102",
+            "origin": "wild",
+            "shiny": false,
+            "bonus": false,
+            "status": "alive",
+            "reason": null,
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          },
+          "1005": {
+            "uid": "1005",
+            "species": 273,
+            "speciesName": "Grainipiot",
+            "level": 5,
+            "nickname": "GRAINIPIOT",
+            "zoneKey": null,
+            "zone": "Route 102",
+            "origin": "wild",
+            "shiny": false,
+            "bonus": true,
+            "status": "released",
+            "reason": "Pokémon de CS qui a gagné de l'expérience",
+            "at": 0,
+            "hm": true,
+            "hmExp": -1
+          }
+        },
+        "refunds": [],
+        "stats": {
+          "captures": 5,
+          "deaths": 0,
+          "wildKills": 0,
+          "shinies": 0,
+          "encounters": 4,
+          "trainersBeaten": 0,
+          "badges": 0,
+          "fouls": 0,
+          "itemsBattle": {},
+          "itemsField": {},
+          "bought": {}
+        },
+        "lastZone": "Route 102",
+        "hasBalls": true,
+        "soloUid": null,
+        "capGyms": null,
+        "capLeague": 0,
+        "hmNext": false
+      }
+    ],
+    "invites": [],
+    "history": [],
+    "zones": [
+      {
+        "key": "route 101",
+        "name": "Route 101",
+        "status": "open",
+        "nickname": null,
+        "firstAt": 0,
+        "entries": {
+          "alice": {
+            "result": "caught",
+            "uid": "1002",
+            "species": 263,
+            "speciesName": "Zigzaton",
+            "level": 3,
+            "shiny": false,
+            "at": 0,
+            "items": {},
+            "itemNames": {}
+          }
+        }
+      },
+      {
+        "key": "route 102",
+        "name": "Route 102",
+        "status": "open",
+        "nickname": null,
+        "firstAt": 0,
+        "entries": {
+          "alice": {
+            "result": "caught",
+            "uid": "1004",
+            "species": 270,
+            "speciesName": "Nénupiot",
+            "level": 4,
+            "shiny": false,
+            "at": 0,
+            "items": {},
+            "itemNames": {}
+          }
+        }
+      }
+    ],
+    "namingQueue": [],
+    "ended": null,
+    "logSeq": 0,
+    "refundSeq": 0,
+    "trades": []
+  }
+Vue en direct [alice] {
+  "party": ["1001","1003"],
+  "at": 0,
+  "zone": "Route 102",
+  "team": [
+    {
+      "uid": "1003",
+      "species": 261,
+      "speciesName": "Medhyèna",
+      "nickname": "MEDHYENA",
+      "level": 3,
+      "hp": 12,
+      "maxHp": 12,
+      "shiny": false,
+      "dead": false,
+      "set": {"exp":30}
+    }
+  ]
+}
