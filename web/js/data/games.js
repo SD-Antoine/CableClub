@@ -1,5 +1,7 @@
 // Supported games (generations 1 to 5).
 
+import { has, deathBoxText } from './capabilities.js';
+
 export const GAMES = {
   red: { gen: 1, name: 'Rouge' },
   blue: { gen: 1, name: 'Bleue' },
@@ -30,22 +32,25 @@ export const LANG = { fr: 'Français', en: 'Anglais', de: 'Allemand', es: 'Espag
 
 export const gameName = (id) => (GAMES[id] ? `Pokémon ${GAMES[id].name}` : 'Jeu inconnu');
 
-/** What Cable Club applies inside a generation's games for a game mode (shown to the players). */
-export function support(gen, mode = 'soullink') {
+/** What Cable Club applies inside a game for a game mode (shown to the players), from capabilities.json. */
+export function support(gen, mode = 'soullink', gameId) {
   const linked = mode === 'soullink';
+  const shinies = has(gameId, gen, 'shinies');
+  const held = has(gameId, gen, 'heldItems');
   const parts = [
-    linked && (gen >= 4 ? 'partenaires visibles dans le jeu (3D)' : 'partenaires visibles dans le jeu'),
+    linked && has(gameId, gen, 'presence') && (gen >= 4 ? 'partenaires visibles dans le jeu (3D)' : 'partenaires visibles dans le jeu'),
     'suivi',
+    has(gameId, gen, 'trainerBattles') && 'combats de dresseurs',
     linked && 'morts liées',
     linked && 'surnoms',
     mode === 'sololocke' && 'un seul Pokémon dans l’équipe (les autres vont au PC)',
-    gen <= 2 ? 'morts rangés dans la boîte actuelle du PC' : gen === 3 ? 'boîte MORTS' : 'boîte MORTS (au changement de lieu)',
+    deathBoxText(gameId, gen),
     'objets rendus',
-    gen >= 2 && 'taux de chromatiques',
-    gen >= 2 ? 'combats entre joueurs (avec les objets tenus)' : 'combats entre joueurs',
-    !linked && `règles classiques du Nuzlocke (objets interdits retirés du sac${gen >= 2 ? ', objets tenus' : ''}, Vol, évolutions, mode Défini…)`,
+    shinies && 'taux de chromatiques',
+    held ? 'combats entre joueurs (avec les objets tenus)' : 'combats entre joueurs',
+    !linked && `règles classiques du Nuzlocke (objets interdits retirés du sac${held ? ', objets tenus' : ''}, Vol, évolutions, mode Défini…)`,
     !linked && 'option Hardcore (plafond de niveau, objets en combat, mode Défini)',
-    'fin automatique',
+    has(gameId, gen, 'autoEnd') && 'fin automatique',
   ].filter(Boolean).join(', ');
-  return parts[0].toUpperCase() + parts.slice(1) + (gen === 1 ? ' (pas de Pokémon chromatiques dans cette génération)' : '');
+  return parts[0].toUpperCase() + parts.slice(1) + (shinies ? '' : ' (pas de Pokémon chromatiques dans cette génération)');
 }

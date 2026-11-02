@@ -4,7 +4,7 @@ import { h, mount, keepScroll, modal, btn, field, seg, icon, errorToast, switchE
 import { local, srv } from '../api.js';
 import { store } from '../store.js';
 import { GAMES, LANG, GEN_SHORT, support, gameName } from '../data/games.js';
-import { ruleDefaults, playerChoices, MODE_PLAYERS, modeAvailable, modeName, MODE_MIN_GEN } from '../data/rules.js';
+import { ruleDefaults, playerChoices, MODE_PLAYERS, modeAvailable, modeName, modeGenerations } from '../data/rules.js';
 import { defaultRando } from '../data/rando.js';
 import { rulesEditor, randoEditor } from './parts.js';
 
@@ -12,7 +12,7 @@ export async function openCreateRoom(mode = 'soullink') {
   let library;
   try {
     // the games this mode can be played with (the Shinylocke needs shinies: not the first generation)
-    library = (await local.get('/api/library')).roms.filter((r) => r.present && modeAvailable(mode, r.gen));
+    library = (await local.get('/api/library')).roms.filter((r) => r.present && modeAvailable(mode, r.gen, r.gameId));
   } catch (e) { errorToast(e); return; }
 
   const user = store.state?.link?.user;
@@ -42,7 +42,7 @@ export async function openCreateRoom(mode = 'soullink') {
     let content;
     if (st.step === 0) content = gameStep();
     else if (st.step === 1) content = h('div', null, h('p', { class: 'muted mb' }, 'Vous pourrez les ajuster à tout moment, même en cours de partie.'),
-      rulesEditor(st.rules, { editable: true, mode, gen: gen(), onChange: (c) => { Object.assign(st.rules, c); draw(); } }));
+      rulesEditor(st.rules, { editable: true, mode, gen: gen(), gameId: rom()?.gameId, onChange: (c) => { Object.assign(st.rules, c); draw(); } }));
     else {
       if (!st.rando) st.rando = defaultRando(gen());
       content = randoEditor(st.rando, gen(), () => {});
@@ -59,8 +59,11 @@ export async function openCreateRoom(mode = 'soullink') {
 
   function gameStep() {
     if (!library.length) {
-      return h('div', { class: 'empty' }, h('b', null, MODE_MIN_GEN[mode] ? `Aucun jeu compatible dans votre bibliothèque` : 'Aucune ROM dans votre bibliothèque'),
-        h('p', null, MODE_MIN_GEN[mode] ? `Le ${modeName(mode)} se joue avec les jeux de la ${MODE_MIN_GEN[mode]}e génération et plus : ajoutez-en un dans « Mes ROMs ».`
+      // a mode some generations cannot play (the Shinylocke: none in generation 1) tells from which one it can
+      const gens = modeGenerations(mode);
+      const limited = gens.length < 5;
+      return h('div', { class: 'empty' }, h('b', null, limited ? `Aucun jeu compatible dans votre bibliothèque` : 'Aucune ROM dans votre bibliothèque'),
+        h('p', null, limited ? `Le ${modeName(mode)} se joue avec les jeux de la ${gens[0]}e génération et plus : ajoutez-en un dans « Mes ROMs ».`
           : 'Ajoutez d’abord les ROMs de vos jeux (copies de vos cartouches).'),
         h('div', { class: 'mt' }, btn('Ouvrir « Mes ROMs »', () => { m.close(); location.hash = '#/roms'; }, { kind: 'primary' })));
     }
@@ -82,7 +85,7 @@ export async function openCreateRoom(mode = 'soullink') {
           h('span', { class: 'pick-dot' }),
           h('span', { class: 'grow' }, h('b', null, gameName(r.gameId)), twin(r) ? h('small', { title: r.file }, tail(r.file)) : null),
           h('span', { class: 'chip' }, LANG[r.lang] || r.lang))))),
-      rom() ? h('p', { class: 'tiny faint' }, icon('info'), ' ', support(gen(), mode)) : null,
+      rom() ? h('p', { class: 'tiny faint' }, icon('info'), ' ', support(gen(), mode, rom().gameId)) : null,
       h('div', { class: 'grid2' },
         field('Nom de la salle', name),
         field('Joueurs', seg(playerChoices(mode), st.maxPlayers, (v) => { st.maxPlayers = v; if (v < 2) st.visibility = 'private'; draw(); }))),

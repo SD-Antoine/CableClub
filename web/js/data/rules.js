@@ -1,4 +1,7 @@
 // Rules of a room (the server applies them; the leader may change them at any time), by game mode.
+// What a rule or a mode needs from the game is in capabilities.json (shared with the server).
+
+import { missingForMode, missingForRule } from './capabilities.js';
 
 // Soul Link
 export const RULES = [
@@ -6,7 +9,7 @@ export const RULES = [
     desc: 'Cable Club détecte dans le jeu la victoire contre le Maître de la Ligue et termine le Soul Link (selon « Fin du Soul Link »). Désactivé : le chef de salle termine l’aventure à la main.' },
   { key: 'startWithBalls', type: 'bool', label: 'Départ aux premières Poké Balls',
     desc: 'Le Soul Link ne commence vraiment que quand chaque joueur a au moins une Poké Ball : avant, un Pokémon K.O. (le starter par exemple) ne meurt pas et les rencontres ne comptent pas.' },
-  { key: 'shinyClause', type: 'bool', label: 'Clause chromatique', minGen: 2,
+  { key: 'shinyClause', type: 'bool', label: 'Clause chromatique',
     desc: 'Un Pokémon chromatique peut toujours être capturé, même dans une zone déjà utilisée (il n’est lié à personne).' },
   { key: 'dupesClause', type: 'bool', label: 'Clause des doublons',
     desc: 'Une lignée d’évolution déjà possédée dans la salle ne compte pas : la rencontre est ignorée tant que la zone n’est pas réglée.' },
@@ -53,7 +56,7 @@ export const NUZLOCKE_RULES = [
   { section: 'Règles optionnelles appliquées par Cable Club' },
   { key: 'dupesClause', type: 'bool', label: 'Clause des doublons',
     desc: 'Si le premier Pokémon rencontré est d’une lignée d’évolution que vous possédez déjà, la rencontre est ignorée : vous pouvez en rencontrer un autre dans la zone.' },
-  { key: 'shinyClause', type: 'bool', label: 'Clause chromatique', minGen: 2,
+  { key: 'shinyClause', type: 'bool', label: 'Clause chromatique',
     desc: 'Un Pokémon chromatique peut toujours être capturé, même dans une zone déjà utilisée.' },
   { key: 'legendaries', type: 'bool', label: 'Légendaires autorisés',
     desc: 'Désactivé : un légendaire capturé est aussitôt relâché.' },
@@ -64,7 +67,7 @@ export const NUZLOCKE_RULES = [
   { section: 'Règles classiques du Nuzlocke, appliquées par Cable Club dans le jeu : un objet interdit quitte le sac dès que le joueur reprend la main sur le terrain' },
   { key: 'honorNoHealItems', type: 'bool', label: 'Pas d’objets de soin',
     desc: 'Soins uniquement au Centre Pokémon : potions, soins de statut, Rappels, PP, boissons, herbes et baies qui soignent sont retirés du sac.' },
-  { key: 'honorNoHeldItems', type: 'bool', label: 'Pas d’objet tenu', minGen: 2,
+  { key: 'honorNoHeldItems', type: 'bool', label: 'Pas d’objet tenu',
     desc: 'L’objet tenu par un Pokémon de l’équipe est remis dans le sac (les lettres restent).' },
   { key: 'honorNoMultiExp', type: 'bool', label: 'Pas de Multi Exp', desc: 'Retiré du sac (et des Pokémon qui le tiennent).' },
   { key: 'honorNoMasterBall', type: 'bool', label: 'Pas de Master Ball', desc: 'Retirée du sac.' },
@@ -153,8 +156,9 @@ const BY_MODE = {
   shinylocke: [SHINYLOCKE_RULES, SHINYLOCKE_DEFAULTS],
 };
 
-/** The rules of a mode, without those impossible in the room's generation (shinies in generation 1, held items…). */
-export const rulesOf = (mode, gen) => (BY_MODE[mode] || BY_MODE.soullink)[0].filter((d) => !d.minGen || !gen || gen >= d.minGen);
+/** The rules of a mode, without those the room's game cannot apply (shinies or held items in generation 1…). */
+export const rulesOf = (mode, gen, gameId) => (BY_MODE[mode] || BY_MODE.soullink)[0]
+  .filter((d) => !d.key || !missingForRule(d.key, gameId, gen));
 export const ruleDefaults = (mode) => (BY_MODE[mode] || BY_MODE.soullink)[1];
 
 /** Names of the game modes. */
@@ -164,9 +168,11 @@ export const modeName = (mode) => MODE_NAMES[mode] || MODE_NAMES.soullink;
 // players a room of each mode may have
 export const MODE_PLAYERS = { soullink: { min: 2, max: 5 }, nuzlocke: { min: 1, max: 10 }, sololocke: { min: 1, max: 10 }, shinylocke: { min: 1, max: 10 } };
 
-/** The first generation a mode can be played in (the Shinylocke needs shinies: generation 2 and later). */
-export const MODE_MIN_GEN = { shinylocke: 2 };
-export const modeAvailable = (mode, gen) => !MODE_MIN_GEN[mode] || Number(gen) >= MODE_MIN_GEN[mode];
+/** Whether a game can play a mode (the Shinylocke needs shinies: not the first generation). */
+export const modeAvailable = (mode, gen, gameId) => !missingForMode(mode, gameId, gen);
+
+/** The generations a mode can be played in. */
+export const modeGenerations = (mode) => [1, 2, 3, 4, 5].filter((g) => modeAvailable(mode, g));
 
 /** Choices of the number of players of a room: [value, label] (1 is "Solo"). */
 export function playerChoices(mode) {

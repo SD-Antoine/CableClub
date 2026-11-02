@@ -18,6 +18,7 @@ import { openUpdate, updateLink } from './views/update.js';
 import { watchBattles } from './views/battle.js';
 import { renderMe } from './views/me.js';
 import { mobile } from './platform.js';
+import { loadCapabilities } from './data/capabilities.js';
 
 const root = document.getElementById('root');
 let cleanup = null;
@@ -255,6 +256,7 @@ async function refreshAll() {
 
 async function boot() {
   document.documentElement.classList.toggle('mobile', mobile);
+  await loadCapabilities(); // what each game can do (rules and modes offered), before any screen
   try {
     await refreshState();
   } catch (e) {

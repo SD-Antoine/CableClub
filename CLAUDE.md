@@ -22,7 +22,11 @@ classiques. Générations 1 à 5. Version dans `src/slt/Version.java`, historiqu
      de `Room` ne teste plus le mode ; un nouveau comportement de mode s'ajoute dans `Mode.java`.
    - `Rooms.java` : salles, journal, écrans en direct (JPEG relayés), copies cloud des sauvegardes.
    - `ServerApi.java`, `Accounts.java`, `Hub.java` (présence, flux SSE).
-   - Définitions des règles côté interface : `web/js/data/rules.js` (clé, type, libellé, `minGen`).
+   - Définitions des règles côté interface : `web/js/data/rules.js` (clé, type, libellé).
+   - Capacités des jeux : `web/js/data/capabilities.json` (par génération, exceptions par jeu, besoins
+     des modes et des règles), lu par `Capabilities.java` (refus côté serveur) et par
+     `web/js/data/capabilities.js` (ce que l'interface propose). Une capacité se relève dans les
+     adaptateurs avant d'être écrite là ; `tests/capabilities.test.mjs` et `CapabilitiesTest` la vérifient.
 2. **Adaptateurs de jeux** (seuls à connaître la mémoire d'un jeu) — `src/slt/player/`
    - `track/GameReader.java` : interface d'adaptateur (lecture `Snapshot`, écritures `Patch`/`Write`),
      implémentée par `GbReader` (gén. 1-2), `Gen3Reader`, `NdsReader` (gén. 4-5, avec `NdsPkm`).
@@ -76,6 +80,7 @@ ROM de salle : `client/RoomRoms.java` la génère **localement** depuis la copie
 .\tests\golden.ps1           # non-régression de l'arbitre : scénarios tests\golden\*.json rejoués sur Room
 .\tests\golden.ps1 -Update   # réécrit les références .txt (seulement pour un changement de comportement décidé)
 node tests/battleteam.test.mjs   # équipes des combats dans le simulateur
+node tests/capabilities.test.mjs # ce que l'interface propose pour chaque jeu (capacités)
 ```
 
 Toute modification de `src/slt/server/Room.java` (ou de ce qu'il appelle) passe par `tests\golden.ps1`.

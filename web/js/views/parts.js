@@ -7,9 +7,9 @@ import {
 } from '../data/rando.js';
 
 /** The room's rules: switches (editable by the leader, read-only for the others). */
-export function rulesEditor(rules, { editable, onChange, mode, gen, launched }) {
+export function rulesEditor(rules, { editable, onChange, mode, gen, gameId, launched }) {
   const r = { ...ruleDefaults(mode), ...(rules || {}) };
-  return h('div', { class: 'list' }, rulesOf(mode, gen).map((def) => {
+  return h('div', { class: 'list' }, rulesOf(mode, gen, gameId).map((def) => {
     if (def.section) return h('div', { class: 'rule-section' }, def.section);
     if (def.when && !def.when(r)) return null; // an option of another rule, shown when that rule is on
     // a rule written in the room's ROM no longer changes once the adventure is launched

@@ -46,7 +46,7 @@ partenaires en direct). Voir [Version Android](#version-android).
 - **Le jeu s'affiche dans la fenêtre principale** de SLT (émulateurs mGBA et
   DeSmuME intégrés, son, manette Xbox, clavier configurable, écran tactile DS à
   la souris, avance rapide, plein écran).
-- **Les joueurs se voient dans le jeu** (générations 1 à 3 et 5) : chaque
+- **Les joueurs se voient dans le jeu** (générations 1 à 5) : chaque
   partenaire apparaît dans votre partie, à sa vraie position sur la carte, avec
   son vrai sprite (direction, marche, vélo), **son pseudo au-dessus de la tête**
   et une icône d'état : combat (deux Poké Balls et un choc), dialogue (trois
@@ -145,47 +145,50 @@ partir de sa propre copie du jeu. « Télécharger » donne une copie de la ROM 
 salle ; sur un nouveau PC, on la **régénère à l'identique** (même seed) et on
 **récupère sa sauvegarde depuis le serveur** (SLT y copie la sauvegarde du jeu).
 
-## État d’avancement (v0.4.1)
+## État d’avancement
+
+Ce que Cable Club sait faire dans chaque jeu et qui change ce que la salle propose
+(chromatiques, objets tenus, combats de dresseurs, fin automatique, partenaires
+visibles, boîte des morts) est décrit en données dans
+[web/js/data/capabilities.json](web/js/data/capabilities.json) : le serveur et
+l'interface lisent ce même fichier, et une règle ou un mode qu'un jeu ne peut pas
+appliquer n'est pas proposé pour ce jeu (le serveur refuse de l'activer).
 
 | | 1re gén. | 2e gén. | 3e gén. | 4e gén. | 5e gén. |
 |---|---|---|---|---|---|
 | Suivi (captures, zones, K.O., évolutions, badges, rencontres) | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Joueurs visibles dans le jeu (sprite, pseudo, icône d'état) | **✓ vérifié** (Rouge) | **✓ vérifié** (Cristal) | **✓ vérifié** (Rubis, Émeraude, Rouge Feu) | écrans | **✓ vérifié** (Blanche 2, à pied)⁵ |
+| Joueurs visibles dans le jeu (sprite, pseudo, icône d'état) | **✓ vérifié** (Rouge) | **✓ vérifié** (Cristal) | **✓ vérifié** (Rubis, Émeraude, Rouge Feu) | **✓ vérifié** (Platine, Diamant, Or HeartGold) | **✓ vérifié** (Blanche 2, à pied)⁵ |
 | Mort liée en jeu (K.O., impossible à soigner) | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Surnom du lien écrit dans le jeu | **✓ vérifié** | ✓ | **✓ vérifié** | ✓² | **✓ vérifié** (Blanc 2) |
-| Pokémon morts rangés dans le PC | **✓ vérifié** (boîte actuelle) | — (reste K.O.)³ | **✓ vérifié** (boîte MORTS) | ✓² (boîte 18 MORTS) | **✓ vérifié** (boîte 24 MORTS) |
+| Pokémon morts rangés dans le PC | **✓ vérifié** (boîte actuelle) | **✓ vérifié** (boîte actuelle, Cristal)³ | **✓ vérifié** (boîte MORTS) | ✓² (boîte 18 MORTS) | **✓ vérifié** (boîte 24 MORTS) |
 | Relâché = supprimé du jeu | **✓ vérifié** | équipe | ✓ | ✓ | ✓ |
 | Départ aux premières Poké Balls | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Échanges entre partenaires | ✓ | ✓ | **✓ vérifié** | ✓ | ✓ |
-| Maître de la Ligue battu (fin automatique) | **✓ vérifié**⁴ | ✓ (Panthéon) | ✓ | ✓ (salle du Panthéon) | chef |
+| Maître de la Ligue battu (fin automatique) | **✓ vérifié**⁴ | ✓ (Panthéon) | ✓ | ✓ (salle du Panthéon) | ✓ (Salle de la Gloire) |
 | Vendeurs secondaires randomisés | — | — | **✓ vérifié** | ✓ (UPR) | ✓ (UPR) |
 | Objets utilisés / achetés / obtenus | ✓ | — | **✓ vérifié** | ✓ | ✓ |
 | Objets rendus (zone annulée) | — | — | **✓ vérifié** | — | — |
 | Combats de dresseurs (lancé / gagné / perdu) | ✓ | Cristal | **✓ vérifié** | — | — |
 
 **✓ vérifié** : testé dans le jeu (versions françaises). ✓ : implémenté et
-testé hors du jeu ou sur une autre version de la même famille. « chef » : le chef
-de salle déclare la fin depuis la salle. « écrans » : les partenaires se voient
-sur le côté (aperçu en direct).
+testé hors du jeu ou sur une autre version de la même famille.
 
 ² Structure de sauvegarde vérifiée sur Diamant, Platine et HeartGold FR (boîtes,
 noms de boîtes, alphabet des surnoms) ; en 4e et 5e génération, l'équipe n'est
 modifiée qu'au **prochain changement de lieu** (pendant un combat, le jeu
 travaille sur une copie de l'équipe et l'écraserait).
-³ En 2e génération, la boîte courante est dans la mémoire de sauvegarde de la
-cartouche, que l'émulateur ne montre qu'en copie : SLT ne peut pas y écrire.
+³ En 2e génération (Or, Argent, Cristal), la boîte courante est dans la mémoire
+de sauvegarde de la cartouche : après le chargement d'une sauvegarde d'état, le
+rangement attend le prochain lancement du jeu.
 ⁴ Simulé (compteur du Panthéon).
 ⁵ À vélo ou en surf, le partenaire s'affiche debout (sprite de marche) ; il
 passe toujours devant le décor (jamais caché par un arbre ou un bâtiment).
 
 Pas encore fait :
 
-- **Joueurs visibles dans le jeu en 4e génération** : écrans côte à côte pour
-  l'instant (la méthode de la 5e génération devrait s'y adapter).
 - **Combats entre partenaires** : un vrai combat en lien entre deux jeux
   demande un câble link / une connexion sans fil que les émulateurs intégrés ne
   savent pas faire à travers Internet.
-- **Fin automatique en 5e génération** (salle du Panthéon non identifiée).
 - **Patch des scripts des ROMs** (légendaires, PNJ qui donnent un Pokémon) :
   SLT applique ces règles **à l'exécution** (Pokémon relâché à la réception).
 - **Objets donnés par les PNJ** randomisés (hors objets clés).
@@ -297,6 +300,7 @@ Prérequis : JDK 21 et git.
 .\tests\golden.ps1           # non-régression de l'arbitre (server\Room.java)
 .\tests\golden.ps1 -Update   # réécrit les références : seulement pour un changement de comportement décidé
 node tests\battleteam.test.mjs   # équipes des combats dans le simulateur
+node tests\capabilities.test.mjs # ce que l'interface propose pour chaque jeu (capacités)
 ```
 
 `tests\golden\*.json` sont des scénarios (joueurs, règles, puis événements des

@@ -250,7 +250,7 @@ export async function renderRoom(container, roomId, { history = false } = {}) {
           h('ul', { class: 'muted small', style: { margin: '10px 0 0', paddingLeft: '18px' } }, randoLines(room.rando, gen()).map((l) => h('li', null, l))),
           h('p', { class: 'tiny faint mt-s' }, 'Seed ', h('span', { class: 'mono' }, room.rando?.seed || '—')))),
         h('div', { class: 'card' }, h('h3', null, 'Règles'), h('p', { class: 'tiny faint mt-s' }, isLeader() ? 'Modifiables à tout moment, même en cours de partie.' : 'Fixées par le chef de salle.'),
-          rulesEditor(room.rules, { editable: isLeader(), mode: room.mode, gen: Number(room.game?.gen), onChange: setRules }))),
+          rulesEditor(room.rules, { editable: isLeader(), mode: room.mode, gen: Number(room.game?.gen), gameId: room.game?.gameId, onChange: setRules }))),
       m ? h('div', { class: 'card mt chat-card' }, h('h3', { class: 'mb' }, 'Discussion de la salle'), chatBox()) : null,
       m ? h('div', { class: 'action-bar' },
         h('div', { class: 'grow' },
@@ -275,7 +275,7 @@ export async function renderRoom(container, roomId, { history = false } = {}) {
       h('div', { class: 'grid2 mt-l' },
         h('div', { class: 'card' }, h('h3', null, 'Randomisation'),
           h('ul', { class: 'muted small', style: { margin: '10px 0 0', paddingLeft: '18px' } }, randoLines(room.rando || {}, gen()).map((l) => h('li', null, l)))),
-        h('div', { class: 'card' }, h('h3', null, 'Règles'), rulesEditor(room.rules || {}, { editable: false, mode: room.mode, gen: Number(room.game?.gen), onChange: () => {} }))));
+        h('div', { class: 'card' }, h('h3', null, 'Règles'), rulesEditor(room.rules || {}, { editable: false, mode: room.mode, gen: Number(room.game?.gen), gameId: room.game?.gameId, onChange: () => {} }))));
   }
 
   function invitedView() {
@@ -425,7 +425,7 @@ export async function renderRoom(container, roomId, { history = false } = {}) {
     switch (ui.tab) {
       case 'players': content = playersTab(); break;
       case 'journal': drawLogs(); content = logBox; break;
-      case 'rules': content = h('div', { class: 'card' }, rulesEditor(room.rules, { editable: isLeader() && room.state === 'running', launched: true, mode: room.mode, gen: Number(room.game?.gen), onChange: setRules })); break;
+      case 'rules': content = h('div', { class: 'card' }, rulesEditor(room.rules, { editable: isLeader() && room.state === 'running', launched: true, mode: room.mode, gen: Number(room.game?.gen), gameId: room.game?.gameId, onChange: setRules })); break;
       case 'rom': content = (drawRomOnly(), romBox); break;
       case 'chat': content = h('div', { class: 'card chat-card' }, chatBox()); break;
       case 'battles': content = duelsBox(); break;
