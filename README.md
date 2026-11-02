@@ -272,6 +272,7 @@ src/slt/
     GbPresence, Gen3Presence, Gen5Presence   joueurs visibles en jeu (Gen5Sprites : sprites lus dans la ROM)
     track/              lecteurs mémoire (GbReader, Gen3Reader, NdsReader), TrackerEngine
 web/                    interface (HTML / CSS / JS modules, sans framework)
+docs/events.md          schéma des événements (contrat adaptateurs ↔ arbitre)
 tests/                  non-régression de l'arbitre (golden), simulateur de combat
 build.ps1               compilation + dist\CableClub\CableClub.exe (jpackage)
 ```

@@ -24,13 +24,18 @@ if (-not $JavaHome -or -not (Test-Path (Join-Path $JavaHome 'bin\javac.exe'))) {
 }
 
 if (Test-Path $Classes) { Remove-Item -Recurse -Force $Classes }
+$sources = Get-ChildItem -Recurse -Filter *.java (Join-Path $PSScriptRoot 'java') | ForEach-Object { $_.FullName }
 $javacArgs = @('-encoding', 'UTF-8', '--release', '21', '--enable-preview', '-Xlint:-preview', '-nowarn', '-d', $Classes,
-    '-sourcepath', (Join-Path $Root 'src'), (Join-Path $PSScriptRoot 'java\slt\server\RoomReplay.java'))
+    '-sourcepath', (Join-Path $Root 'src')) + $sources
 & (Join-Path $JavaHome 'bin\javac.exe') @javacArgs
 if ($LASTEXITCODE -ne 0) { throw 'Compilation du harnais impossible' }
 
+$java = Join-Path $JavaHome 'bin\java.exe'
+# the event-schema check first (point 1b), then the scenarios
+& $java '--enable-preview' '-Dstdout.encoding=UTF-8' '-cp' $Classes 'slt.server.EventSchemaTest'
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 $javaArgs = @('--enable-preview', '-Dstdout.encoding=UTF-8', '-cp', $Classes, 'slt.server.RoomReplay',
     (Join-Path $PSScriptRoot 'golden'))
 if ($Update) { $javaArgs += '--update' }
-& (Join-Path $JavaHome 'bin\java.exe') @javaArgs
+& $java @javaArgs
 exit $LASTEXITCODE

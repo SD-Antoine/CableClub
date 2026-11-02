@@ -175,6 +175,15 @@ public final class RoomReplay {
         for (Object o : Json.arr(sc.get("steps")) == null ? List.of() : Json.arr(sc.get("steps"))) {
             Map<String, Object> step = Json.obj(o);
             out.append('\n').append(++n).append(". ").append(describe(r, step)).append('\n');
+            // check each event against the common schema (docs/events.md); prints only when something is off, so a
+            // valid scenario leaves the reference unchanged and a typo in a future scenario is caught
+            if (Json.str(step, "do") == null) {
+                for (Object ev : Json.arr(step.get("events")) == null ? List.of() : Json.arr(step.get("events"))) {
+                    for (String problem : EventSchema.validate(Json.obj(ev))) {
+                        out.append("  schéma ✗ ").append(problem).append('\n');
+                    }
+                }
+            }
             Room.Out ro = new Room.Out();
             try {
                 apply(r, step, ro);

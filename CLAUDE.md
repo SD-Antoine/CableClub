@@ -24,6 +24,8 @@ classiques. Générations 1 à 5. Version dans `src/slt/Version.java`, historiqu
    - `track/GameReader.java` : interface d'adaptateur (lecture `Snapshot`, écritures `Patch`/`Write`),
      implémentée par `GbReader` (gén. 1-2), `Gen3Reader`, `NdsReader` (gén. 4-5, avec `NdsPkm`).
    - `track/TrackerEngine.java` produit les événements ; `TrackerHost.java` applique les directives.
+     Le vocabulaire d'événements (contrat adaptateurs ↔ arbitre) est documenté dans `docs/events.md` et
+     validé par `src/slt/server/EventSchema.java` (le harnais golden le passe sur chaque scénario).
    - Présence en jeu : `GbPresence`, `Gen3Presence`, `Gen4Presence`, `Gen5Presence` (`Gen5Sprites`
      lit les sprites dans la ROM du joueur à l'exécution), `MapChange`.
    - `ShinyBoost.java` : taux de chromatiques par écriture en RAM (gén. 2-3).
