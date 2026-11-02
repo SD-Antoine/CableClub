@@ -717,36 +717,14 @@ public final class Room {
         boolean first = m.mons.values().stream().noneMatch(x -> x != r && !"existing".equals(x.origin));
         Encounter e = m.encounter;
         boolean wild = "wild".equals(origin) || (e != null && uid.equals(e.uid));
+        Mode.CaptureLogic captures = Mode.forRoom(this).captures();
         if (!wild && first) {
             r.zone = "Départ";
-            if (individual()) {
-                bonus(m, r, "Pokémon de départ", out);
-                parkCheck(m, out);
-                return;
-            }
-            // the first Pokémon received is the starter: linked with the other starters
-            link(m, r, zone(STARTER, "Départ"), null, out);
+            captures.starter(this, m, r, out);
             return;
         }
         if (!wild) {
-            if (shinylocke() && r.shiny) {
-                bonus(m, r, "Pokémon offert chromatique", out);
-                return;
-            }
-            if (!rule("giftPokemon")) {
-                release(m, r, shinylocke() ? "interdit : Pokémon offert non chromatique" : "interdit : Pokémon offert ou échangé", out);
-                return;
-            }
-            if (individual()) {
-                bonus(m, r, "Pokémon offert", out);
-                return;
-            }
-            Zone z = zones.get(zoneKey(zone));
-            if (z == null || !z.entries.containsKey(m.userId)) {
-                link(m, r, zone(zoneKey(zone), zone), null, out);
-            } else {
-                bonus(m, r, "Pokémon offert", out);
-            }
+            captures.gift(this, m, r, zone, out);
             return;
         }
         if (!m.hasBalls) {
@@ -768,7 +746,7 @@ public final class Room {
         m.encounter = null;
         m.live.remove("battle");
         // "Notepad Clause": no capture while the team is full (the Pokémon caught went to the PC)
-        boolean full = individual() && rule("honorNotepad") && !Json.bool(ev, "inParty", true);
+        boolean full = captures.notepad(this) && !Json.bool(ev, "inParty", true);
         if (keepForHms(m, r, kind, full, enc, out)) {
             return;
         }
@@ -801,7 +779,7 @@ public final class Room {
      */
     private boolean keepForHms(Member m, MonRec r, String kind, boolean full, Encounter enc, Out out) {
         boolean forbidden = full || "used".equals(kind) || "dupe".equals(kind) || "notshiny".equals(kind);
-        if (!individual() || !rule("honorCsException") || !m.hmNext || !forbidden) {
+        if (!Mode.forRoom(this).captures().hmException(this) || !m.hmNext || !forbidden) {
             return false;
         }
         if ("zone".equals(kind)) {
@@ -826,7 +804,7 @@ public final class Room {
 
     /** Rule "Exception pour les CS": the player keeps (or no longer keeps) their next forbidden capture for the HMs. */
     void hmNext(Member m, boolean on, Out out) {
-        if (!"running".equals(state) || !individual() || !rule("honorCsException")) {
+        if (!"running".equals(state) || !Mode.forRoom(this).captures().hmException(this)) {
             throw new Http.Fail(409, "L'exception pour les CS n'est pas active dans cette salle.");
         }
         if (m.hmNext == on) {
@@ -841,8 +819,8 @@ public final class Room {
         }
     }
 
-    /** The Pokémon becomes this player's Pokémon for the zone. */
-    private void link(Member m, MonRec r, Zone z, Encounter enc, Out out) {
+    /** The Pokémon becomes this player's Pokémon for the zone (then the mode says what linking it means). */
+    void link(Member m, MonRec r, Zone z, Encounter enc, Out out) {
         r.zoneKey = z.key;
         Entry entry = new Entry();
         entry.result = "caught";
@@ -864,39 +842,22 @@ public final class Room {
         out.log(m, "capture", m.name + " capture " + r.label() + " N." + r.level + " (" + z.name + ")",
                 Json.map("zone", z.name, "species", (long) r.species, "speciesName", r.speciesName, "level", (long) r.level,
                         "shiny", r.shiny));
-        if (individual()) {
-            return; // alone: nobody to link with, the Pokémon is simply the player's for the zone
-        }
-        if (z.nickname != null) {
-            r.nickname = z.nickname;
-        }
-        switch (z.status) {
-            case "dead" -> {
-                r.status = "dead";
-                r.reason = "lien déjà perdu";
-                out.log(m, "death", r.label() + " rejoint ses âmes liées : le lien de " + z.name + " était déjà perdu.", null);
-                out.notice(m, "warn", "Le lien de " + z.name + " était déjà perdu : ce Pokémon est mort d'office.");
-            }
-            case "cancelled" -> {
-                r.status = "released";
-                r.reason = "zone annulée";
-            }
-            default -> refreshZone(z, out);
-        }
+        Mode.forRoom(this).captures().linked(this, m, r, z, out);
     }
 
-    private void bonus(Member m, MonRec r, String why, Out out) {
+    void bonus(Member m, MonRec r, String why, Out out) {
         r.bonus = true;
         m.stats.captures++;
         if (r.shiny) {
             m.stats.shinies++;
         }
-        out.log(m, "capture", m.name + " capture " + r.label() + " N." + r.level + " — " + why + (individual() ? "" : ", sans lien"),
+        out.log(m, "capture", m.name + " capture " + r.label() + " N." + r.level + " — " + why
+                        + Mode.forRoom(this).captures().bonusSuffix(),
                 Json.map("species", (long) r.species, "speciesName", r.speciesName, "level", (long) r.level,
                         "shiny", r.shiny, "bonus", true));
     }
 
-    private void release(Member m, MonRec r, String why, Out out) {
+    void release(Member m, MonRec r, String why, Out out) {
         r.status = "released";
         r.reason = why;
         out.log(m, "release", r.label() + " de " + m.name + " est relâché (" + why.replace("interdit : ", "") + ")", null);
@@ -904,7 +865,7 @@ public final class Room {
     }
 
     /** Recomputes the status of a zone after a change. */
-    private void refreshZone(Zone z, Out out) {
+    void refreshZone(Zone z, Out out) {
         if ("cancelled".equals(z.status) || "dead".equals(z.status)) {
             return;
         }
@@ -1070,7 +1031,7 @@ public final class Room {
      * vont au PC": one living Pokémon in the team, the one that was alone stays (or the first one). Hardcore: a Pokémon
      * above the level cap goes to the PC until the next badge raises it (a team always keeps one Pokémon: the lowest).
      */
-    private void parkCheck(Member m, Out out) {
+    void parkCheck(Member m, Out out) {
         Map<String, String> before = new LinkedHashMap<>(m.park);
         m.park.clear();
         List<Object> party = Json.arr(m.live.get("party"));

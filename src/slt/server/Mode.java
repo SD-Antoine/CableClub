@@ -87,17 +87,48 @@ final class Mode {
         }
     }
 
+    /**
+     * How a family of modes judges a Pokémon that joins a player (point 1c-2): the starter, a Pokémon given by a
+     * character, a capture made with a full team, the one kept for the HMs, and what linking it to its zone means.
+     * Room keeps the steps common to every mode (recording it, telling a starter, a gift and a wild capture apart).
+     */
+    interface CaptureLogic {
+
+        /** The first Pokémon received: the starter. */
+        void starter(Room r, Room.Member m, Room.MonRec rec, Room.Out out);
+
+        /** A Pokémon given, traded or sold by a character (not caught in the wild). */
+        void gift(Room r, Room.Member m, Room.MonRec rec, String zone, Room.Out out);
+
+        /** "Notepad Clause": a capture made while the team is full is forbidden. */
+        boolean notepad(Room r);
+
+        /** "Exception pour les CS": the next forbidden capture may be kept for the HMs. */
+        boolean hmException(Room r);
+
+        /** Once a capture is recorded for its zone: what linking it means (nothing when each player is alone). */
+        void linked(Room r, Room.Member m, Room.MonRec rec, Room.Zone z, Room.Out out);
+
+        /** Added to the journal line of a capture that counts for no zone. */
+        String bonusSuffix();
+    }
+
     private static final EncounterLogic SOUL_LINK = new SoulLinkEncounters();
     private static final EncounterLogic INDIVIDUAL = new IndividualEncounters();
     private static final EncounterLogic SHINYLOCKE = new ShinylockeEncounters();
+    private static final CaptureLogic SOUL_LINK_CAPTURES = new SoulLinkCaptures();
+    private static final CaptureLogic INDIVIDUAL_CAPTURES = new IndividualCaptures();
+    private static final CaptureLogic SHINYLOCKE_CAPTURES = new ShinylockeCaptures();
 
     private final String id;
     private final EncounterLogic encounters;
+    private final CaptureLogic captures;
     private final List<Rule> rules;
 
-    Mode(String id, EncounterLogic encounters, List<Rule> rules) {
+    Mode(String id, EncounterLogic encounters, CaptureLogic captures, List<Rule> rules) {
         this.id = id;
         this.encounters = encounters;
+        this.captures = captures;
         this.rules = rules;
     }
 
@@ -109,6 +140,10 @@ final class Mode {
         return encounters;
     }
 
+    CaptureLogic captures() {
+        return captures;
+    }
+
     /** Runs every rule of the mode on the event, in order. */
     void handle(Ctx ctx, Map<String, Object> ev) {
         for (Rule rule : rules) {
@@ -116,14 +151,17 @@ final class Mode {
         }
     }
 
-    /** The mode of a room: its encounter logic, then Room's handlers for the events not moved yet. */
+    /** The mode of a room: its encounter and capture logic, then Room's handlers for the events not moved yet. */
     static Mode forRoom(Room room) {
-        EncounterLogic enc = switch (room.mode) {
-            case "shinylocke" -> SHINYLOCKE;
-            case "nuzlocke", "sololocke" -> INDIVIDUAL;
-            default -> SOUL_LINK;
+        return switch (room.mode) {
+            case "shinylocke" -> of(room.mode, SHINYLOCKE, SHINYLOCKE_CAPTURES);
+            case "nuzlocke", "sololocke" -> of(room.mode, INDIVIDUAL, INDIVIDUAL_CAPTURES);
+            default -> of(room.mode, SOUL_LINK, SOUL_LINK_CAPTURES);
         };
-        return new Mode(room.mode, enc, List.of(new EncounterRule(enc), new LegacyDispatch()));
+    }
+
+    private static Mode of(String id, EncounterLogic enc, CaptureLogic captures) {
+        return new Mode(id, enc, captures, List.of(new EncounterRule(enc), new LegacyDispatch()));
     }
 
     /** Wild encounters (start and end), through the mode's encounter logic. */
@@ -250,6 +288,65 @@ final class Mode {
         }
     }
 
+    /** The room's players are linked: a starter or a gift links through its zone, a shiny or a second gift does not. */
+    private static final class SoulLinkCaptures implements CaptureLogic {
+
+        @Override
+        public void starter(Room r, Room.Member m, Room.MonRec rec, Room.Out out) {
+            // the first Pokémon received is the starter: linked with the other starters
+            r.link(m, rec, r.zone(Room.STARTER, "Départ"), null, out);
+        }
+
+        @Override
+        public void gift(Room r, Room.Member m, Room.MonRec rec, String zone, Room.Out out) {
+            if (!r.rule("giftPokemon")) {
+                r.release(m, rec, "interdit : Pokémon offert ou échangé", out);
+                return;
+            }
+            Room.Zone z = r.zones.get(Room.zoneKey(zone));
+            if (z == null || !z.entries.containsKey(m.userId)) {
+                r.link(m, rec, r.zone(Room.zoneKey(zone), zone), null, out);
+            } else {
+                r.bonus(m, rec, "Pokémon offert", out);
+            }
+        }
+
+        @Override
+        public boolean notepad(Room r) {
+            return false;
+        }
+
+        @Override
+        public boolean hmException(Room r) {
+            return false;
+        }
+
+        @Override
+        public void linked(Room r, Room.Member m, Room.MonRec rec, Room.Zone z, Room.Out out) {
+            if (z.nickname != null) {
+                rec.nickname = z.nickname;
+            }
+            switch (z.status) {
+                case "dead" -> {
+                    rec.status = "dead";
+                    rec.reason = "lien déjà perdu";
+                    out.log(m, "death", rec.label() + " rejoint ses âmes liées : le lien de " + z.name + " était déjà perdu.", null);
+                    out.notice(m, "warn", "Le lien de " + z.name + " était déjà perdu : ce Pokémon est mort d'office.");
+                }
+                case "cancelled" -> {
+                    rec.status = "released";
+                    rec.reason = "zone annulée";
+                }
+                default -> r.refreshZone(z, out);
+            }
+        }
+
+        @Override
+        public String bonusSuffix() {
+            return ", sans lien";
+        }
+    }
+
     // ------------------------------------------------- Nuzlocke, Sololocke
 
     /** Each player alone: the first wild Pokémon met in a zone is the only one that can be caught there. */
@@ -338,7 +435,63 @@ final class Mode {
         }
     }
 
+    /** Each player alone: nobody to link with; the classic rules (full team, HMs) may apply. */
+    private static class IndividualCaptures implements CaptureLogic {
+
+        @Override
+        public void starter(Room r, Room.Member m, Room.MonRec rec, Room.Out out) {
+            r.bonus(m, rec, "Pokémon de départ", out);
+            r.parkCheck(m, out);
+        }
+
+        @Override
+        public void gift(Room r, Room.Member m, Room.MonRec rec, String zone, Room.Out out) {
+            if (!r.rule("giftPokemon")) {
+                r.release(m, rec, "interdit : Pokémon offert ou échangé", out);
+                return;
+            }
+            r.bonus(m, rec, "Pokémon offert", out);
+        }
+
+        @Override
+        public boolean notepad(Room r) {
+            return r.rule("honorNotepad");
+        }
+
+        @Override
+        public boolean hmException(Room r) {
+            return r.rule("honorCsException");
+        }
+
+        @Override
+        public void linked(Room r, Room.Member m, Room.MonRec rec, Room.Zone z, Room.Out out) {
+            // alone: nobody to link with, the Pokémon is simply the player's for the zone
+        }
+
+        @Override
+        public String bonusSuffix() {
+            return "";
+        }
+    }
+
     // ------------------------------------------------------------ Shinylocke
+
+    /** A gift is kept when it is shiny; otherwise as in the other runs of one player. */
+    private static final class ShinylockeCaptures extends IndividualCaptures {
+
+        @Override
+        public void gift(Room r, Room.Member m, Room.MonRec rec, String zone, Room.Out out) {
+            if (rec.shiny) {
+                r.bonus(m, rec, "Pokémon offert chromatique", out);
+                return;
+            }
+            if (!r.rule("giftPokemon")) {
+                r.release(m, rec, "interdit : Pokémon offert non chromatique", out);
+                return;
+            }
+            r.bonus(m, rec, "Pokémon offert", out);
+        }
+    }
 
     /** Only shinies may be caught, anywhere (one per zone if the room wants); a battle never uses up a zone. */
     private static final class ShinylockeEncounters implements EncounterLogic {
