@@ -258,6 +258,7 @@ src/slt/
   server/               serveur SLT (JDK HttpServer, JSON sur disque, flux SSE)
     Accounts            comptes, sessions, amis
     Rooms, Room         salles, arbitre du Soul Link, journal, aperçus, sauvegardes
+    Mode                ce qui distingue les modes (rencontres, captures, morts, équipe, début et fin)
     Hub                 présence et diffusion temps réel
   client/               application d'un joueur (API locale 127.0.0.1)
     ServerLink          connexion au serveur (requêtes + flux relayé à l'interface)

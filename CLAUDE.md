@@ -13,10 +13,13 @@ classiques. Générations 1 à 5. Version dans `src/slt/Version.java`, historiqu
 ## Architecture en trois couches
 
 1. **Moteur de modes** (serveur, l'arbitre) — `src/slt/server/`
-   - `Room.java` : toute la logique des modes, aujourd'hui en dur (`individual()`, `sololocke()`,
-     `shinylocke()`, `switch` sur les événements `location`, `encounter`, `capture`, `update`,
-     `faint`, `party`/`team`, `badges`, `whiteout`, `battle`, `items`, `champion`, `balls`, `caps`,
-     `removed`/`held`/`forgot`). À découper en règles composables (point 1 du plan d'évolution).
+   - `Room.java` : l'état de la salle et les mécanismes communs (zones, liens, journal, directives) ;
+     `event()` passe chaque événement au mode de la salle, puis `dispatch()` (le `switch` sur les
+     types) pour ceux qui n'ont pas encore de règle propre.
+   - `Mode.java` : ce qui distingue les modes, choisi une seule fois dans `Mode.forRoom` — rencontres
+     (`EncounterLogic`), captures (`CaptureLogic`), morts, équipe, Hardcore, démarrage et fin
+     (`RunLogic`), en familles Soul Link / partie individuelle / Shinylocke / Sololocke. Aucun handler
+     de `Room` ne teste plus le mode ; un nouveau comportement de mode s'ajoute dans `Mode.java`.
    - `Rooms.java` : salles, journal, écrans en direct (JPEG relayés), copies cloud des sauvegardes.
    - `ServerApi.java`, `Accounts.java`, `Hub.java` (présence, flux SSE).
    - Définitions des règles côté interface : `web/js/data/rules.js` (clé, type, libellé, `minGen`).
