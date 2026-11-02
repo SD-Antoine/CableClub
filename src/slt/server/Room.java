@@ -540,16 +540,20 @@ public final class Room {
 
     // ---------------------------------------------------------------- events
 
-    /** Applies one tracker event of a player. */
+    /** Applies one tracker event of a player, through the room's mode (an ordered list of rules). */
     void event(Member m, Map<String, Object> ev, Out out) {
         if (!"running".equals(state)) {
             return;
         }
-        String type = Json.str(ev, "type");
-        if (type == null) {
+        if (Json.str(ev, "type") == null) {
             return;
         }
-        switch (type) {
+        Mode.forRoom(this).handle(new Mode.Ctx(this, m, out), ev);
+    }
+
+    /** The per-type handlers, run by the mode's rules (see {@link Mode}). */
+    void dispatch(Member m, Map<String, Object> ev, Out out) {
+        switch (Json.str(ev, "type")) {
             case "location" -> location(m, ev, out);
             case "encounter" -> {
                 if ("start".equals(Json.str(ev, "phase"))) {
