@@ -604,19 +604,8 @@ public final class Rooms {
                     crc = c;
                 }
             }
-            r.invites.clear();
-            r.state = "running";
-            r.adventureOpen = true;
-            r.launchedAt = System.currentTimeMillis();
             Room.Out out = new Room.Out();
-            out.log(null, "launch", "L'aventure commence ! " + r.members.size() + " joueur(s) sur " + r.gameName() + ".", null);
-            if (r.rule("startWithBalls")) {
-                out.log(null, "info", r.individual()
-                        ? "Le " + r.runName() + " de chaque joueur commence à sa première Poké Ball : d'ici là, un Pokémon K.O. ne meurt pas."
-                        : "Le Soul Link commencera vraiment quand chaque joueur aura une Poké Ball : "
-                        + "d'ici là, un Pokémon K.O. ne meurt pas.", null);
-            }
-            r.checkStart(out);
+            r.launch(out);
             commit(r, out);
         }
     }

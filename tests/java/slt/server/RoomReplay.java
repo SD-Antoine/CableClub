@@ -347,23 +347,12 @@ public final class RoomReplay {
         }
     }
 
-    /** Rooms.launch, once its checks passed (every player ready with the same ROM). */
+    /** Rooms.launch, once its checks passed (every player ready with the same ROM): the room's own launch. */
     private static void launch(Room r, Room.Out out) {
         if (!"lobby".equals(r.state)) {
             throw new Http.Fail(409, "L'aventure est déjà lancée.");
         }
-        r.invites.clear();
-        r.state = "running";
-        r.adventureOpen = true;
-        r.launchedAt = 1;
-        out.log(null, "launch", "L'aventure commence ! " + r.members.size() + " joueur(s) sur " + r.gameName() + ".", null);
-        if (r.rule("startWithBalls")) {
-            out.log(null, "info", r.individual()
-                    ? "Le " + r.runName() + " de chaque joueur commence à sa première Poké Ball : d'ici là, un Pokémon K.O. ne meurt pas."
-                    : "Le Soul Link commencera vraiment quand chaque joueur aura une Poké Ball : "
-                    + "d'ici là, un Pokémon K.O. ne meurt pas.", null);
-        }
-        r.checkStart(out);
+        r.launch(out);
     }
 
     /** The rules part of Rooms.settings. */

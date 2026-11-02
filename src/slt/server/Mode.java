@@ -140,6 +140,18 @@ final class Mode {
 
         /** The classic rules are applied in the games (items, Fly, battle style "Set"): own runs only. */
         boolean classicRules();
+
+        /** Said at the launch when deaths only count from the first Poké Ball (rule "startWithBalls"). */
+        String launchNotice(Room r);
+
+        /** Do the deaths count for this player yet? */
+        boolean started(Room r, Room.Member m);
+
+        /** The room is running and has not started yet: start it if its condition is met. */
+        void checkStart(Room r, Room.Out out);
+
+        /** The player beat the Champion and the run ends by itself (rule "autoEnd"): does the room end? */
+        void champion(Room r, Room.Member m, Room.Out out);
     }
 
     private static final EncounterLogic SOUL_LINK = new SoulLinkEncounters();
@@ -665,6 +677,39 @@ final class Mode {
         public boolean classicRules() {
             return false;
         }
+
+        @Override
+        public String launchNotice(Room r) {
+            return "Le Soul Link commencera vraiment quand chaque joueur aura une Poké Ball : d'ici là, un Pokémon K.O. ne meurt pas.";
+        }
+
+        @Override
+        public boolean started(Room r, Room.Member m) {
+            return r.linkStarted;
+        }
+
+        /** The Soul Link really starts when every player has had a Poké Ball (until then, nobody dies). */
+        @Override
+        public void checkStart(Room r, Room.Out out) {
+            if (r.rule("startWithBalls") && !r.members.stream().allMatch(x -> x.hasBalls)) {
+                return;
+            }
+            r.linkStarted = true;
+            out.log(null, "start", r.rule("startWithBalls")
+                    ? "Tout le monde a des Poké Balls : le Soul Link commence vraiment. Désormais, un Pokémon K.O. est mort."
+                    : "Le Soul Link commence : un Pokémon K.O. est mort.", null);
+            for (Room.Member x : r.members) {
+                out.notice(x, "warn", "Le Soul Link commence : désormais, un Pokémon K.O. est mort, avec son âme liée.");
+            }
+        }
+
+        @Override
+        public void champion(Room r, Room.Member m, Room.Out out) {
+            boolean all = r.members.stream().allMatch(x -> "champion".equals(x.status));
+            if ("first".equals(r.ruleText("endWhen")) || all) {
+                r.finish("victory", m.name + " a battu le Maître de la Ligue.", out);
+            }
+        }
     }
 
     /** Each player's own run (Nuzlocke, Shinylocke): a death is the player's alone; a team knocked out loses the run. */
@@ -710,6 +755,31 @@ final class Mode {
         @Override
         public boolean classicRules() {
             return true;
+        }
+
+        @Override
+        public String launchNotice(Room r) {
+            return "Le " + r.runName() + " de chaque joueur commence à sa première Poké Ball : d'ici là, un Pokémon K.O. ne meurt pas.";
+        }
+
+        @Override
+        public boolean started(Room r, Room.Member m) {
+            return !r.rule("startWithBalls") || m.hasBalls;
+        }
+
+        @Override
+        public void checkStart(Room r, Room.Out out) {
+            r.linkStarted = true; // nobody waits for the others: each player's rules start with their own first Poké Ball
+        }
+
+        /** Each player's own run: it ends with the first Champion, or when every player has beaten the League or lost. */
+        @Override
+        public void champion(Room r, Room.Member m, Room.Out out) {
+            if ("first".equals(r.ruleText("endWhen"))) {
+                r.finish("victory", m.name + " a battu le Maître de la Ligue.", out);
+            } else {
+                r.endWhenAllDone(out);
+            }
         }
 
         /** Hardcore: a whiteout loses the run, whatever the other rules say. */

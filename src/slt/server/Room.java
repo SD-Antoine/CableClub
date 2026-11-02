@@ -506,19 +506,6 @@ public final class Room {
         return v == null ? String.valueOf(defaultRules(mode).get(key)) : v.toString();
     }
 
-    /** Each player has their own run (Nuzlocke, Sololocke, Shinylocke): nobody is linked. */
-    boolean individual() {
-        return !"soullink".equals(mode);
-    }
-
-    boolean sololocke() {
-        return "sololocke".equals(mode);
-    }
-
-    boolean shinylocke() {
-        return "shinylocke".equals(mode);
-    }
-
     String runName() {
         return switch (mode) {
             case "nuzlocke" -> "Nuzlocke";
@@ -530,7 +517,20 @@ public final class Room {
 
     /** Do the deaths count for this player? Soul Link: once everybody has a Poké Ball; Nuzlocke: once they have theirs. */
     boolean started(Member m) {
-        return individual() ? !rule("startWithBalls") || m.hasBalls : linkStarted;
+        return Mode.forRoom(this).run().started(this, m);
+    }
+
+    /** The adventure starts (the leader launched it; {@link Rooms} checked the players and their ROMs). */
+    void launch(Out out) {
+        invites.clear();
+        state = "running";
+        adventureOpen = true;
+        launchedAt = System.currentTimeMillis();
+        out.log(null, "launch", "L'aventure commence ! " + members.size() + " joueur(s) sur " + gameName() + ".", null);
+        if (rule("startWithBalls")) {
+            out.log(null, "info", Mode.forRoom(this).run().launchNotice(this), null);
+        }
+        checkStart(out);
     }
 
     String gameName() {
@@ -605,25 +605,12 @@ public final class Room {
         checkStart(out);
     }
 
-    /** The Soul Link really starts when every player has had a Poké Ball (until then, nobody dies). */
+    /** The run starts when its mode says so (Soul Link: once every player has had a Poké Ball; until then, nobody dies). */
     void checkStart(Out out) {
         if (linkStarted || !"running".equals(state)) {
             return;
         }
-        if (individual()) {
-            linkStarted = true; // nobody waits for the others: each player's rules start with their own first Poké Ball
-            return;
-        }
-        if (rule("startWithBalls") && !members.stream().allMatch(x -> x.hasBalls)) {
-            return;
-        }
-        linkStarted = true;
-        out.log(null, "start", rule("startWithBalls")
-                ? "Tout le monde a des Poké Balls : le Soul Link commence vraiment. Désormais, un Pokémon K.O. est mort."
-                : "Le Soul Link commence : un Pokémon K.O. est mort.", null);
-        for (Member x : members) {
-            out.notice(x, "warn", "Le Soul Link commence : désormais, un Pokémon K.O. est mort, avec son âme liée.");
-        }
+        Mode.forRoom(this).run().checkStart(this, out);
     }
 
     /** Does this wild Pokémon count for its zone? The room's mode decides (see {@link Mode.EncounterLogic}). */
@@ -1307,18 +1294,7 @@ public final class Room {
         if (!rule("autoEnd")) {
             return; // the leader ends the run by hand
         }
-        if (individual()) {
-            if ("first".equals(ruleText("endWhen"))) {
-                finish("victory", m.name + " a battu le Maître de la Ligue.", out);
-            } else {
-                endWhenAllDone(out);
-            }
-            return;
-        }
-        boolean all = members.stream().allMatch(x -> "champion".equals(x.status));
-        if ("first".equals(ruleText("endWhen")) || all) {
-            finish("victory", m.name + " a battu le Maître de la Ligue.", out);
-        }
+        Mode.forRoom(this).run().champion(this, m, out);
     }
 
     /** Each player's own run: it ends when every player has either beaten the League or lost their team. */
