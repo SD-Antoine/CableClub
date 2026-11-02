@@ -113,23 +113,49 @@ final class Mode {
         String bonusSuffix();
     }
 
+    /**
+     * How a family of modes runs a player's adventure (points 1c-3 to 1c-5): what a death and a whole team knocked
+     * out mean. Families: Soul Link (deaths are shared through the links), each player's own run (Nuzlocke,
+     * Shinylocke), Sololocke (one Pokémon at a time).
+     */
+    interface RunLogic {
+
+        /** When deaths start to count, as told to a player whose Pokémon fell before: "… commence <this>". */
+        String startsWhen();
+
+        /** A Pokémon of the player died (already recorded and written in the journal). */
+        void died(Room r, Room.Member m, Room.MonRec rec, Room.Out out);
+
+        /** The whole team of the player is knocked out (already written in the journal). */
+        void whiteout(Room r, Room.Member m, Room.Out out);
+    }
+
     private static final EncounterLogic SOUL_LINK = new SoulLinkEncounters();
     private static final EncounterLogic INDIVIDUAL = new IndividualEncounters();
     private static final EncounterLogic SHINYLOCKE = new ShinylockeEncounters();
     private static final CaptureLogic SOUL_LINK_CAPTURES = new SoulLinkCaptures();
     private static final CaptureLogic INDIVIDUAL_CAPTURES = new IndividualCaptures();
     private static final CaptureLogic SHINYLOCKE_CAPTURES = new ShinylockeCaptures();
+    private static final RunLogic SOUL_LINK_RUN = new SoulLinkRun();
+    private static final RunLogic INDIVIDUAL_RUN = new IndividualRun();
+    private static final RunLogic SOLOLOCKE_RUN = new SololockeRun();
 
     private final String id;
     private final EncounterLogic encounters;
     private final CaptureLogic captures;
+    private final RunLogic run;
     private final List<Rule> rules;
 
-    Mode(String id, EncounterLogic encounters, CaptureLogic captures, List<Rule> rules) {
+    Mode(String id, EncounterLogic encounters, CaptureLogic captures, RunLogic run, List<Rule> rules) {
         this.id = id;
         this.encounters = encounters;
         this.captures = captures;
+        this.run = run;
         this.rules = rules;
+    }
+
+    RunLogic run() {
+        return run;
     }
 
     String id() {
@@ -154,14 +180,15 @@ final class Mode {
     /** The mode of a room: its encounter and capture logic, then Room's handlers for the events not moved yet. */
     static Mode forRoom(Room room) {
         return switch (room.mode) {
-            case "shinylocke" -> of(room.mode, SHINYLOCKE, SHINYLOCKE_CAPTURES);
-            case "nuzlocke", "sololocke" -> of(room.mode, INDIVIDUAL, INDIVIDUAL_CAPTURES);
-            default -> of(room.mode, SOUL_LINK, SOUL_LINK_CAPTURES);
+            case "shinylocke" -> of(room.mode, SHINYLOCKE, SHINYLOCKE_CAPTURES, INDIVIDUAL_RUN);
+            case "nuzlocke" -> of(room.mode, INDIVIDUAL, INDIVIDUAL_CAPTURES, INDIVIDUAL_RUN);
+            case "sololocke" -> of(room.mode, INDIVIDUAL, INDIVIDUAL_CAPTURES, SOLOLOCKE_RUN);
+            default -> of(room.mode, SOUL_LINK, SOUL_LINK_CAPTURES, SOUL_LINK_RUN);
         };
     }
 
-    private static Mode of(String id, EncounterLogic enc, CaptureLogic captures) {
-        return new Mode(id, enc, captures, List.of(new EncounterRule(enc), new LegacyDispatch()));
+    private static Mode of(String id, EncounterLogic enc, CaptureLogic captures, RunLogic run) {
+        return new Mode(id, enc, captures, run, List.of(new EncounterRule(enc), new LegacyDispatch()));
     }
 
     /** Wild encounters (start and end), through the mode's encounter logic. */
@@ -559,6 +586,104 @@ final class Mode {
             }
             ctx.out.log(m, killed ? "kill" : "flee", m.name + (killed ? " met K.O. " : " quitte le combat contre ") + who
                     + " (" + e.zone + ")", Json.map("zone", e.zone));
+        }
+    }
+
+    // ================================================================ runs
+
+    /** Soul Link: a death kills the linked souls of the partners; a team knocked out ends the room's run. */
+    private static final class SoulLinkRun implements RunLogic {
+
+        @Override
+        public String startsWhen() {
+            return "quand chaque joueur a une Poké Ball.";
+        }
+
+        @Override
+        public void died(Room r, Room.Member m, Room.MonRec rec, Room.Out out) {
+            if (rec.bonus || rec.zoneKey == null) {
+                return;
+            }
+            Room.Zone z = r.zones.get(rec.zoneKey);
+            if (z == null || "cancelled".equals(z.status) || "dead".equals(z.status)) {
+                return;
+            }
+            z.status = "dead";
+            r.namingQueue.remove(z.key);
+            for (Map.Entry<String, Room.Entry> x : z.entries.entrySet()) {
+                Room.Member owner = r.member(x.getKey());
+                if (owner == null || owner == m) {
+                    continue;
+                }
+                Room.MonRec linked = owner.mons.get(x.getValue().uid);
+                if (linked != null && "alive".equals(linked.status)) {
+                    linked.status = "dead";
+                    linked.reason = "âme liée à " + rec.label();
+                    // not counted in the partner's deaths: only the player whose Pokémon fell first is
+                    out.log(owner, "death", "☠ " + linked.label() + " de " + owner.name + " meurt avec son âme liée", null);
+                    out.notice(owner, "danger", linked.label() + " est mort : son âme liée de " + m.name + " est tombée.");
+                }
+            }
+        }
+
+        @Override
+        public void whiteout(Room r, Room.Member m, Room.Out out) {
+            if (r.rule("wipeEndsRun") && r.linkStarted) {
+                m.status = "wiped";
+                r.finish("defeat", "L'équipe de " + m.name + " est tombée.", out);
+            }
+        }
+    }
+
+    /** Each player's own run (Nuzlocke, Shinylocke): a death is the player's alone; a team knocked out loses the run. */
+    private static class IndividualRun implements RunLogic {
+
+        @Override
+        public String startsWhen() {
+            return "à votre première Poké Ball.";
+        }
+
+        @Override
+        public void died(Room r, Room.Member m, Room.MonRec rec, Room.Out out) {
+            // nobody is linked: the death is this player's alone
+        }
+
+        @Override
+        public void whiteout(Room r, Room.Member m, Room.Out out) {
+            if (hardcoreWipe(r, m, out)) {
+                return;
+            }
+            if (r.rule("wipeEndsRun") && r.started(m) && !"wiped".equals(m.status)) {
+                m.status = "wiped";
+                out.log(m, "wipe", "☠ " + m.name + " a perdu son Nuzlocke : toute son équipe est tombée.", null);
+                r.endWhenAllDone(out);
+            }
+        }
+
+        /** Hardcore: a whiteout loses the run, whatever the other rules say. */
+        static boolean hardcoreWipe(Room r, Room.Member m, Room.Out out) {
+            if (!r.rule("hardcore") || !r.started(m) || "wiped".equals(m.status) || "champion".equals(m.status)) {
+                return false;
+            }
+            m.status = "wiped";
+            out.log(m, "wipe", "☠ " + m.name + " a perdu son " + r.runName() + " Hardcore : toute son équipe est tombée.", null);
+            r.endWhenAllDone(out);
+            return true;
+        }
+    }
+
+    /** Sololocke: the death of the Pokémon alone decides (another one of the PC takes over, or the run is lost). */
+    private static final class SololockeRun extends IndividualRun {
+
+        @Override
+        public void died(Room r, Room.Member m, Room.MonRec rec, Room.Out out) {
+            r.soloFallen(m, rec, out);
+        }
+
+        @Override
+        public void whiteout(Room r, Room.Member m, Room.Out out) {
+            // the death of the Pokémon already decided (soloFallen), unless Hardcore loses the run here
+            hardcoreWipe(r, m, out);
         }
     }
 }

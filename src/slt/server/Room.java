@@ -954,43 +954,17 @@ public final class Room {
         if (r == null || !"alive".equals(r.status) || "existing".equals(r.origin)) {
             return;
         }
+        Mode.RunLogic run = Mode.forRoom(this).run();
         if (!started(m)) {
             out.log(m, "faint", r.label() + " de " + m.name + " est K.O., sans conséquence : le " + runName() + " n'a pas encore commencé.", null);
-            out.notice(m, "info", r.label() + " est K.O. mais ne meurt pas : le " + runName() + " commence "
-                    + (individual() ? "à votre première Poké Ball." : "quand chaque joueur a une Poké Ball."));
+            out.notice(m, "info", r.label() + " est K.O. mais ne meurt pas : le " + runName() + " commence " + run.startsWhen());
             return;
         }
         r.status = "dead";
         r.reason = "K.O.";
         m.stats.deaths++;
         out.log(m, "death", "☠ " + r.label() + " de " + m.name + " est mort" + (r.zone != null ? " (" + r.zone + ")" : ""), null);
-        if (sololocke()) {
-            soloFallen(m, r, out);
-            return;
-        }
-        if (individual() || r.bonus || r.zoneKey == null) {
-            return;
-        }
-        Zone z = zones.get(r.zoneKey);
-        if (z == null || "cancelled".equals(z.status) || "dead".equals(z.status)) {
-            return;
-        }
-        z.status = "dead";
-        namingQueue.remove(z.key);
-        for (Map.Entry<String, Entry> x : z.entries.entrySet()) {
-            Member owner = member(x.getKey());
-            if (owner == null || owner == m) {
-                continue;
-            }
-            MonRec linked = owner.mons.get(x.getValue().uid);
-            if (linked != null && "alive".equals(linked.status)) {
-                linked.status = "dead";
-                linked.reason = "âme liée à " + r.label();
-                // not counted in the partner's deaths: only the player whose Pokémon fell first is
-                out.log(owner, "death", "☠ " + linked.label() + " de " + owner.name + " meurt avec son âme liée", null);
-                out.notice(owner, "danger", linked.label() + " est mort : son âme liée de " + m.name + " est tombée.");
-            }
-        }
+        run.died(this, m, r, out);
     }
 
     private void live(Member m, Map<String, Object> ev, Out out) {
@@ -1167,7 +1141,7 @@ public final class Room {
     }
 
     /** Sololocke: the player's Pokémon is dead. Lost run, or another one of the PC takes over (if any is alive). */
-    private void soloFallen(Member m, MonRec r, Out out) {
+    void soloFallen(Member m, MonRec r, Out out) {
         if ("wiped".equals(m.status)) {
             return;
         }
@@ -1197,28 +1171,7 @@ public final class Room {
 
     private void whiteout(Member m, Out out) {
         out.log(m, "whiteout", "L'équipe de " + m.name + " est entièrement K.O.", null);
-        if (individual() && rule("hardcore") && started(m) && !"wiped".equals(m.status) && !"champion".equals(m.status)) {
-            // Hardcore: a whiteout loses the run, whatever the other rules say
-            m.status = "wiped";
-            out.log(m, "wipe", "☠ " + m.name + " a perdu son " + runName() + " Hardcore : toute son équipe est tombée.", null);
-            endWhenAllDone(out);
-            return;
-        }
-        if (sololocke()) {
-            return; // the death of the Pokémon already decided (soloFallen)
-        }
-        if (individual()) {
-            if (rule("wipeEndsRun") && started(m) && !"wiped".equals(m.status)) {
-                m.status = "wiped";
-                out.log(m, "wipe", "☠ " + m.name + " a perdu son Nuzlocke : toute son équipe est tombée.", null);
-                endWhenAllDone(out);
-            }
-            return;
-        }
-        if (rule("wipeEndsRun") && linkStarted) {
-            m.status = "wiped";
-            finish("defeat", "L'équipe de " + m.name + " est tombée.", out);
-        }
+        Mode.forRoom(this).run().whiteout(this, m, out);
     }
 
     private void battle(Member m, Map<String, Object> ev, Out out) {
@@ -1368,7 +1321,7 @@ public final class Room {
     }
 
     /** Each player's own run: it ends when every player has either beaten the League or lost their team. */
-    private void endWhenAllDone(Out out) {
+    void endWhenAllDone(Out out) {
         if (!members.stream().allMatch(x -> "champion".equals(x.status) || "wiped".equals(x.status))) {
             return;
         }
