@@ -49,6 +49,11 @@ jobs:
         shell: powershell
         run: .\build.ps1
 
+      # security audit (point 9) : Host check and the file-reader fuzzers; the UPR jar built above is reused
+      - name: Tests de sécurité
+        shell: powershell
+        run: .\tests\security\security-tests.ps1
+
       # --------------------------------------------------- Windows code signing (SignPath)
       - name: SignPath
         id: signpath
