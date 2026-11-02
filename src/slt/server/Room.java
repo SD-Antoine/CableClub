@@ -106,7 +106,7 @@ public final class Room {
         return r;
     }
 
-    private static final Set<Integer> LEGENDARIES = Set.of(144, 145, 146, 150, 151, 243, 244, 245, 249, 250, 251,
+    static final Set<Integer> LEGENDARIES = Set.of(144, 145, 146, 150, 151, 243, 244, 245, 249, 250, 251,
             377, 378, 379, 380, 381, 382, 383, 384, 385, 386, 480, 481, 482, 483, 484, 485, 486, 487, 488, 489, 490,
             491, 492, 493, 494, 638, 639, 640, 641, 642, 643, 644, 645, 646, 647, 648, 649);
 
@@ -555,13 +555,6 @@ public final class Room {
     void dispatch(Member m, Map<String, Object> ev, Out out) {
         switch (Json.str(ev, "type")) {
             case "location" -> location(m, ev, out);
-            case "encounter" -> {
-                if ("start".equals(Json.str(ev, "phase"))) {
-                    encounterStart(m, ev, out);
-                } else {
-                    encounterEnd(m, ev, out);
-                }
-            }
             case "capture" -> capture(m, ev, out);
             case "update" -> update(m, ev, out);
             case "faint" -> faint(m, ev, out);
@@ -595,66 +588,11 @@ public final class Room {
                 hint = " — zone annulée";
             } else if ("dead".equals(z.status)) {
                 hint = " — lien perdu";
-            } else if (shinylocke()) {
-                hint = e != null && "caught".equals(e.result) && rule("oneShinyPerZone") ? " — chromatique déjà capturé ici" : "";
-            } else if (individual()) {
-                hint = e != null ? " — première rencontre déjà faite ici" : "";
-            } else if (e != null) {
-                hint = " — capture déjà faite ici";
-            } else if (!z.entries.isEmpty()) {
-                hint = " — déjà capturée par un partenaire";
+            } else {
+                hint = Mode.forRoom(this).encounters().zoneHint(this, z, e);
             }
         }
         out.log(m, "zone", m.name + " entre dans " + zone + hint, Json.map("zone", zone));
-    }
-
-    private void encounterStart(Member m, Map<String, Object> ev, Out out) {
-        String uid = Json.str(ev, "uid");
-        String zone = zoneName(Json.str(ev, "zone"));
-        String key = zoneKey(zone);
-        int species = (int) Json.num(ev, "species", 0);
-        String speciesName = Json.str(ev, "speciesName");
-        int level = (int) Json.num(ev, "level", 0);
-        boolean shiny = Json.bool(ev, "shiny", false);
-        Encounter e = new Encounter();
-        e.uid = uid;
-        e.zoneKey = key;
-        e.zone = zone;
-        e.species = species;
-        e.speciesName = speciesName;
-        e.level = level;
-        e.shiny = shiny;
-        e.at = System.currentTimeMillis();
-        e.kind = classify(m, key, species, shiny);
-        m.encounter = e;
-        m.stats.encounters++;
-        m.live.put("battle", "wild");
-        String who = (speciesName == null ? "#" + species : speciesName) + " N." + level + (shiny ? " ✨" : "");
-        out.log(m, "encounter", m.name + " rencontre " + who + " (" + zone + ")",
-                Json.map("species", (long) species, "speciesName", speciesName, "level", (long) level, "zone", zone,
-                        "shiny", shiny, "kind", e.kind));
-        switch (e.kind) {
-            case "zone" -> out.notice(m, shinylocke() ? "ok" : "info", shinylocke()
-                    ? "Chromatique ! Vous pouvez le capturer."
-                    : individual()
-                    ? "Première rencontre de " + zone + " : c'est votre seule chance ici (fuir ou le battre l'épuise)."
-                    : "Première rencontre de " + zone + " : elle compte pour le Soul Link.");
-            case "shiny" -> out.notice(m, "ok", "Chromatique ! Capture libre (clause chromatique), sans lien.");
-            case "used" -> out.notice(m, "warn", shinylocke()
-                    ? zone + " : vous y avez déjà capturé un chromatique. Capture interdite."
-                    : individual()
-                    ? zone + " : vous y avez déjà rencontré un Pokémon. Capture interdite."
-                    : zone + " : vous y avez déjà capturé ou mis K.O. un Pokémon. Capture interdite.");
-            case "cancelled" -> out.notice(m, "warn", zone + " est annulée pour la salle. Capture interdite.");
-            case "dupe" -> out.notice(m, "warn", individual()
-                    ? "Doublon : vous avez déjà cette lignée d'évolution. Rencontre ignorée, fuyez ou mettez-le K.O."
-                    : "Doublon : cette lignée d'évolution est déjà dans la salle. Rencontre ignorée, fuyez ou mettez-le K.O.");
-            case "legendary" -> out.notice(m, "warn", "Légendaire interdit par les règles : ne le capturez pas.");
-            case "noballs" -> out.notice(m, "info", "Pas encore de Poké Ball : cette rencontre ne compte pas pour le " + runName() + ".");
-            default -> {
-                // nothing to say
-            }
-        }
     }
 
     /** The bag holds Poké Balls (sent by the game when it changes). */
@@ -688,73 +626,13 @@ public final class Room {
         }
     }
 
-    /** Does this wild Pokémon count for its zone? */
+    /** Does this wild Pokémon count for its zone? The room's mode decides (see {@link Mode.EncounterLogic}). */
     private String classify(Member m, String key, int species, boolean shiny) {
-        if (shinylocke()) {
-            // only shinies may be caught, anywhere (one per zone if the room wants)
-            if (!started(m)) {
-                return "noballs";
-            }
-            if (LEGENDARIES.contains(species) && !rule("legendaries")) {
-                return "legendary";
-            }
-            if (!shiny) {
-                return "notshiny";
-            }
-            Zone sz = zones.get(key);
-            Entry se = sz == null ? null : sz.entries.get(m.userId);
-            if (rule("oneShinyPerZone") && se != null && "caught".equals(se.result)) {
-                return "used";
-            }
-            if (rule("dupesClause") && ownedFamily(m, species, key, false)) {
-                return "dupe";
-            }
-            return "zone";
-        }
-        if (individual()) {
-            // each player alone: the first wild Pokémon met in a zone is the only one that can be caught there
-            if (!started(m)) {
-                return "noballs";
-            }
-            if (shiny && rule("shinyClause")) {
-                return "shiny";
-            }
-            if (LEGENDARIES.contains(species) && !rule("legendaries")) {
-                return "legendary";
-            }
-            Zone nz = zones.get(key);
-            if (nz != null && nz.entries.containsKey(m.userId)) {
-                return "used";
-            }
-            if (rule("dupesClause") && ownedFamily(m, species, key, false)) {
-                return "dupe";
-            }
-            return "zone";
-        }
-        if (!m.hasBalls && rule("startWithBalls")) {
-            return "noballs";
-        }
-        if (shiny && rule("shinyClause")) {
-            return "shiny";
-        }
-        if (LEGENDARIES.contains(species) && !rule("legendaries")) {
-            return "legendary";
-        }
-        Zone z = zones.get(key);
-        if (z != null && "cancelled".equals(z.status)) {
-            return "cancelled";
-        }
-        if (z != null && z.entries.containsKey(m.userId)) {
-            return "used";
-        }
-        if (rule("dupesClause") && ownedFamily(m, species, key, true)) {
-            return "dupe";
-        }
-        return "zone";
+        return Mode.forRoom(this).encounters().classify(this, m, key, species, shiny);
     }
 
     /** An evolution line already caught by someone in the room (encountering player's evolution data). */
-    private boolean ownedFamily(Member m, int species, String zoneKey, boolean everyone) {
+    boolean ownedFamily(Member m, int species, String zoneKey, boolean everyone) {
         int fam = m.family(species);
         for (Member other : members) {
             if (!everyone && other != m) {
@@ -775,67 +653,8 @@ public final class Room {
         return false;
     }
 
-    private void encounterEnd(Member m, Map<String, Object> ev, Out out) {
-        Encounter e = m.encounter;
-        String uid = Json.str(ev, "uid");
-        m.live.remove("battle");
-        if (e == null || (uid != null && !uid.equals(e.uid))) {
-            return;
-        }
-        m.encounter = null;
-        boolean killed = Json.bool(ev, "wildFainted", false);
-        String who = e.speciesName == null ? "#" + e.species : e.speciesName;
-        if (individual()) {
-            if (killed) {
-                m.stats.wildKills++;
-            }
-            if ("zone".equals(e.kind) && !shinylocke()) {
-                // the first Pokémon of the zone got away or was beaten: no second chance in this zone
-                Zone z = zone(e.zoneKey, e.zone);
-                if (!z.entries.containsKey(m.userId)) {
-                    Entry entry = new Entry();
-                    entry.result = killed ? "killed" : "fled";
-                    entry.uid = e.uid;
-                    entry.species = e.species;
-                    entry.speciesName = e.speciesName;
-                    entry.level = e.level;
-                    entry.at = System.currentTimeMillis();
-                    z.entries.put(m.userId, entry);
-                }
-                out.log(m, killed ? "kill" : "flee", m.name + (killed ? " met K.O. " : " quitte le combat contre ") + who
-                        + ", première rencontre de " + e.zone + " : pas de seconde chance ici", Json.map("zone", e.zone));
-            } else {
-                out.log(m, killed ? "kill" : "flee", m.name + (killed ? " met K.O. " : " quitte le combat contre ") + who
-                        + " (" + e.zone + ")", Json.map("zone", e.zone));
-            }
-            return;
-        }
-        if (!killed) {
-            out.log(m, "flee", m.name + " quitte le combat contre " + who, Json.map("zone", e.zone));
-            return;
-        }
-        m.stats.wildKills++;
-        if (!"zone".equals(e.kind)) {
-            out.log(m, "kill", m.name + " met K.O. " + who + " (" + e.zone + ")", Json.map("zone", e.zone));
-            return;
-        }
-        // the first Pokémon of the zone is dead: the zone is lost for the whole room
-        Zone z = zone(e.zoneKey, e.zone);
-        Entry entry = new Entry();
-        entry.result = "killed";
-        entry.uid = e.uid;
-        entry.species = e.species;
-        entry.speciesName = e.speciesName;
-        entry.level = e.level;
-        entry.at = System.currentTimeMillis();
-        z.entries.put(m.userId, entry);
-        out.log(m, "kill", m.name + " met K.O. " + who + ", premier Pokémon de " + e.zone + " : zone annulée",
-                Json.map("zone", e.zone));
-        cancel(z, out);
-    }
-
     /** Zone cancelled: the Pokémon caught there are released, items used to catch them are given back. */
-    private void cancel(Zone z, Out out) {
+    void cancel(Zone z, Out out) {
         if ("cancelled".equals(z.status)) {
             return;
         }
@@ -1892,7 +1711,7 @@ public final class Room {
 
     // ---------------------------------------------------------------- zones
 
-    private Zone zone(String key, String name) {
+    Zone zone(String key, String name) {
         Zone z = zones.get(key);
         if (z == null) {
             z = new Zone();
