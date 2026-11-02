@@ -35,6 +35,11 @@ final class LocalApi {
     void handle(HttpExchange ex) {
         String path = ex.getRequestURI().getPath();
         try {
+            if (!loopbackHost(ex.getRequestHeaders().getFirst("Host"))) {
+                // DNS rebinding: a site that resolves its own domain to 127.0.0.1 reaches this API as same-origin
+                // and could set the X-SLT header itself. Only a loopback Host is the real local interface.
+                throw new Http.Fail(403, "Requête refusée (hôte inattendu).");
+            }
             if (!path.startsWith("/api/")) {
                 Http.serveStatic(ex, app.webDir);
                 return;
@@ -361,6 +366,30 @@ final class LocalApi {
             app.hub.send("notice", b);
             Http.ok(ex);
         });
+    }
+
+    /**
+     * Whether the Host header names the local loopback interface (127.x, ::1 or localhost, with or without the port):
+     * the only way the real interface and the game player reach this API. A browser always sends a Host header, so a
+     * page whose domain was rebound to 127.0.0.1 (DNS rebinding) still carries its own domain here and is refused; a
+     * missing Host (non-browser clients) is allowed.
+     */
+    static boolean loopbackHost(String host) {
+        if (host == null || host.isBlank()) {
+            return true;
+        }
+        String h = host.trim().toLowerCase(java.util.Locale.ROOT);
+        if (h.startsWith("[")) {
+            int close = h.indexOf(']');
+            h = close > 0 ? h.substring(1, close) : h.substring(1);
+        } else {
+            int colon = h.indexOf(':');
+            if (colon >= 0) {
+                h = h.substring(0, colon);
+            }
+        }
+        return h.equals("localhost") || h.equals("::1") || h.equals("0:0:0:0:0:0:0:1")
+                || h.matches("127\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}");
     }
 
     /** Reads the interface needs without custom headers: the event stream and the ROM download link. */

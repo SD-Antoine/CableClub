@@ -5,6 +5,9 @@
 /data/
 /data*/
 /serveur/
+# security audit (point 9): reports stay local until a flaw is fixed; scan runs never enter the repo
+/docs/security/
+/tests/security/strix_runs/
 *.gb
 *.gbc
 *.gba
