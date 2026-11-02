@@ -38,8 +38,12 @@ public final class Json {
     }
 
     private static final class Parser {
+        /** Deepest nesting of objects and arrays accepted: well above any real message, stops a stack overflow. */
+        private static final int MAX_DEPTH = 512;
+
         final String s;
         int pos;
+        int depth;
 
         Parser(String s) {
             this.s = s;
@@ -67,9 +71,14 @@ public final class Json {
             char c = s.charAt(pos);
             switch (c) {
                 case '{':
-                    return readObject();
-                case '[':
-                    return readArray();
+                case '[': {
+                    if (++depth > MAX_DEPTH) {
+                        throw error("JSON trop imbriqué (profondeur maximale " + MAX_DEPTH + ")");
+                    }
+                    Object nested = c == '{' ? readObject() : readArray();
+                    depth--;
+                    return nested;
+                }
                 case '"':
                     return readString();
                 case 't':
