@@ -6,6 +6,7 @@ import { h, mount, btn } from '../ui.js';
 import { renderHome } from './home.js';
 import { renderPublic } from './public.js';
 import { renderHistory } from './history.js';
+import { renderLeaderboard } from './leaderboard.js';
 import { mobile } from '../platform.js';
 
 export const MODES = {
@@ -35,9 +36,9 @@ export const MODES = {
   },
 };
 
-const TABS = [['salles', 'Mes salles'], ['publiques', 'Salles publiques'], ['historique', 'Historique']];
+const TABS = [['salles', 'Mes salles'], ['publiques', 'Salles publiques'], ['historique', 'Historique'], ['classements', 'Classements']];
 // the phone has no side rail: the modes are chosen at the top of the page
-const PHONE_TABS = [['salles', 'Mes salles'], ['publiques', 'Publiques'], ['historique', 'Historique']];
+const PHONE_TABS = [['salles', 'Salles'], ['publiques', 'Publiques'], ['historique', 'Historique'], ['classements', 'Classement']];
 
 export function renderMode(container, mode, tab) {
   const m = MODES[mode]?.soon ? MODES.soullink : MODES[mode] || MODES.soullink;
@@ -59,5 +60,6 @@ export function renderMode(container, mode, tab) {
   const opts = { mode: MODES[mode]?.soon ? 'soullink' : MODES[mode] ? mode : 'soullink' };
   if (current === 'publiques') return renderPublic(body, opts);
   if (current === 'historique') return renderHistory(body, opts);
+  if (current === 'classements') return renderLeaderboard(body, opts);
   return renderHome(body, opts);
 }

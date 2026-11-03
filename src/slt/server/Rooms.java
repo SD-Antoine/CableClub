@@ -245,6 +245,17 @@ public final class Rooms {
         return out;
     }
 
+    /** Every finished run on this server (statistics and leaderboards). */
+    List<Records.Run> runs() {
+        List<Records.Run> out = new ArrayList<>();
+        for (Room r : rooms.values()) {
+            synchronized (r) {
+                out.addAll(Records.of(r));
+            }
+        }
+        return out;
+    }
+
     /** Every Soul Link the user took part in (history). */
     List<Object> history(Accounts.User user) {
         List<Object> out = new ArrayList<>();

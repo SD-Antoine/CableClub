@@ -1,7 +1,7 @@
 // Profiles: a player's card (any name or picture opens it) and the page where
 // the player edits theirs (picture, name, bio, favourite game and Pokémon).
 
-import { h, mount, btn, avatar, modal, act, toast, errorToast, field, confirmDialog, dateTime, keepScroll, icon } from '../ui.js';
+import { h, mount, btn, avatar, modal, act, toast, errorToast, field, confirmDialog, dateTime, keepScroll, icon, switchEl } from '../ui.js';
 import { local, srv } from '../api.js';
 import { store, refreshState, refreshFriends, me } from '../store.js';
 import { GAMES, gameName } from '../data/games.js';
@@ -163,6 +163,17 @@ export function renderProfile(container) {
             toast('Profil enregistré.', 'ok');
             draw();
           }), { kind: 'primary' }))),
+      // the leaderboards: nobody appears in them without asking (point 3)
+      h('div', { class: 'section-title' }, h('h2', null, 'Classements')),
+      h('div', { class: 'card' }, h('div', { class: 'rule-row' },
+        h('div', { class: 'grow' }, h('b', null, 'Apparaître dans les classements'),
+          h('small', null, 'Votre pseudo, votre photo et vos résultats (parties terminées, victoires, morts, survie) deviennent visibles par tous les joueurs de ce serveur, dans l’onglet « Classements » de chaque mode. Désactivé tant que vous ne le demandez pas ; vous pouvez le retirer à tout moment.')),
+        switchEl(!!u.ranked, (v) => act(null, async () => {
+          await local.post('/api/me/profile', { ranked: v });
+          await refreshState();
+          toast(v ? 'Vous apparaissez dans les classements.' : 'Vous n’apparaissez plus dans les classements.', 'ok');
+          draw();
+        })))),
       // the account: not shown to the other players
       h('div', { class: 'section-title' }, h('h2', null, 'Compte')),
       h('div', { class: 'card stack' },

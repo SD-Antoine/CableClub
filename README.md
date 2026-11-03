@@ -38,6 +38,13 @@ textes, jamais de code (format : [docs/modes.md](docs/modes.md)). Un mode peut
 le trouvent, le reprennent, créent des salles avec (publiques si le mode est
 publié) et peuvent le signaler aux modérateurs.
 
+**Autour du jeu** : les **objectifs** du mode et la progression de chaque joueur
+(badges, captures, Maître) dans la salle et dans le panneau du jeu ; vos
+**statistiques** par mode (parties terminées, victoires, captures, morts, survie)
+dans l'onglet Historique ; des **classements** par mode, par jeu et par nombre de
+joueurs (solo à 10), où ne figurent que les joueurs qui l'ont demandé dans leur
+profil.
+
 **[⬇ Télécharger la dernière version](https://github.com/SD-Antoine/CableClub/releases/latest)**
 (`CableClub-x.y.z-windows-x64.zip` : décompressez-le et lancez `CableClub.exe`, rien à
 installer). Les nouveautés de chaque version sont dans [CHANGELOG.md](CHANGELOG.md).

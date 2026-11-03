@@ -921,3 +921,8 @@ html.mobile .chat-del { display: grid; opacity: .55; }
 .goal-bar { grid-column: 1 / -1; height: 4px; border-radius: 2px; background: var(--surface-2); overflow: hidden; }
 .goal-bar i { display: block; height: 100%; background: var(--accent); }
 .goal.done .goal-bar i { background: var(--ok); }
+
+/* leaderboards (point 3) */
+.rank-row { gap: 10px; }
+.rank-row .rank { width: 30px; text-align: center; font-variant-numeric: tabular-nums; color: var(--muted); flex: none; }
+.rank-row.me b { color: var(--accent); }

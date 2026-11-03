@@ -31,6 +31,10 @@ classiques. Générations 1 à 5. Version dans `src/slt/Version.java`, historiqu
      publics (publication rattachée au compte, signalement via `/api/report`, retrait par un modérateur) ;
      une salle d'un mode importé n'est publique que si ce mode est publié et non retiré.
    - `Rooms.java` : salles, journal, écrans en direct (JPEG relayés), copies cloud des sauvegardes.
+   - `Records.java` : les parties terminées (bilan de fin de chaque salle) → statistiques d'un joueur
+     (`/api/me/stats`) et classements (`/api/leaderboard`, mode officiel, jeu, nombre de joueurs ; seuls
+     les comptes `ranked`, option du profil désactivée par défaut). Objectifs affichés :
+     `web/js/data/objectives.js`.
    - `ServerApi.java`, `Accounts.java`, `Hub.java` (présence, flux SSE).
    - Côté interface : `web/js/data/modes.js` (les mêmes fichiers de mode, `specOf`, `familyOf`),
      `web/js/data/rules.js` (affichage des règles : libellé, texte, sections), l'éditeur

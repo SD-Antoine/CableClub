@@ -126,6 +126,7 @@ final class ServerApi {
 
     private Map<String, Object> me(Accounts.User u) {
         Map<String, Object> m = u.profile();
+        m.put("ranked", u.ranked); // only the user sees whether they appear in the leaderboards
         boolean admin = chat.admin(u);
         m.put("admin", admin);
         if (admin) {
@@ -378,6 +379,20 @@ final class ServerApi {
                     (int) parse(q.get("size"), 0), "1".equals(q.get("full")))));
         });
         r.on("GET", "/api/history", (ex, p) -> Http.json(ex, 200, Json.map("rooms", rooms.history(user(ex)))));
+        // statistics and leaderboards (point 3), from the runs the server recorded
+        r.on("GET", "/api/me/stats", (ex, p) -> Http.json(ex, 200, Records.stats(rooms.runs(), user(ex).id)));
+        // ?mode=<official mode>&game=<game id>&players=<size of the room, 0: all>
+        r.on("GET", "/api/leaderboard", (ex, p) -> {
+            Accounts.User u = user(ex);
+            Map<String, String> q = Http.query(ex);
+            String mode = q.get("mode");
+            if (ModeSpec.official(mode) == null) {
+                throw new Http.Fail(400, "Classement inconnu : choisissez un mode officiel.");
+            }
+            String game = q.get("game");
+            Http.json(ex, 200, Json.map("rows", Records.leaderboard(rooms.runs(), accounts, mode,
+                    game == null || game.isBlank() ? null : game, (int) parse(q.get("players"), 0), u.id), "ranked", u.ranked));
+        });
         // the gallery of public modes (point 2d): ?q=words, ?mine=1 (my own, those taken out included)
         r.on("GET", "/api/modes/public", (ex, p) -> {
             Accounts.User u = user(ex);

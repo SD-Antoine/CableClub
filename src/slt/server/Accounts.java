@@ -61,6 +61,8 @@ public final class Accounts {
         public long mutedUntil;
         /** When the user accepted the terms of use (0 = account older than them, or an old client). */
         public long termsAt;
+        /** The user chose to appear in the leaderboards (off until they ask: point 3). */
+        public boolean ranked;
 
         User(String id, String username, String display, long createdAt) {
             this.id = id;
@@ -90,7 +92,7 @@ public final class Accounts {
                     "friends", new ArrayList<Object>(friends), "incoming", new ArrayList<Object>(incoming),
                     "outgoing", new ArrayList<Object>(outgoing), "blocked", new ArrayList<Object>(blocked),
                     "bio", bio, "favGame", favGame, "favPokemon", favPokemon, "avatarAt", avatarAt,
-                    "mutedUntil", mutedUntil, "termsAt", termsAt);
+                    "mutedUntil", mutedUntil, "termsAt", termsAt, "ranked", ranked);
         }
 
         static User fromJson(Map<String, Object> m) {
@@ -109,6 +111,7 @@ public final class Accounts {
             u.avatarAt = Json.num(m, "avatarAt", 0);
             u.mutedUntil = Json.num(m, "mutedUntil", 0);
             u.termsAt = Json.num(m, "termsAt", 0);
+            u.ranked = Json.bool(m, "ranked", false);
             return u;
         }
     }
@@ -213,7 +216,7 @@ public final class Accounts {
         save();
     }
 
-    /** Changes the fields of the profile that are given (name, bio, favourite game and Pokémon). */
+    /** Changes the fields of the profile that are given (name, bio, favourite game and Pokémon, leaderboards). */
     public synchronized void updateProfile(User user, Map<String, Object> b) {
         String name = b.containsKey("name") ? cleanDisplay(Json.str(b, "name")) : user.display;
         String bio = b.containsKey("bio") ? cleanText(Json.str(b, "bio"), 160, "Bio") : user.bio;
@@ -223,6 +226,9 @@ public final class Accounts {
         user.bio = bio;
         user.favGame = game;
         user.favPokemon = mon;
+        if (b.get("ranked") instanceof Boolean on) {
+            user.ranked = on;
+        }
         save();
     }
 
