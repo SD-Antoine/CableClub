@@ -6,14 +6,17 @@ import {
   SECTIONS, TWEAKS, PRESETS, optionAvailable, choiceAvailable, sanitizeSettings, presetById, randomSeed, summarize,
 } from '../data/rando.js';
 
-/** The room's rules: switches (editable by the leader, read-only for the others). */
+/**
+ * The room's rules: switches (editable by the leader, read-only for the others). « mode »: a mode id, a room or a
+ * mode file; a rule the mode fixes stays as it is.
+ */
 export function rulesEditor(rules, { editable, onChange, mode, gen, gameId, launched }) {
   const r = { ...ruleDefaults(mode), ...(rules || {}) };
   return h('div', { class: 'list' }, rulesOf(mode, gen, gameId).map((def) => {
     if (def.section) return h('div', { class: 'rule-section' }, def.section);
     if (def.when && !def.when(r)) return null; // an option of another rule, shown when that rule is on
     // a rule written in the room's ROM no longer changes once the adventure is launched
-    const can = editable && !(def.rom && launched);
+    const can = editable && !(def.rom && launched) && !def.locked;
     let control;
     if (def.type === 'bool') {
       control = switchEl(!!r[def.key] && !def.soon, (v) => onChange({ [def.key]: v }), { disabled: !can || def.soon });
@@ -21,9 +24,26 @@ export function rulesEditor(rules, { editable, onChange, mode, gen, gameId, laun
       control = seg(def.options, r[def.key], (v) => onChange({ [def.key]: v }), { disabled: !can });
     }
     return h('div', { class: ['rule-row', def.highlight && 'rule-key', def.soon && 'soon'] },
-      h('div', { class: 'grow' }, h('b', null, def.highlight ? '★ ' : '', def.label, def.soon ? h('span', { class: 'chip', style: { marginLeft: '8px' } }, 'Bientôt') : null),
+      h('div', { class: 'grow' }, h('b', null, def.highlight ? '★ ' : '', def.label, def.soon ? h('span', { class: 'chip', style: { marginLeft: '8px' } }, 'Bientôt') : null,
+        def.locked ? h('span', { class: 'chip', style: { marginLeft: '8px' }, title: 'Cette règle ne change pas dans les salles de ce mode.' }, 'Fixée par le mode') : null),
         def.desc ? h('small', null, def.desc) : null), control);
   }));
+}
+
+/** The goals of a mode, in words (they decide nothing: point 3 shows them in the game). */
+export function objectiveText(o) {
+  if (o.type === 'badges') return `Obtenir ${o.count} badge${o.count > 1 ? 's' : ''}`;
+  if (o.type === 'captures') return `Capturer ${o.count} Pokémon`;
+  return 'Battre le Maître de la Ligue';
+}
+
+/** What an imported mode is (its name, author, licence, text, goals); nothing for an official mode. */
+export function modeInfo(spec) {
+  if (!spec) return null;
+  return h('div', { class: 'banner mt-s mb' }, icon('info'), h('div', { class: 'grow' },
+    h('b', null, `Mode « ${spec.name} »`), h('span', { class: 'small muted' }, ` par ${spec.author} · ${spec.license}`),
+    spec.description ? h('div', { class: 'small mt-s' }, spec.description) : null,
+    spec.objectives?.length ? h('div', { class: 'tiny muted mt-s' }, `Objectifs : ${spec.objectives.map(objectiveText).join(', ')}`) : null));
 }
 
 /** Short description of the randomization of a room. */

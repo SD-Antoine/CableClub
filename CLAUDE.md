@@ -21,15 +21,21 @@ classiques. Générations 1 à 5. Version dans `src/slt/Version.java`, historiqu
      liés ou non, première rencontre ou chromatiques seuls, équipe libre ou d'un seul Pokémon) ; les
      8 combinaisons tournent sur le même `Engine`. Aucun handler de `Room` ne teste le mode.
    - `ModeSpec.java` : un mode est un fichier déclaratif `.ccmode.json` (format : `docs/modes.md`) —
-     catalogue fermé des règles, validateur strict (pas de code, de binaire, d'image ni d'adresse ;
-     `honorNoEvolution`, écrite dans la ROM, réservée aux modes officiels), registre des modes
-     officiels (`web/js/data/modes/`). `ModeSpecTest` vérifie que les fichiers officiels redonnent
+     catalogue fermé des règles (`web/js/data/modes/catalog.json`, lu aussi par l'interface),
+     validateur strict (pas de code, de binaire, d'image ni d'adresse ; `honorNoEvolution`, écrite
+     dans la ROM, réservée aux modes officiels), registre des modes officiels (`web/js/data/modes/`),
+     `family()` (l'onglet d'un mode). `ModeSpecTest` vérifie que les fichiers officiels redonnent
      exactement les règles d'avant ; chaque nouvelle combinaison a son scénario golden.
+   - Mode importé : `POST /api/rooms` avec `modeFile` (copié dans la salle, relu au redémarrage),
+     `POST /api/modes/check` (vérification) ; une salle d'un mode importé reste privée (publication :
+     point 2d, après le ré-audit de sécurité).
    - `Rooms.java` : salles, journal, écrans en direct (JPEG relayés), copies cloud des sauvegardes.
    - `ServerApi.java`, `Accounts.java`, `Hub.java` (présence, flux SSE).
-   - Définitions des règles côté interface : `web/js/data/rules.js` (clé, type, libellé).
+   - Côté interface : `web/js/data/modes.js` (les mêmes fichiers de mode, `specOf`, `familyOf`),
+     `web/js/data/rules.js` (affichage des règles : libellé, texte, sections), l'éditeur
+     `web/js/views/modes.js` (« Mes modes », gardés dans le navigateur, exportés en fichier).
    - Capacités des jeux : `web/js/data/capabilities.json` (par génération, exceptions par jeu, besoins
-     des modes et des règles), lu par `Capabilities.java` (refus côté serveur) et par
+     des règles ; ceux d'un mode sont dans son fichier, `needs`), lu par `Capabilities.java` (refus côté serveur) et par
      `web/js/data/capabilities.js` (ce que l'interface propose). Une capacité se relève dans les
      adaptateurs avant d'être écrite là ; `tests/capabilities.test.mjs` et `CapabilitiesTest` la vérifient.
 2. **Adaptateurs de jeux** (seuls à connaître la mémoire d'un jeu) — `src/slt/player/`

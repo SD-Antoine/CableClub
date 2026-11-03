@@ -1,6 +1,7 @@
 // Supported games (generations 1 to 5).
 
 import { has, deathBoxText } from './capabilities.js';
+import { linked as isLinked, soloTeam } from './modes.js';
 
 export const GAMES = {
   red: { gen: 1, name: 'Rouge' },
@@ -32,9 +33,9 @@ export const LANG = { fr: 'Français', en: 'Anglais', de: 'Allemand', es: 'Espag
 
 export const gameName = (id) => (GAMES[id] ? `Pokémon ${GAMES[id].name}` : 'Jeu inconnu');
 
-/** What Cable Club applies inside a game for a game mode (shown to the players), from capabilities.json. */
+/** What Cable Club applies inside a game for a game mode (an id or a mode file; shown to the players). */
 export function support(gen, mode = 'soullink', gameId) {
-  const linked = mode === 'soullink';
+  const linked = isLinked(mode);
   const shinies = has(gameId, gen, 'shinies');
   const held = has(gameId, gen, 'heldItems');
   const parts = [
@@ -43,7 +44,7 @@ export function support(gen, mode = 'soullink', gameId) {
     has(gameId, gen, 'trainerBattles') && 'combats de dresseurs',
     linked && 'morts liées',
     linked && 'surnoms',
-    mode === 'sololocke' && 'un seul Pokémon dans l’équipe (les autres vont au PC)',
+    soloTeam(mode) && 'un seul Pokémon dans l’équipe (les autres vont au PC)',
     deathBoxText(gameId, gen),
     'objets rendus',
     shinies && 'taux de chromatiques',

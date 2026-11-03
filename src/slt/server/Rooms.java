@@ -99,7 +99,12 @@ public final class Rooms {
                 if (!"public".equals(r.visibility) || !"lobby".equals(r.state) || r.maxPlayers < 2) {
                     continue;
                 }
-                if (mode != null && !mode.isBlank() && !mode.equals(r.mode)) {
+                // an imported mode is not shown to strangers (its publication is a later step)
+                if (r.customSpec != null) {
+                    continue;
+                }
+                // the tab of a mode lists the official modes of its family (the Nuzlocke Hardcore with the Nuzlocke)
+                if (mode != null && !mode.isBlank() && !mode.equals(r.mode) && !mode.equals(r.spec().family())) {
                     continue;
                 }
                 if (size > 0 && r.maxPlayers != size) {
@@ -317,7 +322,7 @@ public final class Rooms {
         r.maxPlayers = (int) Math.max(spec.minPlayers, Math.min(spec.maxPlayers,
                 Json.num(body, "maxPlayers", Math.max(2, spec.minPlayers))));
         // a room for one player is never listed: nobody could join it
-        r.visibility = "public".equals(Json.str(body, "visibility")) && r.maxPlayers >= 2 ? "public" : "private";
+        r.visibility = "public".equals(Json.str(body, "visibility")) && r.maxPlayers >= 2 && r.customSpec == null ? "public" : "private";
         r.rules = spec.defaults();
         Map<String, Object> rules = Json.obj(body.get("rules"));
         if (rules != null) {
@@ -392,7 +397,7 @@ public final class Rooms {
                 r.maxPlayers = Math.max(r.spec().minPlayers, Math.min(r.spec().maxPlayers, asked));
             }
             if (body.containsKey("visibility")) {
-                r.visibility = "public".equals(Json.str(body, "visibility")) ? "public" : "private";
+                r.visibility = "public".equals(Json.str(body, "visibility")) && r.customSpec == null ? "public" : "private";
             }
             if (r.maxPlayers < 2) {
                 r.visibility = "private"; // a room for one player is never listed

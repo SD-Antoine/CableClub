@@ -55,40 +55,34 @@ final class ModeSpec {
         }
     }
 
-    private static RuleDef bool(String when) {
-        return new RuleDef(null, when, false, false);
-    }
-
-    private static RuleDef choice(String when, String neutral, String... options) {
-        return new RuleDef(List.of(options), when, neutral, false);
-    }
-
     /** The rules a mode may use: the primitives of the engine. Nothing else is accepted in a mode file. */
     static final Map<String, RuleDef> CATALOG = catalog();
 
+    /** The catalog: modes/catalog.json, the file the mode editor of the interface reads too. */
     private static Map<String, RuleDef> catalog() {
-        Map<String, RuleDef> c = new LinkedHashMap<>();
-        c.put("shinyClause", bool("encounters:" + FIRST_PER_ZONE));
-        c.put("dupesClause", bool(null));
-        c.put("giftPokemon", bool(null));
-        c.put("legendaries", bool(null));
-        c.put("naming", choice("links:" + SHARED, "free", "leader", "free"));
-        c.put("pauseForNaming", bool("links:" + SHARED));
-        c.put("deathBox", bool(null));
-        c.put("refundCancelled", bool("links:" + SHARED));
-        c.put("wipeEndsRun", bool("team:" + FREE));
-        c.put("endWhen", choice("win:champion", "all", "all", "first"));
-        c.put("autoEnd", bool("win:champion"));
-        c.put("startWithBalls", bool(null));
-        c.put("saveStates", bool(null));
-        for (String k : Room.CLASSIC_RULES) {
-            c.put(k, new RuleDef(null, "links:" + NONE, false, Room.ROM_RULES.contains(k)));
+        String text = read("catalog.json");
+        Map<String, Object> rules = text == null ? null : Json.obj(Json.parseObject(text).get("rules"));
+        if (rules == null) {
+            throw new IllegalStateException("Catalogue des règles introuvable (" + DIR + "catalog.json)");
         }
-        c.put("hardcore", bool("links:" + NONE));
-        c.put("hardcoreItems", choice("links:" + NONE, "report", "report", "lose"));
-        c.put("soloParty", choice("team:" + ONE, "auto", "auto", "honor"));
-        c.put("soloLoss", choice("team:" + ONE, "next", "next", "end"));
-        c.put("oneShinyPerZone", bool("encounters:" + SHINIES_ONLY));
+        Map<String, RuleDef> c = new LinkedHashMap<>();
+        for (Map.Entry<String, Object> e : rules.entrySet()) {
+            Map<String, Object> d = Json.obj(e.getValue());
+            List<Object> options = Json.arr(d.get("options"));
+            List<String> values = null;
+            if (options != null) {
+                values = new ArrayList<>();
+                for (Object o : options) {
+                    values.add(String.valueOf(o));
+                }
+            }
+            Object neutral = options == null ? Boolean.FALSE : Json.str(d, "neutral");
+            if (neutral == null || (values != null && !values.contains(neutral))) {
+                throw new IllegalStateException("Catalogue des règles : « " + e.getKey() + " » sans valeur neutre parmi ses options");
+            }
+            c.put(e.getKey(), new RuleDef(values == null ? null : List.copyOf(values), Json.str(d, "when"), neutral,
+                    Json.bool(d, "officialOnly", false)));
+        }
         return Collections.unmodifiableMap(c);
     }
 
@@ -144,6 +138,14 @@ final class ModeSpec {
         return ONE.equals(team);
     }
 
+    /**
+     * The historical mode this one is closest to, whose tab shows its rooms: the links first (Soul Link), then the
+     * shinies (Shinylocke), then the team of one (Sololocke), else the Nuzlocke.
+     */
+    String family() {
+        return shared() ? "soullink" : shiniesOnly() ? "shinylocke" : solo() ? "sololocke" : "nuzlocke";
+    }
+
     /** The rules of a new room of this mode (a copy: the room changes it). */
     Map<String, Object> defaults() {
         return new LinkedHashMap<>(defaults);
@@ -191,6 +193,17 @@ final class ModeSpec {
                 "needs", new ArrayList<Object>(needs),
                 "engine", Json.map("links", links, "encounters", encounters, "team", team),
                 "rules", rules, "win", new ArrayList<Object>(win), "lose", new ArrayList<Object>(lose), "objectives", goals);
+    }
+
+    /** The catalog as read: values, where a rule applies, its neutral value, official modes only. */
+    static List<Object> catalogJson() {
+        List<Object> out = new ArrayList<>();
+        for (Map.Entry<String, RuleDef> e : CATALOG.entrySet()) {
+            RuleDef d = e.getValue();
+            out.add(Json.map("key", e.getKey(), "options", d.bool() ? null : new ArrayList<Object>(d.options()),
+                    "when", d.when(), "neutral", d.neutral(), "officialOnly", d.officialOnly()));
+        }
+        return out;
     }
 
     /** Whether the value is one the rule allows (a switch: true or false; a choice: one of its options). */

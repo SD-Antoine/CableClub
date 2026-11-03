@@ -25,7 +25,47 @@ public final class ModeSpecTest {
     private static final Map<String, String> FORMER_PLAYERS = Map.of(
             "soullink", "2-5", "nuzlocke", "1-10", "sololocke", "1-10", "shinylocke", "1-10");
 
+    /** The catalog of rules as ModeSpec.java wrote it, before it became modes/catalog.json. */
+    private static final String FORMER_CATALOG = "[{\"key\":\"shinyClause\",\"options\":null,\"when\":\"encounters:firstPerZone\",\"neutral\":false,\"officialOnly\""
+            + ":false},{\"key\":\"dupesClause\",\"options\":null,\"when\":null,\"neutral\":false,\"officialOnly\":false},{\"key\""
+            + ":\"giftPokemon\",\"options\":null,\"when\":null,\"neutral\":false,\"officialOnly\":false},{\"key\":\"legendaries\""
+            + ",\"options\":null,\"when\":null,\"neutral\":false,\"officialOnly\":false},{\"key\":\"naming\",\"options\":[\"leader"
+            + "\",\"free\"],\"when\":\"links:shared\",\"neutral\":\"free\",\"officialOnly\":false},{\"key\":\"pauseForNaming\",\"opti"
+            + "ons\":null,\"when\":\"links:shared\",\"neutral\":false,\"officialOnly\":false},{\"key\":\"deathBox\",\"options\":nu"
+            + "ll,\"when\":null,\"neutral\":false,\"officialOnly\":false},{\"key\":\"refundCancelled\",\"options\":null,\"when\":"
+            + "\"links:shared\",\"neutral\":false,\"officialOnly\":false},{\"key\":\"wipeEndsRun\",\"options\":null,\"when\":\"tea"
+            + "m:free\",\"neutral\":false,\"officialOnly\":false},{\"key\":\"endWhen\",\"options\":[\"all\",\"first\"],\"when\":\"win"
+            + ":champion\",\"neutral\":\"all\",\"officialOnly\":false},{\"key\":\"autoEnd\",\"options\":null,\"when\":\"win:champio"
+            + "n\",\"neutral\":false,\"officialOnly\":false},{\"key\":\"startWithBalls\",\"options\":null,\"when\":null,\"neutral"
+            + "\":false,\"officialOnly\":false},{\"key\":\"saveStates\",\"options\":null,\"when\":null,\"neutral\":false,\"offici"
+            + "alOnly\":false},{\"key\":\"honorNoHealItems\",\"options\":null,\"when\":\"links:none\",\"neutral\":false,\"officia"
+            + "lOnly\":false},{\"key\":\"honorNoHeldItems\",\"options\":null,\"when\":\"links:none\",\"neutral\":false,\"official"
+            + "Only\":false},{\"key\":\"honorNoMultiExp\",\"options\":null,\"when\":\"links:none\",\"neutral\":false,\"officialOn"
+            + "ly\":false},{\"key\":\"honorNoMasterBall\",\"options\":null,\"when\":\"links:none\",\"neutral\":false,\"officialOn"
+            + "ly\":false},{\"key\":\"honorNoEvolution\",\"options\":null,\"when\":\"links:none\",\"neutral\":false,\"officialOnl"
+            + "y\":true},{\"key\":\"honorNoFly\",\"options\":null,\"when\":\"links:none\",\"neutral\":false,\"officialOnly\":false"
+            + "},{\"key\":\"honorNoRepel\",\"options\":null,\"when\":\"links:none\",\"neutral\":false,\"officialOnly\":false},{\"k"
+            + "ey\":\"honorSetMode\",\"options\":null,\"when\":\"links:none\",\"neutral\":false,\"officialOnly\":false},{\"key\":\""
+            + "honorCsException\",\"options\":null,\"when\":\"links:none\",\"neutral\":false,\"officialOnly\":false},{\"key\":\"h"
+            + "onorNotepad\",\"options\":null,\"when\":\"links:none\",\"neutral\":false,\"officialOnly\":false},{\"key\":\"hardco"
+            + "re\",\"options\":null,\"when\":\"links:none\",\"neutral\":false,\"officialOnly\":false},{\"key\":\"hardcoreItems\","
+            + "\"options\":[\"report\",\"lose\"],\"when\":\"links:none\",\"neutral\":\"report\",\"officialOnly\":false},{\"key\":\"sol"
+            + "oParty\",\"options\":[\"auto\",\"honor\"],\"when\":\"team:one\",\"neutral\":\"auto\",\"officialOnly\":false},{\"key\":\""
+            + "soloLoss\",\"options\":[\"next\",\"end\"],\"when\":\"team:one\",\"neutral\":\"next\",\"officialOnly\":false},{\"key\":\""
+            + "oneShinyPerZone\",\"options\":null,\"when\":\"encounters:shiniesOnly\",\"neutral\":false,\"officialOnly\":false"
+            + "}]";
+
     public static void main(String[] args) {
+        // the catalog read from its file: the same rules, values, conditions and neutral values as before
+        check(Json.stringify(ModeSpec.catalogJson()).equals(FORMER_CATALOG), "catalog.json : le même catalogue qu'avant");
+        for (String k : Room.CLASSIC_RULES) {
+            check(ModeSpec.CATALOG.containsKey(k), "règle classique « " + k + " » au catalogue");
+        }
+        for (Object o : ModeSpec.catalogJson()) {
+            String key = Json.str(Json.obj(o), "key");
+            check(Json.bool(Json.obj(o), "officialOnly", false) == Room.ROM_RULES.contains(key),
+                    key + " : réservée aux modes officiels si et seulement si elle modifie la ROM");
+        }
         // the official modes: the same rules as before, in the same order
         Map<String, ModeSpec> officials = ModeSpec.officials();
         check(officials.keySet().equals(new java.util.LinkedHashSet<>(List.of("soullink", "nuzlocke", "sololocke",
@@ -39,12 +79,12 @@ public final class ModeSpecTest {
         Map<String, Object> expected = new LinkedHashMap<>(officials.get("nuzlocke").defaults());
         expected.put("hardcore", true);
         check(hc.defaults().equals(expected) && hc.locked("hardcore"), "Nuzlocke Hardcore : le Nuzlocke avec le Hardcore fixé");
-        // until the interface reads the mode files (2c), capabilities.json says the same about what a mode needs
-        Map<String, Object> capModes = Json.obj(Capabilities.data().get("modes"));
+        check(officials.get("shinylocke").needs.equals(List.of("shinies")), "le Shinylocke a besoin des chromatiques");
+        // the tab of each mode (the interface computes the same in modes.js)
+        Map<String, String> families = Map.of("soullink", "soullink", "nuzlocke", "nuzlocke", "sololocke", "sololocke",
+                "shinylocke", "shinylocke", "nuzlocke-hardcore", "nuzlocke");
         for (ModeSpec s : officials.values()) {
-            List<Object> listed = Json.arr(capModes.get(s.id));
-            check((listed == null ? List.of() : listed).equals(new java.util.ArrayList<Object>(s.needs)),
-                    s.id + " : mêmes besoins dans capabilities.json");
+            check(s.family().equals(families.get(s.id)), s.id + " : onglet « " + families.get(s.id) + " »");
         }
 
         // a mode of one's own: a combination the historical modes do not use is accepted

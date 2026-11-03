@@ -12,7 +12,7 @@ import { keymap } from '../game/keys.js';
 import { TouchPad } from '../game/touch.js';
 import { Gamepads } from '../game/gamepad.js';
 import { GAMES } from '../data/games.js';
-import { modeName } from '../data/rules.js';
+import { modeName, linked } from '../data/modes.js';
 import { mobile, setPlaying, haptic, onBack, onHidden } from '../platform.js';
 import { tradeBox } from './trades.js';
 import { chatPanel } from './chat.js';
@@ -246,7 +246,7 @@ export async function renderPlay(container, roomId) {
    */
   function hmButton(kind) {
     const mine = room.members.find((m) => m.userId === user?.id);
-    if (!mine || room.mode === 'soullink' || !room.rules?.honorCsException || room.state !== 'running' || mine.status !== 'playing') return null;
+    if (!mine || linked(room) || !room.rules?.honorCsException || room.state !== 'running' || mine.status !== 'playing') return null;
     const on = !!mine.hmNext;
     return btn(on ? 'CS : prochaine capture' : 'Pokémon de CS', () => srv.post(`/rooms/${roomId}/hm`, { on: !on }).catch((e) => showOsd(e.message, 'warn')),
       { kind: [kind, on && 'on'].filter(Boolean).join(' '), title: on ? 'La prochaine capture interdite sera gardée pour les CS (toucher pour annuler)'
@@ -330,7 +330,7 @@ export async function renderPlay(container, roomId) {
     } else if (pause) {
       const leaderNaming = pause.reason === 'naming' && room.leaderId === user?.id;
       box = h('div', { class: 'veil-box' },
-        h('h2', null, pause.reason === 'naming' ? 'Nommage du lien' : pause.reason === 'closed' ? 'Aventure en pause' : `${modeName(room?.mode)} terminé`),
+        h('h2', null, pause.reason === 'naming' ? 'Nommage du lien' : pause.reason === 'closed' ? 'Aventure en pause' : `${modeName(room)} terminé`),
         h('p', null, leaderNaming ? `Choisissez le nom du lien de ${pause.zoneName}.` : pause.text),
         pause.reason === 'ended' ? h('div', { class: 'row mt', style: { justifyContent: 'center' } },
           btn('Voir le bilan', () => { location.hash = `#/salle/${roomId}`; }, { kind: 'primary' })) : null);

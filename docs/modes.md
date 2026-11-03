@@ -63,7 +63,8 @@ par les scénarios `tests/golden/combo-*.json`.
 
 ## Règles du catalogue
 
-Une règle qui n'a pas de sens avec les primitives choisies ne peut garder que sa valeur neutre (entre
+Le catalogue est un fichier de données, `web/js/data/modes/catalog.json`, lu par le serveur (seul
+juge) et par l'éditeur de l'interface. Une règle qui n'a pas de sens avec les primitives choisies ne peut garder que sa valeur neutre (entre
 parenthèses).
 
 | Règle | Valeurs | A du sens avec |
@@ -96,3 +97,16 @@ permises, ou différente de la neutre pour une règle sans objet, est refusée.
   revérifié au redémarrage du serveur). Le jeu de la salle doit avoir les capacités de `needs`, et le
   nombre de joueurs reste dans `players`.
 - Un mode importé ne peut pas reprendre l'`id` d'un mode officiel.
+- Une salle d'un mode importé reste **privée** (elle n'apparaît pas dans « Salles publiques ») tant
+  que la publication des modes (point 2d) n'est pas ouverte.
+
+## Dans l'interface
+
+- **Mes modes** (`web/js/views/modes.js`) : composer un mode à partir d'un mode officiel, le vérifier
+  (le serveur répond à chaque changement), l'exporter (`<id>.ccmode.json`, ou « Copier » sur
+  téléphone), en importer un (fichier ou texte collé), créer une salle avec. Les modes sont gardés dans
+  le navigateur de l'appareil : le fichier exporté est la copie qui compte.
+- **Onglets** : chaque salle s'affiche dans l'onglet du mode historique le plus proche (`family` :
+  joueurs liés → Soul Link, chromatiques seuls → Shinylocke, équipe d'un seul → Sololocke, sinon
+  Nuzlocke) ; le Nuzlocke Hardcore se choisit dans l'onglet Nuzlocke.
+- Une règle fixée par le mode est affichée « Fixée par le mode » et ne se change pas.

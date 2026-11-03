@@ -1,0 +1,33 @@
+{
+  "about": "The rules a mode file may use (point 2 of the evolution plan). Read by the server (slt.server.ModeSpec, which refuses any other rule) and by the interface (web/js/data/rules.js, the mode editor): one source for both. A rule is a switch, or a choice among its options; \"when\" is the primitive it makes sense with (\"links:shared\", \"team:one\", \"win:champion\"…; none = always), and elsewhere it may only keep its neutral value (false for a switch); \"officialOnly\": only an official mode may use it (the rule is written in the room's ROM).",
+  "rules": {
+    "shinyClause": { "when": "encounters:firstPerZone" },
+    "dupesClause": {},
+    "giftPokemon": {},
+    "legendaries": {},
+    "naming": { "options": ["leader", "free"], "neutral": "free", "when": "links:shared" },
+    "pauseForNaming": { "when": "links:shared" },
+    "deathBox": {},
+    "refundCancelled": { "when": "links:shared" },
+    "wipeEndsRun": { "when": "team:free" },
+    "endWhen": { "options": ["all", "first"], "neutral": "all", "when": "win:champion" },
+    "autoEnd": { "when": "win:champion" },
+    "startWithBalls": {},
+    "saveStates": {},
+    "honorNoHealItems": { "when": "links:none" },
+    "honorNoHeldItems": { "when": "links:none" },
+    "honorNoMultiExp": { "when": "links:none" },
+    "honorNoMasterBall": { "when": "links:none" },
+    "honorNoEvolution": { "when": "links:none", "officialOnly": true },
+    "honorNoFly": { "when": "links:none" },
+    "honorNoRepel": { "when": "links:none" },
+    "honorSetMode": { "when": "links:none" },
+    "honorCsException": { "when": "links:none" },
+    "honorNotepad": { "when": "links:none" },
+    "hardcore": { "when": "links:none" },
+    "hardcoreItems": { "options": ["report", "lose"], "neutral": "report", "when": "links:none" },
+    "soloParty": { "options": ["auto", "honor"], "neutral": "auto", "when": "team:one" },
+    "soloLoss": { "options": ["next", "end"], "neutral": "next", "when": "team:one" },
+    "oneShinyPerZone": { "when": "encounters:shiniesOnly" }
+  }
+}

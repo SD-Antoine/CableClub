@@ -1,7 +1,8 @@
-// The tab of a game mode: its rooms, its public rooms and its history. Each
-// mode of Cable Club has its own tab (Soul Link, Nuzlocke, Sololocke, Shinylocke).
+// The tab of a game mode: its rooms, its public rooms and its history. Each historical
+// mode of Cable Club has its own tab (Soul Link, Nuzlocke, Sololocke, Shinylocke); the other modes (the Nuzlocke
+// Hardcore, the player's own) show in the tab of the mode they are closest to (modes.js, familyOf).
 
-import { h, mount } from '../ui.js';
+import { h, mount, btn } from '../ui.js';
 import { renderHome } from './home.js';
 import { renderPublic } from './public.js';
 import { renderHistory } from './history.js';
@@ -48,7 +49,9 @@ export function renderMode(container, mode, tab) {
       ? h('span', { class: 'mode-pill soon' }, h('img', { src: x.logo, alt: '' }), x.name)
       : h('a', { class: ['mode-pill', x === m && 'active'], href: x.hash }, h('img', { src: x.logo, alt: '' }), x.name)))) : null,
     mobile ? null : h('div', { class: 'mode-head' }, h('img', { src: m.logo, alt: '' }),
-      h('div', null, h('h1', null, m.name), h('p', { class: 'muted' }, m.blurb))),
+      h('div', { class: 'grow' }, h('h1', null, m.name), h('p', { class: 'muted' }, m.blurb))),
+    // the player's own modes: the rooms of a mode close to this one also show here
+    mobile ? h('div', { class: 'row mb' }, btn('Mes modes', () => { location.hash = '#/modes'; }, { kind: 'small ghost', iconName: 'edit' })) : null,
     h('div', { class: 'tabs' }, (mobile ? PHONE_TABS : TABS).map(([id, label]) => h('button', { class: current === id ? 'active' : '',
       onclick: () => { location.hash = id === 'salles' ? m.hash : `${m.hash}/${id}`; } }, label))),
     body);

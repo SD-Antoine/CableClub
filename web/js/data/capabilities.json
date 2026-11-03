@@ -1,5 +1,5 @@
 {
-  "about": "What Cable Club can do in each game (point 1d of the evolution plan). Read by the server (slt.server.Capabilities) and by the interface (web/js/data/capabilities.js): one source for both. A generation gives the defaults, a game may change them. A rule or a mode lists the capabilities it needs; without one of them it is not offered for that game (the server refuses to turn the rule on, or to create the room).",
+  "about": "What Cable Club can do in each game (point 1d of the evolution plan). Read by the server (slt.server.Capabilities) and by the interface (web/js/data/capabilities.js): one source for both. A generation gives the defaults, a game may change them. A rule lists the capabilities it needs (a mode lists them in its own file, under \"needs\"); without one of them it is not offered for that game (the server refuses to turn the rule on, or to create the room).",
   "capabilities": {
     "shinies": {
       "label": "Pokémon chromatiques",
@@ -37,9 +37,6 @@
   "games": {
     "gold": { "trainerBattles": false },
     "silver": { "trainerBattles": false }
-  },
-  "modes": {
-    "shinylocke": ["shinies"]
   },
   "rules": {
     "shinyClause": ["shinies"],

@@ -1,7 +1,7 @@
 // What Cable Club can do in each game: capabilities.json next to this file, the same file the server reads
 // (point 1d). Loaded once when the interface starts (loadCapabilities in app.js).
 
-let DATA = { capabilities: {}, generations: {}, games: {}, modes: {}, rules: {}, deathBox: {} };
+let DATA = { capabilities: {}, generations: {}, games: {}, rules: {}, deathBox: {} };
 
 export async function loadCapabilities() {
   try {
@@ -19,17 +19,20 @@ export function has(gameId, gen, cap) {
   return DATA.generations?.[String(gen)]?.[cap] === true;
 }
 
-/** Why the game cannot do what a mode or a rule needs (the text of the first capability missing), or null. */
+/** The sentence that tells a capability is missing (« pas de Pokémon chromatiques en 1re génération »). */
+export const capabilityMissing = (cap) => DATA.capabilities?.[cap]?.missing || cap;
+
+/** Why the game cannot do what a rule needs (the text of the first capability missing), or null. A mode's needs are
+ * in its file (modes.js). */
 function missing(table, key, gameId, gen) {
   const needs = DATA[table]?.[key];
   if (!needs || !Number(gen)) return null; // nothing needed, or the game is not known yet
   for (const cap of needs) {
-    if (!has(gameId, gen, cap)) return DATA.capabilities?.[cap]?.missing || cap;
+    if (!has(gameId, gen, cap)) return capabilityMissing(cap);
   }
   return null;
 }
 
-export const missingForMode = (mode, gameId, gen) => missing('modes', mode, gameId, gen);
 export const missingForRule = (rule, gameId, gen) => missing('rules', rule, gameId, gen);
 
 /** Where the dead Pokémon go in this game (shown to the players). */

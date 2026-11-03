@@ -1656,6 +1656,7 @@ public final class Room {
                 "launchedAt", launchedAt, "game", game, "maxPlayers", (long) maxPlayers, "state", state,
                 "adventureOpen", adventureOpen, "members", ms, "ended", ended, "linkStarted", linkStarted);
         v.put("modeName", runName());
+        v.put("family", spec().family());
         if (full) {
             v.put("code", code);
             v.put("rules", rules);

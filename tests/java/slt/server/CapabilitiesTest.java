@@ -69,15 +69,12 @@ public final class CapabilitiesTest {
                 check(g != null && g.get(cap) instanceof Boolean, "génération " + gen + " : « " + cap + " » renseigné");
             }
         }
-        for (String table : List.of("modes", "rules")) {
-            for (Map.Entry<String, Object> e : Json.obj(d.get(table)).entrySet()) {
-                for (Object cap : Json.arr(e.getValue())) {
-                    check(caps.containsKey(String.valueOf(cap)), table + " " + e.getKey() + " : capacité « " + cap + " » connue");
-                }
+        // what a mode needs is in its own file (checked by ModeSpec against these capabilities)
+        check(!d.containsKey("modes"), "plus de table « modes » : les besoins d'un mode sont dans son fichier");
+        for (Map.Entry<String, Object> e : Json.obj(d.get("rules")).entrySet()) {
+            for (Object cap : Json.arr(e.getValue())) {
+                check(caps.containsKey(String.valueOf(cap)), "rules " + e.getKey() + " : capacité « " + cap + " » connue");
             }
-        }
-        for (String mode : Json.obj(d.get("modes")).keySet()) {
-            check(Room.modes().contains(mode), "mode « " + mode + " » connu");
         }
         for (String rule : Json.obj(d.get("rules")).keySet()) {
             check(Room.modes().stream().anyMatch(m -> Room.defaultRules(m).containsKey(rule)), "règle « " + rule + " » connue");

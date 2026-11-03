@@ -4,30 +4,39 @@ import { h, mount, keepScroll, modal, btn, field, seg, icon, errorToast, switchE
 import { local, srv } from '../api.js';
 import { store } from '../store.js';
 import { GAMES, LANG, GEN_SHORT, support, gameName } from '../data/games.js';
-import { ruleDefaults, playerChoices, MODE_PLAYERS, modeAvailable, modeName, modeGenerations } from '../data/rules.js';
+import { ruleDefaults, playerChoices, modeAvailable, modeGenerations } from '../data/rules.js';
+import { specOf, modeName, modesOfFamily, isOfficial, playersOf } from '../data/modes.js';
 import { defaultRando } from '../data/rando.js';
-import { rulesEditor, randoEditor } from './parts.js';
+import { rulesEditor, randoEditor, modeInfo } from './parts.js';
 
-export async function openCreateRoom(mode = 'soullink') {
-  let library;
+/**
+ * A new room of a tab's mode, or of a given mode (an official id or an imported mode file, from the mode editor).
+ * A tab with several official modes (the Nuzlocke and the Nuzlocke Hardcore) lets the player choose.
+ */
+export async function openCreateRoom(tab = 'soullink', given = null) {
+  const choices = given ? [specOf(given)] : modesOfFamily(tab).length ? modesOfFamily(tab) : [specOf(tab)];
+  let mode = choices.find((s) => s.id === tab) || choices[0];
+  const custom = !isOfficial(mode);
+  let all;
   try {
-    // the games this mode can be played with (the Shinylocke needs shinies: not the first generation)
-    library = (await local.get('/api/library')).roms.filter((r) => r.present && modeAvailable(mode, r.gen, r.gameId));
+    all = (await local.get('/api/library')).roms.filter((r) => r.present);
   } catch (e) { errorToast(e); return; }
+  // the games this mode can be played with (the Shinylocke needs shinies: not the first generation)
+  let library = all.filter((r) => modeAvailable(mode, r.gen, r.gameId));
 
   const user = store.state?.link?.user;
   const st = {
     step: 0,
     romId: library[0]?.id || null,
     name: '',
-    maxPlayers: MODE_PLAYERS[mode]?.min === 1 ? 1 : 2,
+    maxPlayers: playersOf(mode).min === 1 ? 1 : Math.max(2, playersOf(mode).min),
     visibility: 'private',
     rules: { ...ruleDefaults(mode) },
     rando: null,
   };
   const body = h('div');
   const foot = h('div', { class: 'row', style: { width: '100%' } });
-  const m = modal({ title: `Nouvelle salle ${modeName(mode)}`, body: h('div', null, body), wide: true, actions: [foot] });
+  const m = modal({ title: custom ? `Nouvelle salle « ${mode.name} »` : `Nouvelle salle ${modeName(mode)}`, body: h('div', null, body), wide: true, actions: [foot] });
 
   const rom = () => library.find((r) => r.id === st.romId);
   const gen = () => Number(rom()?.gen || 3);
@@ -57,15 +66,33 @@ export async function openCreateRoom(mode = 'soullink') {
         : btn('Créer la salle', (e) => create(e.currentTarget), { kind: 'primary', iconName: 'check' }));
   }
 
+  /** Another official mode of the tab (the Nuzlocke Hardcore…): its rules, players and games. */
+  function chooseMode(id) {
+    mode = choices.find((s) => s.id === id) || mode;
+    library = all.filter((r) => modeAvailable(mode, r.gen, r.gameId));
+    if (!library.some((r) => r.id === st.romId)) st.romId = library[0]?.id || null;
+    st.rules = { ...ruleDefaults(mode) };
+    const { min, max } = playersOf(mode);
+    st.maxPlayers = Math.max(min, Math.min(max, st.maxPlayers));
+    draw();
+  }
+
+  function modePicker() {
+    if (custom) return modeInfo(mode);
+    if (choices.length < 2) return null;
+    return h('div', { class: 'stack' }, field('Mode', seg(choices.map((s) => [s.id, s.name]), mode.id, chooseMode)),
+      mode.description ? h('p', { class: 'tiny muted' }, mode.description) : null);
+  }
+
   function gameStep() {
     if (!library.length) {
       // a mode some generations cannot play (the Shinylocke: none in generation 1) tells from which one it can
       const gens = modeGenerations(mode);
       const limited = gens.length < 5;
-      return h('div', { class: 'empty' }, h('b', null, limited ? `Aucun jeu compatible dans votre bibliothèque` : 'Aucune ROM dans votre bibliothèque'),
+      return h('div', { class: 'stack l' }, modePicker(), h('div', { class: 'empty' }, h('b', null, limited ? `Aucun jeu compatible dans votre bibliothèque` : 'Aucune ROM dans votre bibliothèque'),
         h('p', null, limited ? `Le ${modeName(mode)} se joue avec les jeux de la ${gens[0]}e génération et plus : ajoutez-en un dans « Mes ROMs ».`
           : 'Ajoutez d’abord les ROMs de vos jeux (copies de vos cartouches).'),
-        h('div', { class: 'mt' }, btn('Ouvrir « Mes ROMs »', () => { m.close(); location.hash = '#/roms'; }, { kind: 'primary' })));
+        h('div', { class: 'mt' }, btn('Ouvrir « Mes ROMs »', () => { m.close(); location.hash = '#/roms'; }, { kind: 'primary' }))));
     }
     // the generation first, then one line per game of it (the file name only tells two copies of a game apart)
     const gens = [...new Set(library.map((r) => Number(r.gen)))].sort();
@@ -78,6 +105,7 @@ export async function openCreateRoom(mode = 'soullink') {
     const pick = (r) => { st.romId = r.id; st.rando = null; draw(); };
     const name = h('input', { class: 'input', placeholder: `${user?.name || 'Ma'} salle`, value: st.name, oninput: (e) => { st.name = e.target.value; } });
     return h('div', { class: 'stack l' },
+      modePicker(),
       h('div', { class: 'stack' },
         gens.length > 1 ? field('Génération', seg(gens.map((g) => [g, GEN_SHORT[g]]), gen(),
           (g) => pick(library.find((r) => Number(r.gen) === g)))) : null,
@@ -89,10 +117,11 @@ export async function openCreateRoom(mode = 'soullink') {
       h('div', { class: 'grid2' },
         field('Nom de la salle', name),
         field('Joueurs', seg(playerChoices(mode), st.maxPlayers, (v) => { st.maxPlayers = v; if (v < 2) st.visibility = 'private'; draw(); }))),
-      h('div', { class: ['rule-row', st.maxPlayers < 2 && 'soon'] }, h('div', { class: 'grow' }, h('b', null, 'Salle publique'),
-        h('small', null, st.maxPlayers < 2 ? 'Une salle solo ne peut pas être publique : personne ne pourrait la rejoindre.'
+      h('div', { class: ['rule-row', (st.maxPlayers < 2 || custom) && 'soon'] }, h('div', { class: 'grow' }, h('b', null, 'Salle publique'),
+        h('small', null, custom ? 'Une salle d’un mode importé reste privée : vos invités (ou ceux qui ont le code) entrent.'
+          : st.maxPlayers < 2 ? 'Une salle solo ne peut pas être publique : personne ne pourrait la rejoindre.'
           : 'Elle apparaît dans « Salles publiques » : n’importe quel joueur du serveur peut la trouver et la rejoindre tant que l’aventure n’est pas lancée. Sinon, seuls vos invités (ou ceux qui ont le code) entrent.')),
-      switchEl(st.visibility === 'public' && st.maxPlayers >= 2, (v) => { st.visibility = v ? 'public' : 'private'; }, { disabled: st.maxPlayers < 2 })));
+      switchEl(st.visibility === 'public' && st.maxPlayers >= 2 && !custom, (v) => { st.visibility = v ? 'public' : 'private'; }, { disabled: st.maxPlayers < 2 || custom })));
   }
 
   async function create(button) {
@@ -103,8 +132,9 @@ export async function openCreateRoom(mode = 'soullink') {
         name: st.name.trim() || `${user?.name || 'Ma'} salle`,
         game: { gameId: r.gameId, name: gameName(r.gameId), gen: Number(r.gen), platform: r.platform, romCode: r.romCode, lang: r.lang, crc: r.crc },
         maxPlayers: st.maxPlayers,
-        visibility: st.visibility,
-        mode,
+        visibility: custom ? 'private' : st.visibility,
+        // an imported mode travels as its file (the room keeps its own copy); an official one by its id
+        ...(custom ? { modeFile: mode } : { mode: mode.id }),
         rules: st.rules,
         rando: { ...st.rando, seed: st.rando.seed || undefined },
       });

@@ -1,7 +1,9 @@
-// Rules of a room (the server applies them; the leader may change them at any time), by game mode.
-// What a rule or a mode needs from the game is in capabilities.json (shared with the server).
+// Rules of a room (the server applies them; the leader may change them at any time), by game mode: how each rule
+// is shown. Which rules a mode offers, their default values and the number of players are in the mode's file
+// (modes.js); what a rule needs from the game is in capabilities.json (both shared with the server).
 
-import { missingForMode, missingForRule } from './capabilities.js';
+import { missingForRule } from './capabilities.js';
+import { specOf, familyOf, isOfficial, modeDefaults, locked, playersOf, missingForModeOf, applies } from './modes.js';
 
 // Soul Link
 export const RULES = [
@@ -34,11 +36,6 @@ export const RULES = [
     desc: 'Autorise les sauvegardes instantanées de l’émulateur.' },
 ];
 
-export const RULE_DEFAULTS = {
-  shinyClause: true, dupesClause: true, legendaries: true, giftPokemon: false, naming: 'leader',
-  pauseForNaming: true, deathBox: true, refundCancelled: true, wipeEndsRun: true, endWhen: 'all', saveStates: false,
-  autoEnd: true, startWithBalls: true,
-};
 
 // Nuzlocke: each player has their own, nothing is shared
 export const NUZLOCKE_RULES = [
@@ -89,20 +86,11 @@ export const NUZLOCKE_RULES = [
     desc: 'Cable Club voit les objets du sac utilisés pendant un combat (sur DS, d’après l’écran du jeu).' },
 ];
 
-export const NUZLOCKE_DEFAULTS = {
-  shinyClause: false, dupesClause: false, legendaries: true, giftPokemon: true, naming: 'free',
-  pauseForNaming: false, deathBox: true, refundCancelled: false, wipeEndsRun: true, endWhen: 'all', saveStates: false,
-  autoEnd: true, startWithBalls: true,
-  honorNoHealItems: false, honorNoHeldItems: false, honorNoMultiExp: false, honorNoMasterBall: false, honorNoEvolution: false,
-  honorNoFly: false, honorNoRepel: false, honorSetMode: false, honorCsException: false, honorNotepad: false,
-  hardcore: false, hardcoreItems: 'report',
-};
 
 // the classic rules and the Hardcore, shared by the modes where each player has their own run
 const sectionAt = (start) => NUZLOCKE_RULES.findIndex((d) => d.section && d.section.startsWith(start));
 const CLASSIC = NUZLOCKE_RULES.slice(sectionAt('Règles classiques'), sectionAt('Nuzlocke Hardcore'));
 const HARDCORE = NUZLOCKE_RULES.slice(sectionAt('Nuzlocke Hardcore'));
-const classicDefaults = Object.fromEntries(CLASSIC.filter((d) => d.key).map((d) => [d.key, false]));
 const rule = (key) => NUZLOCKE_RULES.find((d) => d.key === key);
 
 // Sololocke: one Pokémon in the team at a time, the Nuzlocke's rules around it
@@ -124,9 +112,6 @@ export const SOLOLOCKE_RULES = [
   ...HARDCORE,
 ];
 
-export const SOLOLOCKE_DEFAULTS = {
-  ...NUZLOCKE_DEFAULTS, soloParty: 'auto', soloLoss: 'next',
-};
 
 // Shinylocke: only shiny Pokémon may be caught (generations 2 to 5: the first one has no shinies)
 export const SHINYLOCKE_RULES = [
@@ -145,38 +130,48 @@ export const SHINYLOCKE_RULES = [
   ...HARDCORE,
 ];
 
-export const SHINYLOCKE_DEFAULTS = {
-  ...NUZLOCKE_DEFAULTS, shinyClause: false, giftPokemon: false, oneShinyPerZone: false, ...classicDefaults,
-};
 
-const BY_MODE = {
-  soullink: [RULES, RULE_DEFAULTS],
-  nuzlocke: [NUZLOCKE_RULES, NUZLOCKE_DEFAULTS],
-  sololocke: [SOLOLOCKE_RULES, SOLOLOCKE_DEFAULTS],
-  shinylocke: [SHINYLOCKE_RULES, SHINYLOCKE_DEFAULTS],
-};
+// how the rules of each family of modes are shown, in their order and sections
+const BY_FAMILY = { soullink: RULES, nuzlocke: NUZLOCKE_RULES, sololocke: SOLOLOCKE_RULES, shinylocke: SHINYLOCKE_RULES };
 
-/** The rules of a mode, without those the room's game cannot apply (shinies or held items in generation 1…). */
-export const rulesOf = (mode, gen, gameId) => (BY_MODE[mode] || BY_MODE.soullink)[0]
-  .filter((d) => !d.key || !missingForRule(d.key, gameId, gen));
-export const ruleDefaults = (mode) => (BY_MODE[mode] || BY_MODE.soullink)[1];
+// a rule of an imported mode that its family does not show: its first definition in the lists above
+const ANY = new Map();
+for (const list of Object.values(BY_FAMILY)) for (const d of list) if (d.key && !ANY.has(d.key)) ANY.set(d.key, d);
 
-/** Names of the game modes. */
-export const MODE_NAMES = { soullink: 'Soul Link', nuzlocke: 'Nuzlocke', sololocke: 'Sololocke', shinylocke: 'Shinylocke' };
-export const modeName = (mode) => MODE_NAMES[mode] || MODE_NAMES.soullink;
+/** How a rule is shown (the mode editor): as in the family of the mode when it has it, else its first definition. */
+export const ruleDef = (key, mode) => (mode && (BY_FAMILY[familyOf(mode)] || []).find((d) => d.key === key)) || ANY.get(key) || null;
 
-// players a room of each mode may have
-export const MODE_PLAYERS = { soullink: { min: 2, max: 5 }, nuzlocke: { min: 1, max: 10 }, sololocke: { min: 1, max: 10 }, shinylocke: { min: 1, max: 10 } };
+/**
+ * The rules of a mode (an id, a room or a mode file) as they are shown: those the mode offers, in the order of its
+ * family, without those the room's game cannot apply (shinies or held items in generation 1…). A rule the mode
+ * fixes is marked « locked ». An imported mode also shows, after them, the rules its family does not have.
+ */
+export function rulesOf(mode, gen, gameId) {
+  const spec = specOf(mode);
+  const offered = spec.rules || {};
+  const official = isOfficial(spec);
+  const shows = (key) => official || applies(spec, key);
+  const own = BY_FAMILY[familyOf(spec)] || RULES;
+  const shown = own.filter((d) => !d.key || (d.key in offered && shows(d.key)));
+  const extra = official ? [] : Object.keys(offered).filter((k) => ANY.has(k) && !own.some((d) => d.key === k) && shows(k));
+  const all = extra.length ? [...shown, { section: 'Autres règles du mode' }, ...extra.map((k) => ANY.get(k))] : shown;
+  const usable = all.filter((d) => !d.key || !missingForRule(d.key, gameId, gen))
+    .map((d) => (d.key && locked(spec, d.key) ? { ...d, locked: true } : d));
+  // a section without any rule left under it is not shown
+  return usable.filter((d, i) => !d.section || (usable[i + 1] && !usable[i + 1].section));
+}
+
+export const ruleDefaults = (mode) => modeDefaults(mode);
 
 /** Whether a game can play a mode (the Shinylocke needs shinies: not the first generation). */
-export const modeAvailable = (mode, gen, gameId) => !missingForMode(mode, gameId, gen);
+export const modeAvailable = (mode, gen, gameId) => !missingForModeOf(mode, gameId, gen);
 
 /** The generations a mode can be played in. */
 export const modeGenerations = (mode) => [1, 2, 3, 4, 5].filter((g) => modeAvailable(mode, g));
 
 /** Choices of the number of players of a room: [value, label] (1 is "Solo"). */
 export function playerChoices(mode) {
-  const { min, max } = MODE_PLAYERS[mode] || MODE_PLAYERS.soullink;
+  const { min, max } = playersOf(mode);
   const out = [];
   for (let n = min; n <= max; n++) out.push([n, n === 1 ? 'Solo' : String(n)]);
   return out;

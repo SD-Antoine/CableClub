@@ -18,7 +18,8 @@ jeux**. Quatre modes de jeu :
 Option **Nuzlocke Hardcore** (Nuzlocke, Sololocke, Shinylocke) : plafond de
 niveau du prochain champion d'arène (lu dans la ROM, les Pokémon trop forts vont
 au PC), pas d'objets en combat, style de combat Défini imposé, équipe entière
-K.O. = partie perdue.
+K.O. = partie perdue. Le mode **Nuzlocke Hardcore** (onglet Nuzlocke) est le
+Nuzlocke avec cette option toujours active.
 
 **Règles classiques du Nuzlocke**, appliquées elles aussi dans les jeux : pas
 d'objets de soin, pas de Master Ball, de Repousse ni de Multi Exp (retirés du
@@ -26,6 +27,14 @@ sac), pas d'objet tenu (remis dans le sac), pas de Vol (CS retirée, attaque
 oubliée), mode Défini, pas d'évolution (retirées de la ROM de la salle), pas de
 capture équipe pleine, et un Pokémon de CS qui ne doit jamais gagner
 d'expérience.
+
+**Vos propres modes** (« Mes modes ») : composez un mode à partir des mêmes
+briques (joueurs liés ou non, première rencontre ou chromatiques seuls, équipe
+libre ou d'un seul Pokémon), choisissez les règles proposées, leurs valeurs et
+celles qui sont fixées, ajoutez des objectifs, puis créez une salle avec. Un mode
+est un fichier `.ccmode.json` à exporter et à importer : des règles et des
+textes, jamais de code (format : [docs/modes.md](docs/modes.md)). Une salle d'un
+mode importé reste privée pour l'instant.
 
 **[⬇ Télécharger la dernière version](https://github.com/SD-Antoine/CableClub/releases/latest)**
 (`CableClub-x.y.z-windows-x64.zip` : décompressez-le et lancez `CableClub.exe`, rien à
@@ -262,6 +271,7 @@ src/slt/
     Accounts            comptes, sessions, amis
     Rooms, Room         salles, arbitre du Soul Link, journal, aperçus, sauvegardes
     Mode                ce qui distingue les modes (rencontres, captures, morts, équipe, début et fin)
+    ModeSpec            un mode est un fichier déclaratif .ccmode.json (catalogue fermé, validateur)
     Hub                 présence et diffusion temps réel
   client/               application d'un joueur (API locale 127.0.0.1)
     ServerLink          connexion au serveur (requêtes + flux relayé à l'interface)

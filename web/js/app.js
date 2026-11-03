@@ -19,6 +19,8 @@ import { watchBattles } from './views/battle.js';
 import { renderMe } from './views/me.js';
 import { mobile } from './platform.js';
 import { loadCapabilities } from './data/capabilities.js';
+import { loadModes, familyOf } from './data/modes.js';
+import { renderModes } from './views/modes.js';
 
 const root = document.getElementById('root');
 let cleanup = null;
@@ -61,6 +63,7 @@ function parse() {
     // older links of the history (before the tabs of the modes)
     case 'historique': return parts[1] ? { id: 'room', roomId: parts[1], history: true } : { id: 'mode', mode: 'soullink', tab: 'historique' };
     case 'roms': return { id: 'library' };
+    case 'modes': return { id: 'modes' };
     case 'reglages': return { id: 'settings', tab: parts[1] };
     default: return MODES[parts[0]] && !MODES[parts[0]].soon ? { id: 'mode', mode: parts[0], tab: parts[1] } : { id: 'mode', mode: 'soullink' };
   }
@@ -81,7 +84,9 @@ function rail(active, route) {
         h('img', { src: m.logo, alt: '' }), h('span', { class: 'label' }, m.name), h('span', { class: 'chip' }, 'Bientôt'))
       : h('a', { class: ['nav-item', 'mode-item', active === `mode:${id}` && 'active'], href: m.hash, title: m.name },
         h('img', { src: m.logo, alt: '' }), h('span', { class: 'label' }, m.name),
-        pendingInvites().some((i) => (i.mode || 'soullink') === id) ? h('span', { class: 'count', title: 'Invitations' }, pendingInvites().filter((i) => (i.mode || 'soullink') === id).length) : null))),
+        pendingInvites().some((i) => familyOf(i) === id) ? h('span', { class: 'count', title: 'Invitations' }, pendingInvites().filter((i) => familyOf(i) === id).length) : null))),
+    h('a', { class: ['nav-item', active === 'modes' && 'active'], href: '#/modes', title: 'Mes modes : composer, importer, exporter' },
+      icon('edit'), h('span', { class: 'label' }, 'Mes modes')),
     h('div', { class: 'rail-sep' }),
     NAV.map((n) => h('a', { class: ['nav-item', active === n.id && 'active'], href: n.hash, title: n.label },
       icon(n.icon), h('span', { class: 'label' }, n.label),
@@ -140,13 +145,13 @@ function tabBar(active) {
 }
 
 function activeTab(r) {
-  if (r.id === 'room' || r.id === 'play' || r.id === 'mode') return 'rooms';
+  if (r.id === 'room' || r.id === 'play' || r.id === 'mode' || r.id === 'modes') return 'rooms';
   if (r.id === 'profile' || r.id === 'settings' || r.id === 'me') return 'me';
   return r.id;
 }
 
 function activeNav(r) {
-  if (r.id === 'room' || r.id === 'play') return `mode:${store.rooms.get(r.roomId)?.mode || 'soullink'}`;
+  if (r.id === 'room' || r.id === 'play') return `mode:${familyOf(store.rooms.get(r.roomId) || 'soullink')}`;
   if (r.id === 'mode') return `mode:${r.mode}`;
   return r.id;
 }
@@ -185,6 +190,7 @@ async function route() {
       case 'profile': cleanup = renderProfile(main); break;
       case 'me': cleanup = renderMe(main); break;
       case 'library': cleanup = renderLibrary(main); break;
+      case 'modes': cleanup = renderModes(main); break;
       case 'settings': cleanup = renderSettings(main, { applyTheme, tab: r.tab }); break;
       default: cleanup = renderMode(main, r.mode, r.tab); break;
     }
@@ -257,6 +263,7 @@ async function refreshAll() {
 async function boot() {
   document.documentElement.classList.toggle('mobile', mobile);
   await loadCapabilities(); // what each game can do (rules and modes offered), before any screen
+  await loadModes(); // the official modes and the catalog of rules (the files the server reads too)
   try {
     await refreshState();
   } catch (e) {

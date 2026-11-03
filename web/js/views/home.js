@@ -5,7 +5,7 @@ import { srv } from '../api.js';
 import { store, on, refreshRooms, loadRoom } from '../store.js';
 import { gameName } from '../data/games.js';
 import { openCreateRoom } from './create-room.js';
-import { MODE_PLAYERS, modeName } from '../data/rules.js';
+import { modeName, familyOf, playersOf } from '../data/modes.js';
 import { mobile } from '../platform.js';
 
 export function stateChip(room) {
@@ -24,7 +24,8 @@ export function renderHome(container, { mode = 'soullink' } = {}) {
   container.appendChild(page);
 
   function draw() {
-    const rooms = [...store.rooms.values()].filter((r) => (r.mode || 'soullink') === mode && (r.state === 'lobby' || r.state === 'running'));
+    // the tab of a mode shows the rooms of its family (the Nuzlocke Hardcore and the imported modes close to it)
+    const rooms = [...store.rooms.values()].filter((r) => familyOf(r) === mode && (r.state === 'lobby' || r.state === 'running'));
     const invites = rooms.filter((r) => r.invited);
     const mine = rooms.filter((r) => !r.invited);
     mount(page,
@@ -32,7 +33,7 @@ export function renderHome(container, { mode = 'soullink' } = {}) {
       mobile ? h('div', { class: 'row mb' },
         btn('Nouvelle salle', () => openCreateRoom(mode), { kind: 'primary grow', iconName: 'plus' }),
         btn('Code', joinWithCode, { iconName: 'door', title: 'Rejoindre avec un code' })) : h('div', { class: 'row between mb' },
-        h('p', { class: 'muted' }, `Créez une salle (${MODE_PLAYERS[mode].min === 1 ? 'solo ou ' : ''}de ${Math.max(2, MODE_PLAYERS[mode].min)} à ${MODE_PLAYERS[mode].max} joueurs), rejoignez celle d’un ami ou une salle publique.`),
+        h('p', { class: 'muted' }, `Créez une salle (${playersOf(mode).min === 1 ? 'solo ou ' : ''}de ${Math.max(2, playersOf(mode).min)} à ${playersOf(mode).max} joueurs), rejoignez celle d’un ami ou une salle publique.`),
         h('div', { class: 'row' },
           btn('Rejoindre avec un code', joinWithCode, { iconName: 'door' }),
           btn('Nouvelle salle', () => openCreateRoom(mode), { kind: 'primary', iconName: 'plus' }))),
@@ -49,7 +50,8 @@ export function renderHome(container, { mode = 'soullink' } = {}) {
     const members = room.members || [];
     return h('a', { class: 'card click room-card', href: `#/salle/${room.id}`, style: { color: 'inherit', textDecoration: 'none' } },
       h('div', { class: 'grow' },
-        h('div', { class: 'row' }, h('h3', null, room.name), stateChip(room), room.visibility === 'public' ? chip('Publique', 'accent') : null),
+        h('div', { class: 'row' }, h('h3', null, room.name), stateChip(room), room.mode !== mode ? chip(modeName(room)) : null,
+          room.visibility === 'public' ? chip('Publique', 'accent') : null),
         h('p', { class: 'muted small mt-s' }, `${gameName(room.game?.gameId)} · ${members.length}/${room.maxPlayers} joueur(s) · créée ${timeAgo(room.createdAt)}`)),
       h('div', { class: 'avatars' }, members.map((m) => avatar(m.name, m.slot, { size: 's', online: m.online, id: m.userId, pic: m.avatar }))),
       icon('back', 'flip'));
