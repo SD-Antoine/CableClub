@@ -129,7 +129,8 @@ Ils réduisent le risque, ils ne rendent pas le projet « légal » par décret.
    partager ou héberger une ROM, un BIOS ou une ressource extraite d'un jeu, même « de salle ».
 3. **La RAM avant la ROM** : appliquer une règle par écriture de variables en RAM (comme `ShinyBoost`),
    pas par patch du code du jeu (CJUE, *Sony c. Datel*, C-159/23, 17 octobre 2024). Les patches de
-   ROM (`SltPatches`) ont un statut ⚠️.
+   ROM (`SltPatches`) ont un statut ⚠️ ; leur inventaire, les alternatives en RAM étudiées et la raison
+   de chaque patch restant sont dans `docs/rom-patches.md` (à tenir à jour pour tout nouveau patch).
 4. **Aucun contournement de mesure technique** : ne jamais intégrer ni télécharger de BIOS, firmware
    ou clé propriétaire (les cœurs tournent en HLE / FreeBIOS : à conserver).
 5. **Modes communautaires déclaratifs uniquement** : ni code exécutable, ni binaire, ni ressource
