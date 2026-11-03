@@ -1390,10 +1390,10 @@ public final class Room {
                 }
             }
         }
-        return Json.map("room", id, "doomed", doomed, "release", release, "nicknames", nicknames, "pause", pause,
+        Map<String, Object> directives = Json.map("room", id, "doomed", doomed, "release", release, "nicknames", nicknames, "pause", pause,
                 "refunds", new ArrayList<Object>(m.refunds), "deathBox", rule("deathBox"),
-                // shiny rate of the room: k out of 8192 (0 = the game's), applied while playing in gen 2-3 (the DS games
-                // have it in their ROM); "1 in N" too, for the players of older versions
+                // shiny rate of the room: k out of 8192 (0 = the game's), applied while playing; "1 in N" too, for the
+                // players of older versions
                 "shinyNum", (long) slt.ShinyOdds.numerator(rando),
                 "shinyRate", (long) slt.ShinyOdds.oneIn(slt.ShinyOdds.numerator(rando)),
                 "park", new ArrayList<Object>(m.park.keySet()), "parkWhy", new LinkedHashMap<String, Object>(m.park),
@@ -1402,6 +1402,11 @@ public final class Room {
                 "levelCap", (long) levelCap(m), "setMode", run.hardcore(this) || (run.classicRules() && rule("honorSetMode")),
                 "ban", ban, "noHeld", classic && rule("honorNoHeldItems"), "noFly", classic && rule("honorNoFly"),
                 "saveStates", rule("saveStates"), "state", state, "open", adventureOpen, "trade", tradeDirective(m));
+        // DS games: rooms saved before this have the rate in their ROM (SltPatches), and every player's copy must stay so
+        if (Json.bool(rando, "shinyRam", false)) {
+            directives.put("shinyRam", true);
+        }
+        return directives;
     }
 
     void ackRefunds(Member m, List<Object> ids) {

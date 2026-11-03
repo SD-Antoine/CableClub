@@ -7,7 +7,8 @@ import java.util.Map;
  * rate is 1/8192). Kept in the randomization of the room as {@code shinyNum} (k; 0 = the game's own rate); rooms of
  * older versions have {@code shinyRate} (1 in N) instead.
  *
- * <p>The DS games get it in their ROM: their shiny test {@code x < 8} (x = the 16-bit mix of the personality value
+ * <p>The rate is applied while playing (the player's ShinyBoost). The DS rooms saved before that, without
+ * {@code shinyRam}, have it in their ROM: their shiny test {@code x < 8} (x = the 16-bit mix of the personality value
  * and the trainer's IDs) becomes {@code (x >> shift) < limit}, so the threshold {@code limit << shift} can be any
  * multiple of 8 up to 65536 (exactly, or within 1/255 when it has no exact form).
  */

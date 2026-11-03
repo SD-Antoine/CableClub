@@ -18,8 +18,8 @@ import java.util.Random;
 import java.util.Set;
 
 /**
- * The room's shiny rate, applied while the game runs (generations 2 and 3;
- * the DS games get it in their ROM, or here: point 8b, being proven). When a wild battle starts, with the
+ * The room's shiny rate, applied while the game runs (generations 2 to 5; DS
+ * rooms of older versions have it in their ROM instead). When a wild battle starts, with the
  * chance that brings the game's 1/8192 to the room's rate, the wild Pokémon
  * becomes shiny before it appears, the way the game itself makes a shiny:
  *
@@ -83,13 +83,10 @@ final class ShinyBoost {
         this.reader = reader;
     }
 
-    /**
-     * The boost for this game, or null when it does not apply (generation 1, unknown ROM layout; DS games unless
-     * {@code ds}: their rate is still written in the ROM of the room, the RAM way being proven, point 8b).
-     */
-    static ShinyBoost create(GameReader reader, Path rom, boolean ds) {
+    /** The boost for this game, or null when it does not apply (generation 1, unknown ROM layout). */
+    static ShinyBoost create(GameReader reader, Path rom) {
         if (reader instanceof NdsReader) {
-            return ds ? new ShinyBoost(reader) : null;
+            return new ShinyBoost(reader);
         }
         ShinyBoost b = new ShinyBoost(reader);
         if (reader instanceof GbReader gb && gb.gen() == 2) {

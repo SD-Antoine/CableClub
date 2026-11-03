@@ -15,12 +15,12 @@ package slt.player.track;
 public final class NdsPkm {
 
     /**
-     * A Pokémon is shiny when its shiny value is under this: 8 in the games, the room's threshold when its ROM
-     * got another shiny rate (SltPatches), given by the room's directives.
+     * A Pokémon is shiny when its shiny value is under this: 8 in the games, the room's threshold when its ROM got
+     * another shiny rate (SltPatches, DS rooms of older versions), given by the room's directives.
      */
     static volatile int shinyThreshold = 8;
 
-    /** The room's shiny rate ({@code num} out of 8192, 0: the game's), as the patched ROM tests it (SltPatches). */
+    /** The shiny rate in the room's ROM ({@code num} out of 8192, 0: the game's), as that ROM tests it (SltPatches). */
     public static void shinyNumerator(int num) {
         shinyThreshold = slt.ShinyOdds.dsThreshold(num);
     }

@@ -115,7 +115,7 @@ public final class DsShinyTest {
         Mem mem = new Mem().add(0x02000000L, ram);
         check(reader.read(mem) != null && reader.mapAddress() == 0x02000000L + base + 0x19504, "Noire/Blanche : sauvegarde trouvée");
         byte[] before = ram.clone();
-        ShinyBoost boost = ShinyBoost.create(reader, null, true);
+        ShinyBoost boost = ShinyBoost.create(reader, null);
         boost.setRate(1);
         ShinyBoost.Live live = new ShinyBoost.Live() {
             @Override

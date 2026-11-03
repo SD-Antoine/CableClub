@@ -33,9 +33,11 @@ import java.util.function.Consumer;
  *       more when sold than when bought;</li>
  *   <li>evolution lines of the final ROM (dupes clause of the room);</li>
  *   <li>the room's rule "Pas d'évolution": no evolution left in the ROM;</li>
- *   <li>DS games: the room's shiny rate (the test "shiny value < 8" of the
- *       games' only shiny function becomes "< N"; generations 2 and 3 get the
- *       rate while playing, see the player's ShinyBoost).</li>
+ *   <li>DS games, rooms saved before the rate moved to the RAM (no "shinyRam" in
+ *       their randomization): the room's shiny rate (the test "shiny value < 8" of
+ *       the games' only shiny function becomes "< N"), so that their ROM stays the
+ *       same for every player. Other rooms get the rate while playing, see the
+ *       player's ShinyBoost.</li>
  * </ul>
  */
 final class SltPatches {
@@ -77,7 +79,7 @@ final class SltPatches {
                 }
             }
             int shinyNum = slt.ShinyOdds.numerator(rando);
-            if (shinyNum > 1 && rh.generationOfPokemon() >= 4) {
+            if (shinyNum > 1 && rh.generationOfPokemon() >= 4 && !Json.bool(rando, "shinyRam", false)) {
                 progress.accept("Taux de chromatiques…");
                 if (dsShinyRate(rh, shinyNum)) {
                     notes.add("Chromatiques : " + slt.ShinyOdds.label(shinyNum));

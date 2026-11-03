@@ -73,7 +73,7 @@ final class TrackerHost implements Session.Tracker {
     private final Set<Long> heldNoRoom = new HashSet<>();
     private long lastWrites;
     private final Set<Long> depositFailures = new HashSet<>();
-    /** The room's shiny rate, applied in the game (generations 2 and 3), or null. */
+    /** The room's shiny rate, applied in the game (generations 2 to 5), or null. */
     private final ShinyBoost shiny;
     private final ShinyBoost.Live live;
     private CoreHost liveCore;
@@ -143,8 +143,7 @@ final class TrackerHost implements Session.Tracker {
         String platform = name.endsWith(".nds") ? "nds" : name.endsWith(".gba") ? "gba" : "gb";
         TrackerEngine engine = new TrackerEngine(reader, info, saves.resolve("suivi.json"), sink);
         Log.info("Suivi automatique : " + game + " (" + reader.getClass().getSimpleName() + ")");
-        // DS games: the rate in RAM only in scripts until it is proven (point 8b); their ROM gets it otherwise
-        ShinyBoost shiny = ShinyBoost.create(reader, rom, a.containsKey("--shiny-rate"));
+        ShinyBoost shiny = ShinyBoost.create(reader, rom);
         TrackerHost host = new TrackerHost(engine, reader, platform, sync, saves, shiny);
         if (shiny != null && a.containsKey("--shiny-rate")) {
             shiny.setRate(Integer.parseInt(a.get("--shiny-rate"))); // tests (scripts)
@@ -194,11 +193,14 @@ final class TrackerHost implements Session.Tracker {
         deathBox = Json.bool(d, "deathBox", false);
         // the room's shiny rate: k out of 8192 (servers before 0.10 only send "1 in N")
         int shinyNum = slt.ShinyOdds.numerator(d);
+        // DS rooms of older versions (no "shinyRam"): the ROM's own test was changed (SltPatches), nothing to do here
+        // but to read the Pokémon with the same threshold
+        boolean inRom = "nds".equals(platform) && !Json.bool(d, "shinyRam", false);
         if (shiny != null) {
-            shiny.setNumerator(shinyNum);
+            shiny.setNumerator(inRom ? 0 : shinyNum);
         }
         if ("nds".equals(platform)) {
-            slt.player.track.NdsPkm.shinyNumerator(shinyNum); // the ROM's own test was changed (SltPatches)
+            slt.player.track.NdsPkm.shinyNumerator(inRom ? shinyNum : 0);
         }
         Set<Long> rel = new HashSet<>();
         List<Object> relList = Json.arr(d.get("release"));
