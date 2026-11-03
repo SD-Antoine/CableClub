@@ -274,6 +274,15 @@ public final class Rooms {
 
     // --------------------------------------------------------------- lobby
 
+    /** A mode file brought by a player: checked like any mode file, and never under the name of an official mode. */
+    static ModeSpec importMode(String text) {
+        ModeSpec spec = ModeSpec.parse(text, false);
+        if (ModeSpec.official(spec.id) != null) {
+            throw new Http.Fail(400, "Mode invalide : « " + spec.id + " » est l'identifiant d'un mode officiel, choisissez-en un autre.");
+        }
+        return spec;
+    }
+
     Map<String, Object> create(Accounts.User user, Map<String, Object> body) {
         Map<String, Object> game = Json.obj(body.get("game"));
         String gameId = Json.str(game, "gameId");
@@ -289,22 +298,30 @@ public final class Rooms {
         r.game = Json.map("gameId", gameId, "name", Json.str(game, "name"), "gen", Json.num(game, "gen", 0),
                 "platform", Json.str(game, "platform"), "romCode", Json.str(game, "romCode"), "lang", Json.str(game, "lang"),
                 "crc", Json.str(game, "crc"));
-        String mode = Json.str(body, "mode");
-        r.mode = mode != null && Room.modes().contains(mode) ? mode : "soullink";
+        Object modeFile = body.get("modeFile");
+        if (modeFile != null) {
+            // an imported mode: checked like any mode file, kept in the room (its own copy)
+            ModeSpec imported = importMode(modeFile instanceof String s ? s : Json.stringify(modeFile));
+            r.customSpec = imported;
+            r.mode = imported.id;
+        } else {
+            String mode = Json.str(body, "mode");
+            r.mode = mode != null && Room.modes().contains(mode) ? mode : "soullink";
+        }
+        ModeSpec spec = r.spec();
         // the mode needs what the game can do (Shinylocke: shinies, none in generation 1)
-        String missing = Capabilities.missingForMode(r.mode, gameId, (int) Json.num(game, "gen", 0));
+        String missing = Capabilities.missingForSpec(spec, gameId, (int) Json.num(game, "gen", 0));
         if (missing != null) {
             throw new Http.Fail(400, "Le " + r.runName() + " n'est pas disponible avec " + r.gameName() + " : " + missing + ".");
         }
-        r.maxPlayers = (int) Math.max(Room.minPlayers(r.mode), Math.min(Room.maxPlayers(r.mode),
-                Json.num(body, "maxPlayers", Math.max(2, Room.minPlayers(r.mode)))));
+        r.maxPlayers = (int) Math.max(spec.minPlayers, Math.min(spec.maxPlayers,
+                Json.num(body, "maxPlayers", Math.max(2, spec.minPlayers))));
         // a room for one player is never listed: nobody could join it
         r.visibility = "public".equals(Json.str(body, "visibility")) && r.maxPlayers >= 2 ? "public" : "private";
-        r.rules = Room.defaultRules(r.mode);
+        r.rules = spec.defaults();
         Map<String, Object> rules = Json.obj(body.get("rules"));
         if (rules != null) {
             // a rule the mode fixes keeps its value, as does a value the rule does not allow
-            ModeSpec spec = r.spec();
             for (Map.Entry<String, Object> e : rules.entrySet()) {
                 if (r.rules.containsKey(e.getKey()) && !spec.locked(e.getKey()) && ModeSpec.allows(e.getKey(), e.getValue())) {
                     r.rules.put(e.getKey(), e.getValue());
@@ -372,7 +389,7 @@ public final class Rooms {
                 if (asked < r.members.size()) {
                     throw new Http.Fail(409, "Il y a déjà " + r.members.size() + " joueur(s) dans la salle.");
                 }
-                r.maxPlayers = Math.max(Room.minPlayers(r.mode), Math.min(Room.maxPlayers(r.mode), asked));
+                r.maxPlayers = Math.max(r.spec().minPlayers, Math.min(r.spec().maxPlayers, asked));
             }
             if (body.containsKey("visibility")) {
                 r.visibility = "public".equals(Json.str(body, "visibility")) ? "public" : "private";
@@ -568,8 +585,8 @@ public final class Rooms {
             if (!"lobby".equals(r.state)) {
                 throw new Http.Fail(409, "L'aventure est déjà lancée.");
             }
-            if (r.members.size() < Room.minPlayers(r.mode)) {
-                throw new Http.Fail(409, "Il faut au moins " + Room.minPlayers(r.mode) + " joueurs pour lancer un " + r.runName() + ".");
+            if (r.members.size() < r.spec().minPlayers) {
+                throw new Http.Fail(409, "Il faut au moins " + r.spec().minPlayers + " joueurs pour lancer un " + r.runName() + ".");
             }
             List<String> waiting = new ArrayList<>();
             for (Room.Member m : r.members) {

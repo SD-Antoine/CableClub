@@ -244,6 +244,12 @@ public final class RoomReplay {
         out.append("\nÉtat final\n  ");
         pretty(out, normalize(r.toStore()), "  ");
         out.append('\n');
+        // the room saved then read back (a restart of the server) is the same room
+        String saved = Json.stringify(r.toStore());
+        String reread = Json.stringify(Room.fromStore(Json.parseObject(saved)).toStore());
+        if (!reread.equals(saved)) {
+            out.append("Relecture de la sauvegarde : salle différente\n  ").append(reread).append('\n');
+        }
         for (Room.Member m : r.members) {
             out.append("Vue en direct [").append(m.userId).append("] ");
             pretty(out, normalize(m.live), "");

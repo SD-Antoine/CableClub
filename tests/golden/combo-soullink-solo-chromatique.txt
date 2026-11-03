@@ -323,7 +323,36 @@ règles {"dupesClause":false,"giftPokemon":false,"legendaries":true,"naming":"fr
     },
     "logSeq": 0,
     "refundSeq": 0,
-    "trades": []
+    "trades": [],
+    "modeFile": {
+      "schemaVersion": 1,
+      "id": "soullink-solo-chromatique",
+      "name": "Soul Link solo chromatique",
+      "description": "Liés, un seul Pokémon chacun, et seuls les chromatiques se capturent.",
+      "author": "Testeur",
+      "license": "CC0-1.0",
+      "players": {"min":2,"max":2},
+      "needs": ["shinies"],
+      "engine": {"links":"shared","encounters":"shiniesOnly","team":"one"},
+      "rules": {
+        "dupesClause": false,
+        "giftPokemon": false,
+        "legendaries": true,
+        "naming": "free",
+        "pauseForNaming": false,
+        "deathBox": true,
+        "refundCancelled": false,
+        "endWhen": "all",
+        "autoEnd": true,
+        "startWithBalls": true,
+        "soloParty": "auto",
+        "soloLoss": "next",
+        "oneShinyPerZone": false
+      },
+      "win": ["champion"],
+      "lose": ["soloLost"],
+      "objectives": [{"type":"badges","count":8},{"type":"champion"}]
+    }
   }
 Vue en direct [alice] {"zone":"Route 29","party":["1001","1002"],"at":0}
 Vue en direct [bob] {"zone":"Route 29","party":["2001","2002"],"at":0}

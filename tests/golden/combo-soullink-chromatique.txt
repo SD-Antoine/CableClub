@@ -367,7 +367,35 @@ règles {"dupesClause":true,"giftPokemon":false,"legendaries":true,"naming":"fre
     },
     "logSeq": 0,
     "refundSeq": 0,
-    "trades": []
+    "trades": [],
+    "modeFile": {
+      "schemaVersion": 1,
+      "id": "soullink-chromatique",
+      "name": "Soul Link chromatique",
+      "description": "Les chromatiques capturés dans une même zone sont liés entre les joueurs.",
+      "author": "Testeur",
+      "license": "CC0-1.0",
+      "players": {"min":2,"max":4},
+      "needs": ["shinies"],
+      "engine": {"links":"shared","encounters":"shiniesOnly","team":"free"},
+      "rules": {
+        "dupesClause": true,
+        "giftPokemon": false,
+        "legendaries": true,
+        "naming": "free",
+        "pauseForNaming": false,
+        "deathBox": true,
+        "refundCancelled": true,
+        "wipeEndsRun": true,
+        "endWhen": "all",
+        "autoEnd": true,
+        "startWithBalls": true,
+        "oneShinyPerZone": true
+      },
+      "win": ["champion"],
+      "lose": ["teamWiped"],
+      "objectives": []
+    }
   }
 Vue en direct [alice] {"zone":"Route 102"}
 Vue en direct [bob] {"zone":"Route 102"}

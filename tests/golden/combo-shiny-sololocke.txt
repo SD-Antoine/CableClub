@@ -203,6 +203,32 @@ règles {"dupesClause":false,"giftPokemon":false,"legendaries":true,"deathBox":t
     },
     "logSeq": 0,
     "refundSeq": 0,
-    "trades": []
+    "trades": [],
+    "modeFile": {
+      "schemaVersion": 1,
+      "id": "shiny-sololocke",
+      "name": "Shiny Sololocke",
+      "description": "Un seul Pokémon dans l’équipe, et seuls les chromatiques se capturent.",
+      "author": "Testeur",
+      "license": "CC0-1.0",
+      "players": {"min":1,"max":4},
+      "needs": ["shinies"],
+      "engine": {"links":"none","encounters":"shiniesOnly","team":"one"},
+      "rules": {
+        "dupesClause": false,
+        "giftPokemon": false,
+        "legendaries": true,
+        "deathBox": true,
+        "endWhen": "all",
+        "autoEnd": true,
+        "startWithBalls": true,
+        "soloParty": "auto",
+        "soloLoss": "next",
+        "oneShinyPerZone": false
+      },
+      "win": ["champion"],
+      "lose": ["soloLost"],
+      "objectives": []
+    }
   }
 Vue en direct [alice] {"party":["1001","1003"],"at":0,"zone":"Route 29"}

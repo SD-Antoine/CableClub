@@ -337,7 +337,36 @@ règles {"shinyClause":true,"dupesClause":true,"giftPokemon":false,"legendaries"
     },
     "logSeq": 0,
     "refundSeq": 0,
-    "trades": []
+    "trades": [],
+    "modeFile": {
+      "schemaVersion": 1,
+      "id": "soullink-solo",
+      "name": "Soul Link solo",
+      "description": "Un Soul Link où chaque joueur n’a qu’un Pokémon dans l’équipe.",
+      "author": "Testeur",
+      "license": "CC0-1.0",
+      "players": {"min":2,"max":4},
+      "needs": [],
+      "engine": {"links":"shared","encounters":"firstPerZone","team":"one"},
+      "rules": {
+        "shinyClause": true,
+        "dupesClause": true,
+        "giftPokemon": false,
+        "legendaries": true,
+        "naming": "free",
+        "pauseForNaming": false,
+        "deathBox": true,
+        "refundCancelled": true,
+        "endWhen": "all",
+        "autoEnd": true,
+        "startWithBalls": true,
+        "soloParty": "auto",
+        "soloLoss": "next"
+      },
+      "win": ["champion"],
+      "lose": ["soloLost"],
+      "objectives": []
+    }
   }
 Vue en direct [alice] {"party":["1001"],"at":0,"zone":"Route 101"}
 Vue en direct [bob] {"party":["2002"],"at":0,"zone":"Route 101"}

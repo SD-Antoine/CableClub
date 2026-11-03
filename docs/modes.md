@@ -86,3 +86,13 @@ parenthèses).
 
 Dans une salle, une règle fixée par le mode (`locked`) ne change pas ; une valeur hors des valeurs
 permises, ou différente de la neutre pour une règle sans objet, est refusée.
+
+## Importer un mode
+
+- `POST /api/modes/check` (avec une session) : le corps est le fichier ; la réponse est sa forme
+  normalisée (`{ "mode": … }`), ou une erreur 400 qui dit ce qui ne va pas.
+- `POST /api/rooms` avec `modeFile` (le fichier, en objet ou en texte) à la place de `mode` : le fichier
+  est vérifié de la même façon, puis **copié dans la salle** (sa sauvegarde le garde ; il est relu et
+  revérifié au redémarrage du serveur). Le jeu de la salle doit avoir les capacités de `needs`, et le
+  nombre de joueurs reste dans `players`.
+- Un mode importé ne peut pas reprendre l'`id` d'un mode officiel.

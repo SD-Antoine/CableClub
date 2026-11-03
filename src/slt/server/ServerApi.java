@@ -6,6 +6,7 @@ import slt.Json;
 import slt.Log;
 import slt.Sse;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -352,6 +353,12 @@ final class ServerApi {
                     (int) parse(q.get("size"), 0), "1".equals(q.get("full")))));
         });
         r.on("GET", "/api/history", (ex, p) -> Http.json(ex, 200, Json.map("rooms", rooms.history(user(ex)))));
+        // a mode file checked before it is used: the body is the file, the answer its normalized form (or a 400)
+        r.on("POST", "/api/modes/check", (ex, p) -> {
+            user(ex);
+            String text = new String(Http.readBody(ex, 64 * 1024), StandardCharsets.UTF_8);
+            Http.json(ex, 200, Json.map("mode", Rooms.importMode(text).toJson()));
+        });
         r.on("POST", "/api/rooms", (ex, p) -> Http.json(ex, 200, rooms.create(user(ex), Http.readJson(ex))));
         r.on("POST", "/api/rooms/join", (ex, p) -> {
             Accounts.User u = user(ex);

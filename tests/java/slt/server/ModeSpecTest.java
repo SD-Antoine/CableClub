@@ -56,6 +56,15 @@ public final class ModeSpecTest {
             m.put("lose", List.of("soloLost"));
         }), false);
         check(shinySolo.solo() && shinySolo.shiniesOnly() && shinySolo.locked("oneShinyPerZone"), "un Shiny Sololocke importé est accepté");
+        // the normalized form (kept in the room, given back by /api/modes/check) reads back as the same mode
+        String once = Json.stringify(shinySolo.toJson());
+        check(Json.stringify(ModeSpec.parse(once, false).toJson()).equals(once), "un mode relu depuis sa forme normalisée est le même");
+        for (ModeSpec s : officials.values()) {
+            check(Json.stringify(ModeSpec.parse(Json.stringify(s.toJson()), true).toJson()).equals(Json.stringify(s.toJson())),
+                    s.id + " : forme normalisée relue à l'identique");
+        }
+        failsWith(() -> Rooms.importMode(mode(m -> m.put("id", "nuzlocke"))), 400, "mode officiel");
+        check(Rooms.importMode(mode(m -> { })).id.equals("mon-mode"), "un mode à soi s'importe");
 
         // what an imported mode may not do: each refused with a clear message
         refused(mode(m -> m.put("script", "x")), "champ inconnu « script »");

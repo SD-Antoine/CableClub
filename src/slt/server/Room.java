@@ -39,14 +39,6 @@ public final class Room {
         return s != null ? s : ModeSpec.official("soullink");
     }
 
-    public static int minPlayers(String mode) {
-        return officialOrSoulLink(mode).minPlayers;
-    }
-
-    public static int maxPlayers(String mode) {
-        return officialOrSoulLink(mode).maxPlayers;
-    }
-
     /**
      * The classic rules of the Nuzlocke, applied by Cable Club in the games (their keys keep the "honor" of the time the
      * players kept to them on their honour): items taken out of the bag, held items back in it, Fly forgotten, battle
@@ -1663,9 +1655,13 @@ public final class Room {
                 "leaderId", leaderId, "createdAt", createdAt,
                 "launchedAt", launchedAt, "game", game, "maxPlayers", (long) maxPlayers, "state", state,
                 "adventureOpen", adventureOpen, "members", ms, "ended", ended, "linkStarted", linkStarted);
+        v.put("modeName", runName());
         if (full) {
             v.put("code", code);
             v.put("rules", rules);
+            if (customSpec != null) {
+                v.put("modeFile", customSpec.toJson()); // the interface shows an imported mode's rules and objectives
+            }
             v.put("rando", rando);
             List<Object> zs = new ArrayList<>();
             for (Zone z : zones.values()) {
@@ -1696,13 +1692,17 @@ public final class Room {
         for (Zone z : zones.values()) {
             zs.add(z.toJson());
         }
-        return Json.map("version", 1L, "id", id, "code", code, "name", name, "mode", mode, "visibility", visibility,
+        Map<String, Object> store = Json.map("version", 1L, "id", id, "code", code, "name", name, "mode", mode, "visibility", visibility,
                 "leaderId", leaderId,
                 "createdAt", createdAt, "launchedAt", launchedAt, "game", game, "maxPlayers", (long) maxPlayers,
                 "state", state, "adventureOpen", adventureOpen, "linkStarted", linkStarted, "rules", rules, "rando", rando, "members", ms,
                 "invites", new ArrayList<Object>(invites), "history", new ArrayList<Object>(history), "zones", zs,
                 "namingQueue", new ArrayList<Object>(namingQueue), "ended", ended, "logSeq", logSeq,
                 "refundSeq", refundSeq, "trades", storedTrades());
+        if (customSpec != null) {
+            store.put("modeFile", customSpec.toJson()); // the room keeps its own copy of an imported mode
+        }
+        return store;
     }
 
     static Room fromStore(Map<String, Object> m) {
@@ -1712,6 +1712,11 @@ public final class Room {
         r.name = Json.str(m, "name");
         r.leaderId = Json.str(m, "leaderId");
         r.mode = Json.str(m, "mode") == null ? "soullink" : Json.str(m, "mode");
+        Map<String, Object> modeFile = Json.obj(m.get("modeFile"));
+        if (modeFile != null) {
+            // read again as when it was imported: a mode the validator no longer accepts stops here, loudly
+            r.customSpec = ModeSpec.parse(Json.stringify(modeFile), false);
+        }
         r.visibility = "public".equals(Json.str(m, "visibility")) ? "public" : "private";
         r.createdAt = Json.num(m, "createdAt", 0);
         r.launchedAt = Json.num(m, "launchedAt", 0);
@@ -1724,10 +1729,15 @@ public final class Room {
         r.adventureOpen = Json.bool(m, "adventureOpen", false);
         // rooms started before this rule existed: already under way
         r.linkStarted = Json.bool(m, "linkStarted", "running".equals(r.state) || "finished".equals(r.state));
-        Map<String, Object> rules = defaultRules();
+        // the rules of the room's own mode (a rule added since takes its default), never those of another mode
+        Map<String, Object> rules = r.spec().defaults();
         Map<String, Object> saved = Json.obj(m.get("rules"));
         if (saved != null) {
-            rules.putAll(saved);
+            for (Map.Entry<String, Object> e : saved.entrySet()) {
+                if (rules.containsKey(e.getKey())) {
+                    rules.put(e.getKey(), e.getValue());
+                }
+            }
         }
         r.rules = rules;
         Map<String, Object> rando = Json.obj(m.get("rando"));

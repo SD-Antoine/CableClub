@@ -176,6 +176,23 @@ final class ModeSpec {
         return def != null && holds(def.when());
     }
 
+    /** The file of this mode, normalized (what a room keeps, what the interface shows and exports). */
+    Map<String, Object> toJson() {
+        Map<String, Object> rules = new LinkedHashMap<>();
+        for (Map.Entry<String, Object> e : defaults.entrySet()) {
+            rules.put(e.getKey(), locked.contains(e.getKey()) ? Json.map("default", e.getValue(), "locked", true) : e.getValue());
+        }
+        List<Object> goals = new ArrayList<>();
+        for (Map<String, Object> g : objectives) {
+            goals.add(new LinkedHashMap<>(g));
+        }
+        return Json.map("schemaVersion", 1L, "id", id, "name", name, "description", description, "author", author,
+                "license", license, "players", Json.map("min", (long) minPlayers, "max", (long) maxPlayers),
+                "needs", new ArrayList<Object>(needs),
+                "engine", Json.map("links", links, "encounters", encounters, "team", team),
+                "rules", rules, "win", new ArrayList<Object>(win), "lose", new ArrayList<Object>(lose), "objectives", goals);
+    }
+
     /** Whether the value is one the rule allows (a switch: true or false; a choice: one of its options). */
     static boolean allows(String rule, Object value) {
         RuleDef def = CATALOG.get(rule);
