@@ -33,6 +33,7 @@ public final class SltServer {
     final Chat chat;
     final Battles battles;
     final Reports reports;
+    final ModeGallery gallery;
     final String name;
     private final java.util.concurrent.ScheduledExecutorService timer =
             Executors.newSingleThreadScheduledExecutor(r -> {
@@ -51,6 +52,9 @@ public final class SltServer {
         this.chat = new Chat(dataDir, accounts, rooms, hub);
         this.battles = new Battles(rooms, hub);
         this.reports = new Reports(dataDir);
+        this.gallery = new ModeGallery(dataDir, accounts);
+        rooms.gallery = gallery;
+        Room.publishedMode = gallery::published;
         this.name = name == null || name.isBlank() ? "Serveur Cable Club" : name;
         hub.avatars(userId -> {
             Accounts.User u = accounts.get(userId);

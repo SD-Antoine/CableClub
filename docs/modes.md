@@ -101,12 +101,27 @@ permises, ou différente de la neutre pour une règle sans objet, est refusée.
   revérifié au redémarrage du serveur). Le jeu de la salle doit avoir les capacités de `needs`, et le
   nombre de joueurs reste dans `players`.
 - Un mode importé ne peut pas reprendre l'`id` d'un mode officiel.
-- Une salle d'un mode importé reste **privée** (elle n'apparaît pas dans « Salles publiques ») tant
-  que la publication des modes (point 2d) n'est pas ouverte.
+- Une salle d'un mode importé est **privée**, sauf si ce mode (le même fichier) est publié dans la
+  galerie et n'en a pas été retiré : elle peut alors être publique.
+
+## Galerie des modes publics (point 2d)
+
+- `POST /api/modes/publish` (corps : le fichier) : vérifié comme un import, rattaché au compte qui
+  publie (affiché « publié par »). Un identifiant appartient à un seul compte ; le propriétaire met à
+  jour son mode en le republiant. 20 modes publiés par compte, 10 publications par 10 minutes.
+- `GET /api/modes/public?q=mots` (les plus joués d'abord), `?mine=1` (les miens, retirés compris) ;
+  `POST /api/modes/public/{id}/unpublish` (le propriétaire).
+- Signalement : `POST /api/report` avec `modeId` (vise le compte qui a publié) ; un modérateur retire
+  le mode (`POST /api/admin/modes/{id}/hide`) : il disparaît de la galerie, ses salles ne sont plus
+  listées, il ne peut plus être republié sous cet identifiant. Les salles déjà créées gardent leur copie.
+- Stockage : `modes-publics.json` dans les données du serveur, relu comme la copie d'une salle
+  (`ModeSpec.stored`). Un compte supprimé emporte ses modes publiés.
 
 ## Dans l'interface
 
-- **Mes modes** (`web/js/views/modes.js`) : composer un mode à partir d'un mode officiel, le vérifier
+- **Mes modes** (`web/js/views/modes.js`) : onglets « Mes modes » et « Modes publics » (recherche,
+  « Ajouter à mes modes », « Créer une salle », « Signaler » ; « Publier » / « Retirer de la galerie »
+  sur ses propres modes). Composer un mode à partir d'un mode officiel, le vérifier
   (le serveur répond à chaque changement), l'exporter (`<id>.ccmode.json`, ou « Copier » sur
   téléphone), en importer un (fichier ou texte collé), créer une salle avec. Les modes sont gardés dans
   le navigateur de l'appareil : le fichier exporté est la copie qui compte.

@@ -416,6 +416,8 @@ public final class Room {
     String mode = "soullink";
     /** The file of a mode imported for this room (point 2b), or null: the official mode of {@link #mode}. */
     ModeSpec customSpec;
+    /** Whether an imported mode is in the gallery of public modes (set by the server). */
+    static volatile java.util.function.Predicate<ModeSpec> publishedMode = s -> false;
     Map<String, Object> unreadMode;   // an imported mode this version cannot read (the room follows its family)
     /** "public": listed in the public rooms, anybody may join while it is a lobby; "private": invitation or code. */
     String visibility = "private";
@@ -1664,6 +1666,7 @@ public final class Room {
             v.put("rules", rules);
             if (customSpec != null) {
                 v.put("modeFile", customSpec.toJson()); // the interface shows an imported mode's rules and objectives
+                v.put("modePublic", publishedMode.test(customSpec)); // in the gallery: the room may be public
             }
             v.put("rando", rando);
             List<Object> zs = new ArrayList<>();

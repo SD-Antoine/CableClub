@@ -22,6 +22,7 @@ final class ServerApi {
     private final Avatars avatars;
     private final Battles battles;
     private final Reports reports;
+    private final ModeGallery gallery;
     private final Http.Router router = new Http.Router();
 
     ServerApi(SltServer server) {
@@ -33,6 +34,7 @@ final class ServerApi {
         this.avatars = server.avatars;
         this.battles = server.battles;
         this.reports = server.reports;
+        this.gallery = server.gallery;
         routes();
     }
 
@@ -98,6 +100,7 @@ final class ServerApi {
         rooms.accountDeleted(u);
         chat.accountDeleted(u.id);
         reports.forget(u.id);
+        gallery.forget(u.id);
         avatars.delete(u.id);
         accounts.delete(u);
         for (String f : told) {
@@ -257,6 +260,23 @@ final class ServerApi {
         r.on("POST", "/api/report", (ex, p) -> {
             Accounts.User u = user(ex);
             Map<String, Object> b = Http.readJson(ex);
+            String modeId = Json.str(b, "modeId");
+            if (modeId != null) {
+                // a mode of the gallery: reported about the account that published it
+                Map<String, Object> mode = gallery.forReport(modeId);
+                if (mode == null) {
+                    throw new Http.Fail(404, "Mode publié introuvable.");
+                }
+                Accounts.User owner = other(Json.str(mode, "owner"));
+                if (owner.id.equals(u.id)) {
+                    throw new Http.Fail(400, "Vous ne pouvez pas signaler votre propre mode.");
+                }
+                Map<String, Object> report = reports.add(u, owner, "mode:" + modeId, Json.map("id", 1L, "text", Json.str(mode, "text")),
+                        Json.str(b, "reason"));
+                hub.send(chat.onlineAdmins(), "report", Json.map("open", reports.open(), "report", report));
+                Http.ok(ex);
+                return;
+            }
             Accounts.User about = other(Json.str(b, "userId"));
             if (about.id.equals(u.id)) {
                 throw new Http.Fail(400, "Vous ne pouvez pas vous signaler vous-même.");
@@ -283,6 +303,11 @@ final class ServerApi {
             Accounts.User u = admin(ex);
             reports.done(parse(p.get("id"), -1), u, Json.bool(Http.readJson(ex), "done", true));
             hub.send(chat.onlineAdmins(), "report", Json.map("open", reports.open()));
+            Http.ok(ex);
+        });
+        // a moderator takes a mode out of the gallery (its rooms keep their copy, but are no longer listed)
+        r.on("POST", "/api/admin/modes/{id}/hide", (ex, p) -> {
+            gallery.hide(admin(ex), p.get("id"));
             Http.ok(ex);
         });
         // a moderator deletes an account (serious or repeated breaches of the terms of use)
@@ -353,9 +378,24 @@ final class ServerApi {
                     (int) parse(q.get("size"), 0), "1".equals(q.get("full")))));
         });
         r.on("GET", "/api/history", (ex, p) -> Http.json(ex, 200, Json.map("rooms", rooms.history(user(ex)))));
+        // the gallery of public modes (point 2d): ?q=words, ?mine=1 (my own, those taken out included)
+        r.on("GET", "/api/modes/public", (ex, p) -> {
+            Accounts.User u = user(ex);
+            Map<String, String> q = Http.query(ex);
+            Http.json(ex, 200, Json.map("modes", gallery.list(u, q.get("q"), "1".equals(q.get("mine")))));
+        });
+        r.on("POST", "/api/modes/publish", (ex, p) -> {
+            Accounts.User u = user(ex);
+            String text = new String(Http.readBody(ex, 64 * 1024), StandardCharsets.UTF_8);
+            Http.json(ex, 200, gallery.publish(u, text));
+        });
+        r.on("POST", "/api/modes/public/{id}/unpublish", (ex, p) -> {
+            gallery.unpublish(user(ex), p.get("id"));
+            Http.ok(ex);
+        });
         // a mode file checked before it is used: the body is the file, the answer its normalized form (or a 400)
         r.on("POST", "/api/modes/check", (ex, p) -> {
-            user(ex);
+            gallery.limitCheck(user(ex).id, System.currentTimeMillis());
             String text = new String(Http.readBody(ex, 64 * 1024), StandardCharsets.UTF_8);
             Http.json(ex, 200, Json.map("mode", Rooms.importMode(text).toJson()));
         });

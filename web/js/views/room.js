@@ -163,7 +163,7 @@ export async function renderRoom(container, roomId, { history = false } = {}) {
           'Joueurs', h('select', { class: 'input', style: { width: '90px' },
             onchange: (e) => srv.post(`/rooms/${roomId}/settings`, { maxPlayers: Number(e.target.value) }).catch((err) => { errorToast(err); draw(); }) },
           playerChoices(room).map(([n, label]) => h('option', { value: n, selected: n === room.maxPlayers, disabled: n < room.members.length }, label)))) : null,
-        room.state === 'lobby' && isLeader() && room.maxPlayers >= 2 && !room.modeFile ? btn(room.visibility === 'public' ? 'Rendre privée' : 'Rendre publique', (e) => act(e.currentTarget,
+        room.state === 'lobby' && isLeader() && room.maxPlayers >= 2 && (!room.modeFile || room.modePublic || room.visibility === 'public') ? btn(room.visibility === 'public' ? 'Rendre privée' : 'Rendre publique', (e) => act(e.currentTarget,
           () => srv.post(`/rooms/${roomId}/settings`, { visibility: room.visibility === 'public' ? 'private' : 'public' })),
         { kind: 'ghost', iconName: room.visibility === 'public' ? 'lock' : 'globe',
           title: room.visibility === 'public' ? 'Seuls vos invités (ou le code) pourront entrer' : 'La salle apparaît dans « Salles publiques » : n’importe qui peut la rejoindre tant qu’elle n’est pas lancée' }) : null,

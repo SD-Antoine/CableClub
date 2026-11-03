@@ -26,9 +26,10 @@ classiques. Générations 1 à 5. Version dans `src/slt/Version.java`, historiqu
      dans la ROM, réservée aux modes officiels), registre des modes officiels (`web/js/data/modes/`),
      `family()` (l'onglet d'un mode). `ModeSpecTest` vérifie que les fichiers officiels redonnent
      exactement les règles d'avant ; chaque nouvelle combinaison a son scénario golden.
-   - Mode importé : `POST /api/rooms` avec `modeFile` (copié dans la salle, relu au redémarrage),
-     `POST /api/modes/check` (vérification) ; une salle d'un mode importé reste privée (publication :
-     point 2d, après le ré-audit de sécurité).
+   - Mode importé : `POST /api/rooms` avec `modeFile` (copié dans la salle, relu au redémarrage par
+     `ModeSpec.stored`), `POST /api/modes/check` (vérification). `ModeGallery.java` : galerie des modes
+     publics (publication rattachée au compte, signalement via `/api/report`, retrait par un modérateur) ;
+     une salle d'un mode importé n'est publique que si ce mode est publié et non retiré.
    - `Rooms.java` : salles, journal, écrans en direct (JPEG relayés), copies cloud des sauvegardes.
    - `ServerApi.java`, `Accounts.java`, `Hub.java` (présence, flux SSE).
    - Côté interface : `web/js/data/modes.js` (les mêmes fichiers de mode, `specOf`, `familyOf`),

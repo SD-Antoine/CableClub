@@ -13,10 +13,12 @@ import { rulesEditor, randoEditor, modeInfo } from './parts.js';
  * A new room of a tab's mode, or of a given mode (an official id or an imported mode file, from the mode editor).
  * A tab with several official modes (the Nuzlocke and the Nuzlocke Hardcore) lets the player choose.
  */
-export async function openCreateRoom(tab = 'soullink', given = null) {
+export async function openCreateRoom(tab = 'soullink', given = null, { published = false } = {}) {
   const choices = given ? [specOf(given)] : modesOfFamily(tab).length ? modesOfFamily(tab) : [specOf(tab)];
   let mode = choices.find((s) => s.id === tab) || choices[0];
   const custom = !isOfficial(mode);
+  // an imported mode gives a public room once it is in the gallery (« published »: this very file)
+  const privateOnly = custom && !published;
   let all;
   try {
     all = (await local.get('/api/library')).roms.filter((r) => r.present);
@@ -117,11 +119,11 @@ export async function openCreateRoom(tab = 'soullink', given = null) {
       h('div', { class: 'grid2' },
         field('Nom de la salle', name),
         field('Joueurs', seg(playerChoices(mode), st.maxPlayers, (v) => { st.maxPlayers = v; if (v < 2) st.visibility = 'private'; draw(); }))),
-      h('div', { class: ['rule-row', (st.maxPlayers < 2 || custom) && 'soon'] }, h('div', { class: 'grow' }, h('b', null, 'Salle publique'),
-        h('small', null, custom ? 'Une salle d’un mode importé reste privée : vos invités (ou ceux qui ont le code) entrent.'
+      h('div', { class: ['rule-row', (st.maxPlayers < 2 || privateOnly) && 'soon'] }, h('div', { class: 'grow' }, h('b', null, 'Salle publique'),
+        h('small', null, privateOnly ? 'Une salle d’un mode importé reste privée tant que le mode n’est pas publié dans la galerie : vos invités (ou ceux qui ont le code) entrent.'
           : st.maxPlayers < 2 ? 'Une salle solo ne peut pas être publique : personne ne pourrait la rejoindre.'
           : 'Elle apparaît dans « Salles publiques » : n’importe quel joueur du serveur peut la trouver et la rejoindre tant que l’aventure n’est pas lancée. Sinon, seuls vos invités (ou ceux qui ont le code) entrent.')),
-      switchEl(st.visibility === 'public' && st.maxPlayers >= 2 && !custom, (v) => { st.visibility = v ? 'public' : 'private'; }, { disabled: st.maxPlayers < 2 || custom })));
+      switchEl(st.visibility === 'public' && st.maxPlayers >= 2 && !privateOnly, (v) => { st.visibility = v ? 'public' : 'private'; }, { disabled: st.maxPlayers < 2 || privateOnly })));
   }
 
   async function create(button) {
@@ -132,7 +134,7 @@ export async function openCreateRoom(tab = 'soullink', given = null) {
         name: st.name.trim() || `${user?.name || 'Ma'} salle`,
         game: { gameId: r.gameId, name: gameName(r.gameId), gen: Number(r.gen), platform: r.platform, romCode: r.romCode, lang: r.lang, crc: r.crc },
         maxPlayers: st.maxPlayers,
-        visibility: custom ? 'private' : st.visibility,
+        visibility: privateOnly ? 'private' : st.visibility,
         // an imported mode travels as its file (the room keeps its own copy); an official one by its id
         ...(custom ? { modeFile: mode } : { mode: mode.id }),
         rules: st.rules,

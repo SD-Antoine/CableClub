@@ -49,7 +49,8 @@ public final class Rooms {
     private final Hub hub;
     private final Map<String, Room> rooms = new ConcurrentHashMap<>();
     private final Map<String, Screen> screens = new ConcurrentHashMap<>();
-    final Map<String, Deque<Long>> creations = new ConcurrentHashMap<>();   // by user: when they created a room
+    final Map<String, Deque<Long>> creations = new ConcurrentHashMap<>();
+    ModeGallery gallery; // the public modes (set by the server; null: none)   // by user: when they created a room
     /** A room was deleted (its chat goes with it). */
     volatile java.util.function.Consumer<String> onDeleted = id -> { };
 
@@ -107,8 +108,8 @@ public final class Rooms {
                 if (!"public".equals(r.visibility) || !"lobby".equals(r.state) || r.maxPlayers < 2) {
                     continue;
                 }
-                // an imported mode is not shown to strangers (its publication is a later step)
-                if (r.customSpec != null) {
+                // an imported mode is shown to strangers only once it is in the gallery (and not taken out of it)
+                if (!mayBePublic(r)) {
                     continue;
                 }
                 // the tab of a mode lists the official modes of its family (the Nuzlocke Hardcore with the Nuzlocke)
@@ -315,6 +316,11 @@ public final class Rooms {
         }
     }
 
+    /** Whether strangers may see the room: an official mode, or an imported one published in the gallery. */
+    boolean mayBePublic(Room r) {
+        return r.customSpec == null || (gallery != null && gallery.published(r.customSpec));
+    }
+
     /** A mode file brought by a player: checked like any mode file, and never under the name of an official mode. */
     static ModeSpec importMode(String text) {
         ModeSpec spec = ModeSpec.parse(text, false);
@@ -359,7 +365,7 @@ public final class Rooms {
         r.maxPlayers = (int) Math.max(spec.minPlayers, Math.min(spec.maxPlayers,
                 Json.num(body, "maxPlayers", Math.max(2, spec.minPlayers))));
         // a room for one player is never listed: nobody could join it
-        r.visibility = "public".equals(Json.str(body, "visibility")) && r.maxPlayers >= 2 && r.customSpec == null ? "public" : "private";
+        r.visibility = "public".equals(Json.str(body, "visibility")) && r.maxPlayers >= 2 && mayBePublic(r) ? "public" : "private";
         r.rules = spec.defaults();
         Map<String, Object> rules = Json.obj(body.get("rules"));
         if (rules != null) {
@@ -382,6 +388,9 @@ public final class Rooms {
         r.history.add(user.id);
         rooms.put(r.id, r);
         save(r);
+        if (r.customSpec != null && gallery != null) {
+            gallery.used(r.customSpec);
+        }
         Log.info("Serveur : salle " + r.id + " créée par " + user.username + " (" + gameId + ")");
         return r.view(hub, true);
     }
@@ -434,7 +443,11 @@ public final class Rooms {
                 r.maxPlayers = Math.max(r.spec().minPlayers, Math.min(r.spec().maxPlayers, asked));
             }
             if (body.containsKey("visibility")) {
-                r.visibility = "public".equals(Json.str(body, "visibility")) && r.customSpec == null ? "public" : "private";
+                boolean open = "public".equals(Json.str(body, "visibility"));
+                if (open && !mayBePublic(r)) {
+                    throw new Http.Fail(409, "Une salle d'un mode importé devient publique quand son mode est publié dans la galerie.");
+                }
+                r.visibility = open ? "public" : "private";
             }
             if (r.maxPlayers < 2) {
                 r.visibility = "private"; // a room for one player is never listed

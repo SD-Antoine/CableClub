@@ -33,8 +33,10 @@ briques (joueurs liés ou non, première rencontre ou chromatiques seuls, équip
 libre ou d'un seul Pokémon), choisissez les règles proposées, leurs valeurs et
 celles qui sont fixées, ajoutez des objectifs, puis créez une salle avec. Un mode
 est un fichier `.ccmode.json` à exporter et à importer : des règles et des
-textes, jamais de code (format : [docs/modes.md](docs/modes.md)). Une salle d'un
-mode importé reste privée pour l'instant.
+textes, jamais de code (format : [docs/modes.md](docs/modes.md)). Un mode peut
+être **publié** dans la galerie du serveur (« Modes publics ») : les autres joueurs
+le trouvent, le reprennent, créent des salles avec (publiques si le mode est
+publié) et peuvent le signaler aux modérateurs.
 
 **[⬇ Télécharger la dernière version](https://github.com/SD-Antoine/CableClub/releases/latest)**
 (`CableClub-x.y.z-windows-x64.zip` : décompressez-le et lancez `CableClub.exe`, rien à

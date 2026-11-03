@@ -11,28 +11,30 @@ const REASONS = [
   ['sexual', 'Contenu sexuel ou choquant'],
   ['spam', 'Spam ou publicité'],
   ['cheat', 'Triche ou non-respect des règles d’une salle'],
+  ['rom', 'Lien ou aide pour obtenir des jeux (ROM)'],
   ['other', 'Autre'],
 ];
 
-/** Reports a player, or one of their messages ({ ch, msg, text } given). */
-export function openReport({ userId, name, ch = null, msg = null, text = null }) {
+/** Reports a player, one of their messages ({ ch, msg, text } given), or a mode of the gallery ({ modeId, text }). */
+export function openReport({ userId = null, name, ch = null, msg = null, text = null, modeId = null }) {
   const reason = h('select', { class: 'input' }, REASONS.map(([v, l]) => h('option', { value: v }, l)));
   const details = h('textarea', { class: 'input', rows: 3, maxlength: 250, placeholder: 'Facultatif : ce qui s’est passé.' });
   modal({
-    title: msg ? 'Signaler un message' : `Signaler ${name}`,
+    title: modeId ? 'Signaler un mode publié' : msg ? 'Signaler un message' : `Signaler ${name}`,
     body: h('div', { class: 'stack' },
       text ? h('blockquote', { class: 'report-quote' }, h('b', null, name), ' : ', text) : null,
       field('Motif', reason),
       field('Précisions', details),
       h('p', { class: 'tiny faint' }, 'Les modérateurs du serveur reçoivent votre signalement avec ',
-        msg ? 'le message' : 'le profil', '. La personne signalée ne sait pas qui l’a signalée. ',
-        'Pour ne plus voir ses messages, vous pouvez aussi la bloquer depuis son profil.')),
+        modeId ? 'le mode' : msg ? 'le message' : 'le profil', '. La personne signalée ne sait pas qui l’a signalée. ',
+        modeId ? '' : 'Pour ne plus voir ses messages, vous pouvez aussi la bloquer depuis son profil.')),
     actions: [
       { label: 'Annuler', onClick: (close) => close() },
       { label: 'Signaler', kind: 'danger solid', onClick: async (close) => {
         const label = REASONS.find(([v]) => v === reason.value)?.[1] || '';
         try {
-          await srv.post('/report', { userId, ch, msg, reason: details.value.trim() ? `${label} — ${details.value.trim()}` : label });
+          const reasonText = details.value.trim() ? `${label} — ${details.value.trim()}` : label;
+          await srv.post('/report', modeId ? { modeId, reason: reasonText } : { userId, ch, msg, reason: reasonText });
           close();
           toast('Merci : les modérateurs ont reçu votre signalement.', 'ok');
         } catch (e) { errorToast(e); }
@@ -111,6 +113,11 @@ export function reportsCard() {
           r.ch === 'global' && r.msgId ? btn('Supprimer le message', (e) => act(e.currentTarget, async () => {
             await srv.post(`/chat/global/${r.msgId}/delete`);
             toast('Message supprimé.', 'ok');
+          }), { kind: 'ghost small danger' }) : null,
+          // a mode of the gallery: taken out of it (the rooms already created keep their copy)
+          String(r.ch).startsWith('mode:') ? btn('Retirer de la galerie', (e) => act(e.currentTarget, async () => {
+            await srv.post(`/admin/modes/${encodeURIComponent(r.ch.slice(5))}/hide`);
+            toast('Mode retiré de la galerie.', 'ok');
           }), { kind: 'ghost small danger' }) : null,
           btn('Rendre muet 24 h', (e) => act(e.currentTarget, async () => {
             await srv.post('/chat/mute', { userId: r.userId, minutes: 1440 }); toast(`${r.userName} est muet 24 h dans le chat général.`, 'ok');

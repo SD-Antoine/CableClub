@@ -1,5 +1,6 @@
 // The player's own game modes (point 2): compose a mode from the primitives of the engine and the rules of the
-// catalog, check it with the server, export it as a .ccmode.json file, import one, and create a room with it.
+// catalog, check it with the server, export it as a .ccmode.json file, import one, and create a room with it; and
+// the gallery of the server (2d): publish a mode, find the modes of the others, report one.
 // A mode file is declarative: rules, values and the author's texts, never code (docs/modes.md).
 
 import { h, mount, btn, field, seg, switchEl, chip, modal, toast, errorToast, confirmDialog, icon } from '../ui.js';
@@ -8,6 +9,7 @@ import { me } from '../store.js';
 import { officialModes, officialMode, familyOf, catalogRules, modeDefaults, applies } from '../data/modes.js';
 import { ruleDef } from '../data/rules.js';
 import { objectiveText } from './parts.js';
+import { openReport } from './moderation.js';
 import { openCreateRoom } from './create-room.js';
 import { MODES } from './mode.js';
 import { mobile } from '../platform.js';
@@ -44,41 +46,135 @@ export function renderModes(container) {
   const page = h('div', { class: 'page narrow' });
   container.appendChild(page);
   let own = loadOwn();
+  let tab = 'mine';
+  let published = new Map(); // my modes in the gallery, by id (those taken out by the moderation too)
+  let gallery = null; // the modes of the gallery shown, or the error that came instead
+  let query = '';
+  let timer = 0;
 
+  async function refreshPublished() {
+    try {
+      published = new Map(((await srv.get('/modes/public?mine=1')).modes || []).map((e) => [e.id, e]));
+    } catch { published = new Map(); }
+    if (tab === 'mine') draw();
+  }
+
+  async function loadGallery() {
+    try {
+      gallery = (await srv.get(`/modes/public?q=${encodeURIComponent(query)}`)).modes || [];
+    } catch (e) { gallery = e; }
+    if (tab === 'public') drawGallery();
+  }
+
+  const galleryBox = h('div');
   function draw() {
     mount(page,
       h('div', { class: 'page-head' }, h('div', null, h('h1', null, 'Mes modes'),
-        h('p', null, 'Composez votre mode avec les règles que Cable Club applique dans les jeux, puis créez une salle avec. Un mode est un fichier « .ccmode.json » : des règles et vos textes, jamais de code. Pour le partager, exportez-le ; vos amis l’importent.'))),
-      h('div', { class: 'row wrap mb' },
-        btn('Nouveau mode', () => edit(fromOfficial('nuzlocke'), true), { kind: 'primary', iconName: 'plus' }),
-        importButton(),
-        btn('Coller un mode', pasteMode, { iconName: 'copy' })),
-      own.length ? h('div', { class: 'stack' }, own.map(card))
-        : h('div', { class: 'empty' }, h('b', null, 'Aucun mode pour l’instant'), 'Partez d’un mode officiel et changez ce que vous voulez, ou importez le fichier d’un ami.'));
+        h('p', null, 'Composez votre mode avec les règles que Cable Club applique dans les jeux, puis créez une salle avec. Un mode est un fichier « .ccmode.json » : des règles et vos textes, jamais de code. Pour le partager, exportez-le, ou publiez-le dans la galerie du serveur.'))),
+      h('div', { class: 'tabs' }, [['mine', 'Mes modes'], ['public', 'Modes publics']].map(([id, label]) =>
+        h('button', { class: tab === id ? 'active' : '', onclick: () => { tab = id; draw(); if (id === 'public') loadGallery(); } }, label))),
+      tab === 'public' ? galleryView() : [
+        h('div', { class: 'row wrap mb' },
+          btn('Nouveau mode', () => edit(fromOfficial('nuzlocke'), true), { kind: 'primary', iconName: 'plus' }),
+          importButton(),
+          btn('Coller un mode', pasteMode, { iconName: 'copy' })),
+        own.length ? h('div', { class: 'stack' }, own.map(card))
+          : h('div', { class: 'empty' }, h('b', null, 'Aucun mode pour l’instant'), 'Partez d’un mode officiel et changez ce que vous voulez, importez le fichier d’un ami, ou prenez un mode de la galerie (« Modes publics »).')]);
   }
 
-  function card(spec) {
+  /** What a mode is, in a card: name, tab, author, players, text, goals; then its buttons. */
+  function modeCard(spec, { by = null, extra = null } = {}, ...buttons) {
     const family = MODES[familyOf(spec)];
     return h('div', { class: 'card' },
-      h('div', { class: 'row' }, h('h3', { class: 'grow' }, spec.name), family ? chip(`Onglet ${family.name}`) : null),
-      h('p', { class: 'small muted mt-s' }, `Par ${spec.author} · ${spec.license} · ${spec.players.min === spec.players.max ? spec.players.min : `${spec.players.min} à ${spec.players.max}`} joueur(s)`),
+      h('div', { class: 'row' }, h('h3', { class: 'grow' }, spec.name), extra, family ? chip(`Onglet ${family.name}`) : null),
+      h('p', { class: 'small muted mt-s' }, `Par ${spec.author}${by ? ` · publié par ${by}` : ''} · ${spec.license} · ${spec.players.min === spec.players.max ? spec.players.min : `${spec.players.min} à ${spec.players.max}`} joueur(s)`),
       spec.description ? h('p', { class: 'small mt-s' }, spec.description) : null,
       spec.objectives?.length ? h('p', { class: 'tiny muted mt-s' }, `Objectifs : ${spec.objectives.map(objectiveText).join(', ')}`) : null,
-      h('div', { class: 'row wrap mt' },
-        btn('Créer une salle', () => createRoom(spec), { kind: 'small primary', iconName: 'play' }),
-        btn('Modifier', () => edit(JSON.parse(JSON.stringify(spec)), false), { kind: 'small', iconName: 'edit' }),
-        mobile ? null : btn('Exporter', () => download(spec), { kind: 'small', iconName: 'download' }),
-        btn('Copier', () => copy(spec), { kind: 'small', iconName: 'copy', title: 'Copier le fichier du mode (à coller chez un ami)' }),
-        h('span', { class: 'grow' }),
-        btn('', () => remove(spec), { kind: 'small ghost icon-only', iconName: 'trash', title: 'Supprimer ce mode' })));
+      h('div', { class: 'row wrap mt' }, buttons));
   }
 
-  async function createRoom(spec) {
+  // my mode in the gallery: the same file (its rooms may be public), another version, or taken out
+  const publication = (spec) => {
+    const e = published.get(spec.id);
+    if (!e) return null;
+    return { entry: e, hidden: !!e.hidden, same: JSON.stringify(e.mode) === JSON.stringify(spec) };
+  };
+
+  function card(spec) {
+    const p = publication(spec);
+    const state = !p ? null : p.hidden ? chip('Retiré par la modération', 'danger') : p.same ? chip('Publié', 'ok') : chip('Publié (autre version)', 'warn');
+    return modeCard(spec, { extra: state },
+      btn('Créer une salle', () => createRoom(spec, !!p && p.same && !p.hidden), { kind: 'small primary', iconName: 'play' }),
+      btn('Modifier', () => edit(JSON.parse(JSON.stringify(spec)), false), { kind: 'small', iconName: 'edit' }),
+      mobile ? null : btn('Exporter', () => download(spec), { kind: 'small', iconName: 'download' }),
+      btn('Copier', () => copy(spec), { kind: 'small', iconName: 'copy', title: 'Copier le fichier du mode (à coller chez un ami)' }),
+      !p ? btn('Publier', () => publish(spec), { kind: 'small', iconName: 'globe', title: 'Le montrer à tous les joueurs du serveur' })
+        : !p.hidden && !p.same ? btn('Mettre à jour la publication', () => publish(spec), { kind: 'small', iconName: 'globe' }) : null,
+      p && !p.hidden ? btn('Retirer de la galerie', () => unpublish(spec.id), { kind: 'small ghost' }) : null,
+      h('span', { class: 'grow' }),
+      btn('', () => remove(spec), { kind: 'small ghost icon-only', iconName: 'trash', title: 'Supprimer ce mode' }));
+  }
+
+  async function createRoom(spec, isPublished) {
     try {
       // checked again: the validator of the server is the one that counts
       const ok = await check(spec);
-      openCreateRoom(familyOf(ok), ok);
+      openCreateRoom(familyOf(ok), ok, { published: isPublished });
     } catch (e) { errorToast(e); }
+  }
+
+  async function publish(spec) {
+    if (!await confirmDialog(`Publier « ${spec.name} »`,
+      `Le mode apparaît dans « Modes publics » pour tous les joueurs du serveur, avec votre pseudo. Ils pourront le prendre, créer des salles avec (publiques ou non) et le signaler. Son texte reste sous la licence ${spec.license}. Pas de lien, pas d’aide pour obtenir des jeux, rien d’offensant : la modération retire les modes qui ne respectent pas les conditions d’utilisation.`,
+      { okLabel: 'Publier' })) return;
+    try {
+      await srv.post('/modes/publish', spec);
+      toast(`« ${spec.name} » est publié.`, 'ok');
+      await refreshPublished();
+    } catch (e) { errorToast(e); }
+  }
+
+  async function unpublish(id) {
+    if (!await confirmDialog('Retirer de la galerie', 'Le mode n’est plus proposé aux autres joueurs. Il reste dans vos modes, et les salles déjà créées avec gardent leur copie.', { okLabel: 'Retirer' })) return;
+    try {
+      await srv.post(`/modes/public/${encodeURIComponent(id)}/unpublish`);
+      await refreshPublished();
+      if (tab === 'public') loadGallery();
+    } catch (e) { errorToast(e); }
+  }
+
+  // ------------------------------------------------------------ gallery
+  function galleryView() {
+    const search = h('input', { class: 'input', type: 'search', placeholder: 'Rechercher un mode (nom, texte, auteur)', value: query, autocomplete: 'off',
+      oninput: (e) => { clearTimeout(timer); timer = setTimeout(() => { query = e.target.value.trim(); loadGallery(); }, 250); } });
+    drawGallery();
+    return h('div', null, h('div', { class: 'card tight mb' }, search), galleryBox);
+  }
+
+  function drawGallery() {
+    if (gallery === null) { mount(galleryBox, h('p', { class: 'muted small' }, 'Chargement…')); return; }
+    if (gallery instanceof Error) { mount(galleryBox, h('div', { class: 'empty' }, h('b', null, 'Galerie indisponible'), gallery.message)); return; }
+    mount(galleryBox, gallery.length ? h('div', { class: 'stack' }, gallery.map(publicCard))
+      : h('div', { class: 'empty' }, h('b', null, query ? 'Aucun mode trouvé' : 'Aucun mode publié pour l’instant'), 'Publiez le vôtre depuis « Mes modes ».'));
+  }
+
+  function publicCard(e) {
+    const spec = e.mode;
+    const uses = Number(e.uses) || 0;
+    return modeCard(spec, { by: e.publisher, extra: uses ? chip(`${uses} salle${uses > 1 ? 's' : ''}`) : null },
+      btn('Créer une salle', () => openCreateRoom(familyOf(spec), spec, { published: true }), { kind: 'small primary', iconName: 'play' }),
+      btn('Ajouter à mes modes', () => take(spec), { kind: 'small', iconName: 'plus' }),
+      h('span', { class: 'grow' }),
+      e.mine ? btn('Retirer de la galerie', () => unpublish(e.id), { kind: 'small ghost' })
+        : btn('Signaler', () => openReport({ modeId: e.id, name: spec.name, text: spec.description || '(sans description)' }), { kind: 'small ghost', iconName: 'flag' }));
+  }
+
+  async function take(spec) {
+    const mine = own.find((m) => m.id === spec.id);
+    if (mine && JSON.stringify(mine) === JSON.stringify(spec)) { toast('Ce mode est déjà dans vos modes.', 'info'); return; }
+    if (mine && !await confirmDialog('Remplacer votre mode', `Vous avez déjà un mode « ${spec.id} » : il est remplacé par celui de la galerie.`, { okLabel: 'Remplacer' })) return;
+    keep(JSON.parse(JSON.stringify(spec)));
+    toast(`« ${spec.name} » ajouté à vos modes.`, 'ok');
   }
 
   function keep(spec, replacedId = spec.id) {
@@ -319,5 +415,6 @@ export function renderModes(container) {
   }
 
   draw();
-  return () => {};
+  refreshPublished();
+  return () => clearTimeout(timer);
 }
