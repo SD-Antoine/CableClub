@@ -136,7 +136,8 @@ lancement du jeu (un service dans un processus à part, comme le processus du je
 sur PC), les mises à jour (APK confié à l'installateur d'Android).
 
 - Cœurs libretro pour Android : **mGBA** (GB, GBC, GBA) et **melonDS DS** (DS, bien
-  plus rapide que DeSmuME sur un processeur de téléphone). Les sauvegardes de jeu
+  plus rapide que DeSmuME sur un processeur de téléphone ; version officielle v1.4.0,
+  téléphones ARM 64 bits seulement : pas de jeux DS sur les appareils x86_64). Les sauvegardes de jeu
   DS sont converties entre le format de DeSmuME (`rom.dsv`) et le format brut
   (serveur, téléphone) : une partie se continue d'un appareil à l'autre.
 - Construire : `.\build-android.ps1` (JDK 21, SDK Android avec le NDK ; la clé de
@@ -361,9 +362,28 @@ Confidentialité : Cable Club ne transmet des informations qu'aux serveurs que l
 (serveur Cable Club, serveur d'un ami) et à GitHub pour les mises à jour ; voir la
 [politique de confidentialité](https://play.cableclub.app/confidentialite) du serveur officiel.
 
+## Ce que Cable Club ne fait pas
+
+- **Aucun jeu fourni** : pas de ROM, ni dans le dépôt, ni dans les releases, ni sur le serveur. Chaque
+  joueur utilise sa propre copie de ses jeux, et aucun lien ni aucune aide pour en obtenir n'est donné.
+- **Aucun BIOS, firmware ni clé propriétaire** : les émulateurs tournent sans (HLE / FreeBIOS), et
+  Cable Club n'en télécharge jamais.
+- **Aucun hébergement ni partage de jeux** : une ROM ne passe jamais par le réseau ; la ROM d'une salle
+  est générée par chaque joueur, sur son appareil, à partir de sa propre copie. Le serveur ne garde que
+  des données de partie (sauvegardes de cartouche envoyées par le joueur, journal, règles).
+- **Aucun contenu tiré d'un jeu** dans le projet : pas de sprite, musique, texte, carte ni capture
+  d'écran de jeu. Ce qui s'affiche des jeux est lu à l'exécution dans la copie du joueur. La CI refuse
+  ces fichiers ([tests/assets-check.mjs](tests/assets-check.mjs)).
+- **Aucune prise en charge des fan games** qui reprennent une franchise tierce
+  ([docs/fan-games.md](docs/fan-games.md)), et aucun code exécutable dans les modes partagés
+  ([docs/modes.md](docs/modes.md)).
+- **Pas un jeu à part** : Cable Club reste une surcouche autour des jeux émulés ; il ne remplace ni
+  leurs menus, ni leurs combats, ni leurs écrans.
+
 ## Licence
 
-GPLv3 — voir [LICENSE](LICENSE) et [THIRD-PARTY.txt](THIRD-PARTY.txt).
+GPLv3 — voir [LICENSE](LICENSE) et [THIRD-PARTY.txt](THIRD-PARTY.txt). La source exacte de chaque
+cœur d'émulation livré est jointe à chaque release (`CableClub-<version>-sources-coeurs.zip`).
 Pokémon © Nintendo, Creatures Inc., GAME FREAK inc. Cable Club n'est ni affilié à Nintendo,
 Creatures, GAME FREAK ou The Pokémon Company, ni approuvé par eux.
 [Conditions d'utilisation](https://play.cableclub.app/conditions) du serveur officiel.

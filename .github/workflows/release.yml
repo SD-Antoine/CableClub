@@ -154,6 +154,13 @@ jobs:
           path: dist/CableClub-*-play.aab
           if-no-files-found: error
 
+      # the GPL: the source of each emulator core shipped (exact commit or tag, read by the builds), with the release
+      - name: Sources des cœurs
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: .\.github\cores-sources.ps1 -Version $env:VERSION
+
       - name: Notes
         shell: powershell
         run: |
@@ -184,5 +191,7 @@ jobs:
           $files = @($zip.FullName, "$($zip.FullName).sha256")
           $apk = "dist\CableClub-$env:VERSION-android.apk"
           if (Test-Path $apk) { $files += @($apk, "$apk.sha256") }
+          $sources = "dist\CableClub-$env:VERSION-sources-coeurs.zip"
+          $files += @($sources, "$sources.sha256")
           gh release create '${{ github.ref_name }}' @files --title "Cable Club $env:VERSION" --notes-file notes.md
           if ($LASTEXITCODE -ne 0) { throw 'gh release create a echoue' }

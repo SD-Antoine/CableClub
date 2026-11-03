@@ -1,0 +1,41 @@
+{
+  "about": "The emulator cores Cable Club ships (point 7 of the evolution plan), read by build.ps1 (Windows) and android/app/build.gradle.kts (Android). The GPL asks that the source matching each binary can be given: a core is either taken from an official release (\"release\": tag, file and SHA-256 fixed here), or from the libretro buildbot (\"buildbot\"), in which case the build reads the commit the binary was built from (\"commit\": a regular expression, the commit is its last group) and fails when it cannot. Each build writes coeurs.txt and coeurs.json next to the cores; the release attaches the source of these exact commits and tags.",
+  "cores": [
+    {
+      "id": "mgba",
+      "name": "mGBA",
+      "license": "MPL-2.0",
+      "repo": "mgba-emu/mgba",
+      "from": "buildbot",
+      "commit": "\\b\\d+\\.\\d+-\\d+-([0-9a-f]{7,40})\\b",
+      "windows": "mgba_libretro.dll",
+      "android": { "file": "mgba_libretro_android.so", "abis": ["arm64-v8a", "x86_64"] }
+    },
+    {
+      "id": "desmume",
+      "name": "DeSmuME",
+      "license": "GPL-2.0-or-later",
+      "repo": "libretro/desmume",
+      "from": "buildbot",
+      "commit": "\\bgit ([0-9a-f]{7,40})\\b",
+      "windows": "desmume_libretro.dll"
+    },
+    {
+      "id": "melondsds",
+      "name": "melonDS DS",
+      "license": "GPL-3.0-or-later",
+      "repo": "JesseTG/melonds-ds",
+      "from": "release",
+      "tag": "v1.4.0",
+      "url": "https://github.com/JesseTG/melonds-ds/releases/download/v1.4.0/melondsds_libretro-android-Release.zip",
+      "sha256": "555568396dd5cf230030e4dd0ff0b0c6ca7118231fe562bc50680fefa7ad8594",
+      "entry": "melondsds_libretro-android-Release/cores/melondsds_libretro_android.so",
+      "entrySha256": "d8aa47391ee4f58b63f11fb1d26684a3346869b3b011dc34dcf3db6b12ee78bc",
+      "android": { "file": "melondsds_libretro_android.so", "abis": ["arm64-v8a"] },
+      "dependencies": [
+        { "repo": "JesseTG/melonDS", "ref": "16f127dbb587a73371827ce79689c5d237c4b59b",
+          "why": "melonDS itself, named by a branch (jtg/fix-uninitialized-opengl) in cmake/FetchDependencies.cmake of v1.4.0: the commit at its head when v1.4.0 was published (2026-09-27), unchanged since 2026-09-15" }
+      ]
+    }
+  ]
+}

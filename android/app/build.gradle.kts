@@ -55,9 +55,13 @@ val uprAndroid by tasks.registering(Jar::class) {
 
 // ---------------------------------------------------------------- emulator cores (libretro builds for Android)
 
+// The cores are described by ../cores.lock.json (point 7: the source of each binary shipped must be known). A core
+// taken from an official release is checked against its SHA-256; one from the libretro buildbot gives the commit
+// it was built from (read in the binary: the build stops when it cannot be read). An ABI a core is not listed for
+// gets no copy of it (melonDS DS: arm64-v8a only, the ABI of its official release). Writes coeurs.txt / coeurs.json.
 abstract class DownloadCores : DefaultTask() {
-    @get:Input
-    abstract val cores: ListProperty<String>
+    @get:InputFile
+    abstract val lockFile: RegularFileProperty
 
     @get:Input
     abstract val abis: ListProperty<String>
@@ -65,32 +69,66 @@ abstract class DownloadCores : DefaultTask() {
     @get:OutputDirectory
     abstract val outputDir: DirectoryProperty
 
-    @TaskAction
-    fun download() {
-        for (abi in abis.get()) {
-            for (core in cores.get()) {
-                val name = "${core}_libretro_android.so"
-                val target = outputDir.get().dir(abi).file("lib$name").asFile
-                if (!target.isFile) {
-                    logger.lifecycle("TÃ©lÃ©chargement du cÅ“ur d'Ã©mulation $core ($abi)")
-                    target.parentFile.mkdirs()
-                    val url = URI("https://buildbot.libretro.com/nightly/android/latest/$abi/$name.zip").toURL()
-                    val tmp = File(target.path + ".tmp")
-                    ZipInputStream(url.openStream()).use { zip ->
-                        while (true) {
-                            val e = zip.nextEntry ?: throw GradleException("$name absent de l'archive de $abi")
-                            if (e.name.endsWith(name)) {
-                                tmp.outputStream().use { zip.copyTo(it) }
-                                break
-                            }
-                        }
-                    }
-                    tmp.renameTo(target)
-                }
-                val sha = MessageDigest.getInstance("SHA-256").digest(target.readBytes()).joinToString("") { "%02x".format(it) }
-                logger.lifecycle("    $abi/${target.name} sha256 $sha")
+    private fun sha256(bytes: ByteArray) = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
+
+    /** The bytes of the zip entry whose name ends with {@code name}. */
+    private fun unzip(bytes: ByteArray, name: String): ByteArray {
+        ZipInputStream(bytes.inputStream()).use { zip ->
+            while (true) {
+                val e = zip.nextEntry ?: throw GradleException("$name absent de l'archive")
+                if (e.name.endsWith(name)) return zip.readBytes()
             }
         }
+    }
+
+    @TaskAction
+    fun download() {
+        @Suppress("UNCHECKED_CAST")
+        val lock = groovy.json.JsonSlurper().parse(lockFile.get().asFile) as Map<String, Any?>
+        @Suppress("UNCHECKED_CAST")
+        val cores = (lock["cores"] as List<Map<String, Any?>>).filter { it["android"] != null }
+        val shipped = mutableListOf<Map<String, String>>()
+        for (abi in abis.get()) {
+            for (c in cores) {
+                @Suppress("UNCHECKED_CAST")
+                val android = c["android"] as Map<String, Any?>
+                val name = android["file"] as String
+                val target = outputDir.get().dir(abi).file("lib$name").asFile
+                if (abi !in (android["abis"] as List<*>)) {
+                    // not shipped for this ABI (a copy left from an earlier build would be packaged: remove it)
+                    target.delete()
+                    continue
+                }
+                val release = c["from"] == "release"
+                if (release && target.isFile && sha256(target.readBytes()) != c["entrySha256"]) target.delete()
+                if (!target.isFile) {
+                    logger.lifecycle("Telechargement du coeur d'emulation ${c["id"]} ($abi)")
+                    target.parentFile.mkdirs()
+                    val url = if (release) c["url"] as String else "https://buildbot.libretro.com/nightly/android/latest/$abi/$name.zip"
+                    val zip = URI(url).toURL().openStream().use { it.readBytes() }
+                    if (release && sha256(zip) != c["sha256"]) throw GradleException("${c["id"]} : empreinte de $url differente de cores.lock.json")
+                    val so = unzip(zip, if (release) c["entry"] as String else name)
+                    if (release && sha256(so) != c["entrySha256"]) throw GradleException("${c["id"]} : empreinte du coeur differente de cores.lock.json")
+                    val tmp = File(target.path + ".tmp")
+                    tmp.writeBytes(so)
+                    tmp.renameTo(target)
+                }
+                val bytes = target.readBytes()
+                val ref = if (release) c["tag"] as String else {
+                    val m = Regex(c["commit"] as String).find(String(bytes, Charsets.ISO_8859_1))
+                        ?: throw GradleException("Commit introuvable dans $abi/${target.name} : la source de ce binaire ne pourrait pas etre fournie (cores.lock.json)")
+                    m.groupValues.last()
+                }
+                val sha = sha256(bytes)
+                logger.lifecycle("    $abi/${target.name} sha256 $sha ${if (release) "version" else "commit"} $ref")
+                shipped += mapOf("file" to "$abi/${target.name}", "core" to c["name"] as String, "license" to c["license"] as String,
+                    "repo" to c["repo"] as String, "ref" to ref, "sha256" to sha, "source" to "https://github.com/${c["repo"]}/tree/$ref")
+            }
+        }
+        val dir = outputDir.get().asFile
+        File(dir, "coeurs.json").writeText(groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(shipped)) + "\n")
+        File(dir, "coeurs.txt").writeText((listOf("Coeurs d'emulation livres avec Cable Club (Android) : fichier, coeur, licence, version ou commit, empreinte, source.", "") +
+            shipped.map { "${it["file"]} : ${it["core"]}, ${it["license"]}, ${it["ref"]}, sha256 ${it["sha256"]}\n    source : ${it["source"]}" }).joinToString("\n") + "\n")
     }
 }
 
@@ -98,7 +136,7 @@ val abiList = listOf("arm64-v8a", "x86_64")
 // kept outside build/ (a clean does not download them again)
 val coresDir = File(repo, "build/cores-android")
 val downloadCores by tasks.registering(DownloadCores::class) {
-    cores.set(listOf("mgba", "melondsds"))
+    lockFile.set(File(repo, "cores.lock.json"))
     abis.set(abiList)
     outputDir.set(coresDir)
 }

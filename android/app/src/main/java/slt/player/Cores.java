@@ -21,6 +21,11 @@ final class Cores {
         String name = rom.getFileName().toString().toLowerCase(Locale.ROOT);
         String lib = name.endsWith(".nds") ? "libmelondsds_libretro_android.so" : "libmgba_libretro_android.so";
         Path p = coresDir.resolve(lib);
+        if (!Files.isRegularFile(p) && name.endsWith(".nds")) {
+            // melonDS DS is shipped for ARM phones only (the ABI of its official release, whose source is known)
+            throw new IllegalStateException("Les jeux DS ne sont pas pris en charge sur cet appareil (processeur x86_64) : "
+                    + "jouez-les sur un téléphone ARM ou sur PC.");
+        }
         if (!Files.isRegularFile(p)) {
             throw new IllegalStateException("Émulateur intégré manquant : " + p);
         }

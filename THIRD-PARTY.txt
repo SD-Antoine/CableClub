@@ -10,32 +10,52 @@ Universal Pokemon Randomizer ZX 4.6.1
   Usage   : moteur de randomisation, compilé sans modification dans
             upr-zx.jar. Le script build.ps1 du code source de SLT
             télécharge et compile exactement cette version.
+            Version Android : la classe com.dabomstew.pkrandom.newgui.
+            NewRandomizerGUI du moteur (sa fenêtre Swing, absente d'Android)
+            est retirée et remplacée par une classe vide propre à Cable Club
+            (android/app/src/main/java/com/dabomstew/pkrandom/newgui/
+            NewRandomizerGUI.java, GPLv3), sans autre modification du moteur.
+
+Cœurs d'émulation (libretro)
+  Chaque binaire livré a une source connue (cores.lock.json) : la construction
+  lit le commit dont il est issu (ou vérifie l'empreinte d'une version
+  officielle), refuse un cœur dont la source serait inconnue, et l'écrit dans
+  COEURS.txt (Windows) ou coeurs.txt (Android) avec son empreinte SHA-256.
+  Chaque release GitHub joint l'archive des sources exactes de ces commits et
+  tags : CableClub-<version>-sources-coeurs.zip.
 
 mGBA (cœur libretro) — Game Boy, Game Boy Color, Game Boy Advance
   Auteurs : Vicki Pfau (endrift) et les contributeurs de mGBA.
   Licence : Mozilla Public License 2.0
-  Source  : https://github.com/mgba-emu/mgba
-  Binaire : app\cores\mgba_libretro.dll, compilé par le projet libretro
-            (https://buildbot.libretro.com).
+  Source  : https://github.com/mgba-emu/mgba (commit lu dans le binaire ; à
+            ce jour 7a12d6d4b9acb14c0ae62c9166b6a2f3d08007f6, version 0.11-212)
+  Binaire : app\cores\mgba_libretro.dll (Windows) et
+            lib/*/libmgba_libretro_android.so de l'APK, compilés par le projet
+            libretro (https://buildbot.libretro.com).
 
-DeSmuME (cœur libretro) — Nintendo DS
+DeSmuME (cœur libretro) — Nintendo DS, version Windows
   Auteurs : l'équipe DeSmuME et les contributeurs libretro.
   Licence : GNU General Public License v2 ou ultérieure
-  Source  : https://github.com/libretro/desmume
+  Source  : https://github.com/libretro/desmume (commit lu dans le binaire ; à
+            ce jour 95b4d798731caa809125b6c3c11d17cc332ff6ef)
   Binaire : app\cores\desmume_libretro.dll, compilé par le projet libretro
             (https://buildbot.libretro.com).
 
 melonDS DS (cœur libretro) — Nintendo DS, version Android
   Auteurs : Jesse Talavera et les contributeurs de melonDS DS, d'après
             melonDS (Arisotura et les contributeurs).
-  Licence : GNU General Public License v3
-  Source  : https://github.com/JesseTG/melonds-ds
-  Binaire : lib/*/libmelondsds_libretro_android.so de l'APK, compilé par le
-            projet libretro (https://buildbot.libretro.com).
-
-mGBA (cœur libretro), version Android
-  Comme ci-dessus (Mozilla Public License 2.0) ; binaire
-  lib/*/libmgba_libretro_android.so de l'APK, compilé par le projet libretro.
+  Licence : GNU General Public License v3 ou ultérieure
+  Source  : https://github.com/JesseTG/melonds-ds, version officielle v1.4.0
+            (tag v1.4.0) ; melonDS, qu'il compile avec lui :
+            https://github.com/JesseTG/melonDS, commit
+            16f127dbb587a73371827ce79689c5d237c4b59b. Ses autres dépendances
+            sont désignées par commit ou par tag dans
+            cmake/FetchDependencies.cmake du tag v1.4.0.
+  Binaire : lib/arm64-v8a/libmelondsds_libretro_android.so de l'APK, tiré de
+            l'archive officielle melondsds_libretro-android-Release.zip de la
+            release v1.4.0 (empreintes vérifiées : cores.lock.json). Pas de
+            version x86_64 officielle : les jeux DS ne sont pas proposés sur
+            les appareils x86_64.
 
 desugar_jdk_libs (Android)
   Auteurs : Google et les contributeurs d'OpenJDK.

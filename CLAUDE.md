@@ -69,6 +69,12 @@ Règles d'architecture :
 - Chaque jeu déclare ce qu'il sait faire ; un mode refuse proprement de démarrer si une règle dont il
   a besoin n'est pas prise en charge.
 
+Cœurs d'émulation : `cores.lock.json` (source connue de chaque binaire livré) — mGBA et DeSmuME du
+buildbot libretro, commit lu dans le binaire par `build.ps1` / `android/app/build.gradle.kts` (la
+construction échoue sinon) ; melonDS DS : release officielle v1.4.0 épinglée par SHA-256, arm64-v8a
+seulement. Les constructions écrivent `coeurs.txt` / `coeurs.json` ; la release joint les sources exactes
+(`.github/cores-sources.ps1`). Changer un cœur = changer `cores.lock.json` et revérifier en jeu.
+
 ROM de salle : `client/RoomRoms.java` la génère **localement** depuis la copie du joueur, via
 `client/Rando.java` (Universal Pokemon Randomizer ZX 4.6.1, GPLv3, compilé par `build.ps1`) puis
 `client/SltPatches.java` (vendeurs, retrait des évolutions, patch du test chromatique des jeux DS).

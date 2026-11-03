@@ -91,20 +91,34 @@ if (-not (Test-Path $UprJar)) {
 }
 
 # ---------------------------------------------------------------- emulator cores
-# Official libretro builds: mGBA (MPL-2.0) for GB/GBC/GBA, DeSmuME (GPL-2.0) for the DS
+# Official libretro builds: mGBA (MPL-2.0) for GB/GBC/GBA, DeSmuME (GPL-2.0) for the DS (cores.lock.json).
+# The GPL asks that the source of each binary can be given: the commit it was built from is read in the binary
+# (the build stops when it cannot be), and written with its source in coeurs.txt / coeurs.json, shipped with them.
 $Cores = Join-Path $Build 'cores'
 New-Item -ItemType Directory -Force $Cores | Out-Null
-foreach ($core in 'mgba', 'desmume') {
-    $dll = Join-Path $Cores "${core}_libretro.dll"
+$lock = Get-Content -Raw -Encoding UTF8 (Join-Path $Root 'cores.lock.json') | ConvertFrom-Json
+$shipped = @()
+foreach ($c in @($lock.cores | Where-Object { $_.windows })) {
+    $dll = Join-Path $Cores $c.windows
     if (-not (Test-Path $dll)) {
-        Step "Telechargement du coeur d'emulation $core (libretro)"
-        $zipCore = Join-Path $Cores "$core.zip"
-        Invoke-WebRequest -UseBasicParsing -Uri "https://buildbot.libretro.com/nightly/windows/x86_64/latest/${core}_libretro.dll.zip" -OutFile $zipCore
+        Step "Telechargement du coeur d'emulation $($c.id) (libretro)"
+        $zipCore = Join-Path $Cores "$($c.id).zip"
+        Invoke-WebRequest -UseBasicParsing -Uri "https://buildbot.libretro.com/nightly/windows/x86_64/latest/$($c.windows).zip" -OutFile $zipCore
         Expand-Archive -Force $zipCore $Cores
         Remove-Item $zipCore
     }
-    Write-Host ("    {0} sha256 {1}" -f (Split-Path $dll -Leaf), (Get-FileHash -Algorithm SHA256 $dll).Hash.ToLower())
+    $sha = (Get-FileHash -Algorithm SHA256 $dll).Hash.ToLower()
+    $m = [regex]::Match([Text.Encoding]::GetEncoding(28591).GetString([IO.File]::ReadAllBytes($dll)), $c.commit)
+    if (-not $m.Success) { throw "Commit introuvable dans $($c.windows) : la source de ce binaire ne pourrait pas etre fournie (cores.lock.json)" }
+    $commit = $m.Groups[$m.Groups.Count - 1].Value
+    Write-Host ("    {0} sha256 {1} commit {2}" -f $c.windows, $sha, $commit)
+    $shipped += [ordered]@{ file = $c.windows; core = $c.name; license = $c.license; repo = $c.repo; ref = $commit; sha256 = $sha
+        source = "https://github.com/$($c.repo)/tree/$commit" }
 }
+[IO.File]::WriteAllText((Join-Path $Cores 'coeurs.json'), (ConvertTo-Json -Depth 4 @($shipped)), (New-Object System.Text.UTF8Encoding $false))
+$text = @('Coeurs d''emulation livres avec Cable Club (Windows) : fichier, coeur, licence, commit, empreinte, source.', '')
+foreach ($s in $shipped) { $text += "$($s.file) : $($s.core), $($s.license), commit $($s.ref), sha256 $($s.sha256)`r`n    source : $($s.source)" }
+[IO.File]::WriteAllLines((Join-Path $Cores 'coeurs.txt'), $text, (New-Object System.Text.UTF8Encoding $false))
 
 # ---------------------------------------------------------------- SLT
 Step 'Compilation de Cable Club'
@@ -203,6 +217,7 @@ Exec $jpackage @(
 Copy-Item (Join-Path $Root 'LICENSE') (Join-Path $image 'LICENSE.txt')
 Copy-Item (Join-Path $Root 'LISEZMOI.txt') (Join-Path $image 'LISEZMOI.txt')
 Copy-Item (Join-Path $Root 'THIRD-PARTY.txt') (Join-Path $image 'THIRD-PARTY.txt')
+Copy-Item (Join-Path $Cores 'coeurs.txt') (Join-Path $image 'COEURS.txt')
 
 Step 'Archive zip'
 $zip = Join-Path $Dist "CableClub-$Version-windows-x64.zip"
