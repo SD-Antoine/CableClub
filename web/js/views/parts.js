@@ -2,6 +2,7 @@
 
 import { h, mount, switchEl, seg, icon, act, keepScroll } from '../ui.js';
 import { rulesOf, ruleDefaults } from '../data/rules.js';
+import { objectivesOf, progressOf } from '../data/objectives.js';
 import {
   SECTIONS, TWEAKS, PRESETS, optionAvailable, choiceAvailable, sanitizeSettings, presetById, randomSeed, summarize,
 } from '../data/rando.js';
@@ -35,6 +36,19 @@ export function objectiveText(o) {
   if (o.type === 'badges') return `Obtenir ${o.count} badge${o.count > 1 ? 's' : ''}`;
   if (o.type === 'captures') return `Capturer ${o.count} Pokémon`;
   return 'Battre le Maître de la Ligue';
+}
+
+/** A player's progress on the goals of the room's mode: one line per goal, with its bar. */
+export function goalsBlock(room, member) {
+  const goals = objectivesOf(room);
+  if (!goals.length) return null;
+  return h('div', { class: 'goals' }, goals.map((g) => {
+    const p = progressOf(g, member);
+    return h('div', { class: ['goal', p.done && 'done'] },
+      h('span', { class: 'goal-label' }, p.done ? '✓ ' : '', p.label),
+      p.target > 1 ? h('span', { class: 'goal-num' }, `${p.value}/${p.target}`) : null,
+      h('span', { class: 'goal-bar' }, h('i', { style: { width: `${Math.round(100 * p.value / p.target)}%` } })));
+  }));
 }
 
 /** What an imported mode is (its name, author, licence, text, goals); nothing for an official mode. */

@@ -313,6 +313,7 @@ Prérequis : JDK 21 et git.
 .\tests\golden.ps1 -Update   # réécrit les références : seulement pour un changement de comportement décidé
 node tests\battleteam.test.mjs   # équipes des combats dans le simulateur
 node tests\capabilities.test.mjs # ce que l'interface propose pour chaque jeu (capacités)
+node tests\objectives.test.mjs   # objectifs des modes et progression des joueurs
 ```
 
 `tests\golden\*.json` sont des scénarios (joueurs, règles, puis événements des

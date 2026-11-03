@@ -16,6 +16,7 @@ import { modeName, linked } from '../data/modes.js';
 import { mobile, setPlaying, haptic, onBack, onHidden } from '../platform.js';
 import { tradeBox } from './trades.js';
 import { chatPanel } from './chat.js';
+import { goalsBlock } from './parts.js';
 
 /** The console of a game, for the touch buttons. */
 function consoleOf(room) {
@@ -363,6 +364,7 @@ export async function renderPlay(container, roomId) {
       h('button', { class: active('partners'), onclick: pick('partners') }, mobile ? 'Joueurs' : partners.length ? 'Partenaires' : 'Équipe'),
       h('button', { class: active('chat'), onclick: pick('chat') },
         'Chat', unread && (ui.sideTab !== 'chat' || (sheet && !ui.sheet)) ? h('span', { class: 'tab-count' }, unread) : null),
+      h('button', { class: active('goals'), onclick: pick('goals') }, 'Objectifs'),
       h('button', { class: active('journal'), onclick: pick('journal') }, 'Journal'));
     if (mobile) {
       side.classList.toggle('hidden', !sheet && !ui.side);
@@ -381,7 +383,15 @@ export async function renderPlay(container, roomId) {
     }
     chat?.setVisible(false);
     let body;
-    if (ui.sideTab === 'journal') {
+    if (ui.sideTab === 'goals') {
+      // every player's progress, me first (point 3: shown, never decisive)
+      const order = [...room.members].sort((a, b) => (a.userId === user?.id ? -1 : b.userId === user?.id ? 1 : a.slot - b.slot));
+      body = h('div', null, order.map((m) => h('div', { class: 'partner' },
+        h('div', { class: 'info' }, avatar(m.name, m.slot, { size: 's', online: m.online, id: m.userId, pic: m.avatar }),
+          h('div', { class: 'grow' }, h('b', null, m.userId === user?.id ? `${m.name} (vous)` : m.name),
+            h('div', { class: 'zone' }, `${m.stats?.captures || 0} captures · ${m.stats?.deaths || 0} morts`))),
+        goalsBlock(room, m) || h('p', { class: 'tiny faint' }, 'Pas d’objectif pour ce mode.'))));
+    } else if (ui.sideTab === 'journal') {
       const logs = store.logs.get(roomId);
       if (!logs) loadLogs(roomId).then(drawSide).catch(() => {});
       const slotOf = (uid) => room.members.find((m) => m.userId === uid)?.slot;

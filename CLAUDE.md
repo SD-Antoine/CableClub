@@ -93,6 +93,7 @@ ROM de salle : `client/RoomRoms.java` la génère **localement** depuis la copie
 .\tests\golden.ps1 -Update   # réécrit les références .txt (seulement pour un changement de comportement décidé)
 node tests/battleteam.test.mjs   # équipes des combats dans le simulateur
 node tests/capabilities.test.mjs # ce que l'interface propose pour chaque jeu (capacités)
+node tests/objectives.test.mjs   # objectifs des modes et progression des joueurs
 ```
 
 Toute modification de `src/slt/server/Room.java` (ou de ce qu'il appelle) passe par `tests\golden.ps1`.

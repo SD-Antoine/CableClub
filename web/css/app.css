@@ -911,3 +911,13 @@ html.mobile .chat-del { display: grid; opacity: .55; }
 .play.mobile.landscape .tp-shoulder { top: 10px; }
 .play.mobile.landscape .tp-meta { left: 14px; right: 14px; bottom: 8px; justify-content: space-between; }
 .game-menu .rule-row { padding: 10px 0; }
+
+/* goals of a mode (point 3): one line per goal, its count and a thin bar */
+.goals { display: grid; gap: 6px; margin: 10px 0; }
+.goal { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 2px 8px; font-size: 12.5px; }
+.goal-label { color: var(--muted); }
+.goal.done .goal-label { color: var(--ok); }
+.goal-num { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 11.5px; }
+.goal-bar { grid-column: 1 / -1; height: 4px; border-radius: 2px; background: var(--surface-2); overflow: hidden; }
+.goal-bar i { display: block; height: 100%; background: var(--accent); }
+.goal.done .goal-bar i { background: var(--ok); }

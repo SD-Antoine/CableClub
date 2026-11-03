@@ -7,7 +7,7 @@ import {
 import { local, srv, pollJob } from '../api.js';
 import { store, on, loadRoom, loadLogs, refreshFriends, me } from '../store.js';
 import { gameName, LANG } from '../data/games.js';
-import { rulesEditor, randoEditor, randoLines, modeInfo } from './parts.js';
+import { rulesEditor, randoEditor, randoLines, modeInfo, goalsBlock } from './parts.js';
 import { playerChoices } from '../data/rules.js';
 import { modeName } from '../data/modes.js';
 import { stateChip } from './home.js';
@@ -356,6 +356,7 @@ export async function renderRoom(container, roomId, { history = false } = {}) {
           h('div', null, h('b', null, s.deaths || 0), h('small', null, 'morts')),
           h('div', null, h('b', null, s.badges || 0), h('small', null, 'badges')),
           h('div', null, h('b', null, s.shinies || 0), h('small', null, 'chromatiques'))),
+        goalsBlock(room, m),
         team.length ? h('div', { class: 'list' }, team.map((p) => h('div', { class: 'list-item', style: { padding: '6px 2px' } },
           h('div', { class: 'grow' }, h('b', { class: p.dead ? 'faint' : '' }, p.nickname || p.speciesName || `#${p.species}`),
             h('div', { class: 'tiny muted' }, `${p.speciesName || ''} N.${p.level}`)),
