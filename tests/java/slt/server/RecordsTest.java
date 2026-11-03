@@ -50,6 +50,7 @@ public final class RecordsTest {
 
     private static void run(Path dir) throws IOException {
         Accounts accounts = new Accounts(dir);
+        RunReviews reviews = new RunReviews(dir);
         Accounts.User a = accounts.register("test_records_a", "mot-de-passe-de-test", "Alice", true);
         Accounts.User b = accounts.register("test_records_b", "mot-de-passe-de-test", "Bob", true);
         Accounts.User c = accounts.register("test_records_c", "mot-de-passe-de-test", "Chloé", true);
@@ -82,21 +83,21 @@ public final class RecordsTest {
         check(Json.num(Json.obj(sa.get("all")), "captures", 0) == 32, "Alice, tous modes : 32 captures (abandon exclu)");
 
         // leaderboards: nobody without asking
-        check(Records.leaderboard(runs, accounts, "nuzlocke", null, 0, a.id).isEmpty(), "personne n'apparaît sans l'avoir demandé");
+        check(Records.leaderboard(runs, accounts, reviews, "nuzlocke", null, 0, a.id).isEmpty(), "personne n'apparaît sans l'avoir demandé");
         a.ranked = true;
         b.ranked = true;
-        List<Object> nuzBoard = Records.leaderboard(runs, accounts, "nuzlocke", null, 0, a.id);
+        List<Object> nuzBoard = Records.leaderboard(runs, accounts, reviews, "nuzlocke", null, 0, a.id);
         check(nuzBoard.size() == 2, "seuls ceux qui l'ont demandé (Chloé non)");
         // Alice: 1 win, 4 deaths in 1 run; Bob: 1 win, 11 deaths in 2 runs (5.5 a run): Alice first
         Map<String, Object> first = Json.obj(nuzBoard.get(0));
         check(a.id.equals(Json.str(Json.obj(first.get("user")), "id")) && Json.num(first, "rank", 0) == 1,
                 "à victoires égales, moins de morts par partie d'abord (Alice)");
         check(Boolean.TRUE.equals(Json.obj(nuzBoard.get(0)).get("me")), "le joueur se reconnaît");
-        check(Records.leaderboard(runs, accounts, "nuzlocke", "platinum", 0, a.id).size() == 1, "filtre par jeu");
-        check(Records.leaderboard(runs, accounts, "nuzlocke", null, 1, a.id).size() == 2
-                && Records.leaderboard(runs, accounts, "nuzlocke", null, 2, a.id).size() == 1, "filtre par nombre de joueurs");
-        check(Records.leaderboard(runs, accounts, "soullink", null, 0, a.id).size() == 1, "un abandon ne classe personne (Bob)");
-        check(Records.leaderboard(runs, accounts, "sololocke", null, 0, a.id).isEmpty(), "un mode sans partie : vide");
+        check(Records.leaderboard(runs, accounts, reviews, "nuzlocke", "platinum", 0, a.id).size() == 1, "filtre par jeu");
+        check(Records.leaderboard(runs, accounts, reviews, "nuzlocke", null, 1, a.id).size() == 2
+                && Records.leaderboard(runs, accounts, reviews, "nuzlocke", null, 2, a.id).size() == 1, "filtre par nombre de joueurs");
+        check(Records.leaderboard(runs, accounts, reviews, "soullink", null, 0, a.id).size() == 1, "un abandon ne classe personne (Bob)");
+        check(Records.leaderboard(runs, accounts, reviews, "sololocke", null, 0, a.id).isEmpty(), "un mode sans partie : vide");
     }
 
     private static void check(boolean ok, String what) {

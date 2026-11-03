@@ -34,7 +34,10 @@ classiques. Générations 1 à 5. Version dans `src/slt/Version.java`, historiqu
    - `Records.java` : les parties terminées (bilan de fin de chaque salle) → statistiques d'un joueur
      (`/api/me/stats`) et classements (`/api/leaderboard`, mode officiel, jeu, nombre de joueurs ; seuls
      les comptes `ranked`, option du profil désactivée par défaut). Objectifs affichés :
-     `web/js/data/objectives.js`.
+     `web/js/data/objectives.js`. Seules les **parties vérifiées** comptent (`docs/run-checks.md`) :
+     `RunCheck` (contrôles chargés par `ServiceLoader`, aucun dans le serveur publié ; ceux du serveur
+     officiel sont dans un dépôt privé, **jamais dans ce dépôt**), `RunReviews` (décisions des
+     modérateurs). Ne jamais écrire de règle de détection dans le dépôt public.
    - `ServerApi.java`, `Accounts.java`, `Hub.java` (présence, flux SSE).
    - Côté interface : `web/js/data/modes.js` (les mêmes fichiers de mode, `specOf`, `familyOf`),
      `web/js/data/rules.js` (affichage des règles : libellé, texte, sections), l'éditeur

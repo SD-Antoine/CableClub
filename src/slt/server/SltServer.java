@@ -34,6 +34,7 @@ public final class SltServer {
     final Battles battles;
     final Reports reports;
     final ModeGallery gallery;
+    final RunReviews reviews;
     final String name;
     private final java.util.concurrent.ScheduledExecutorService timer =
             Executors.newSingleThreadScheduledExecutor(r -> {
@@ -53,6 +54,12 @@ public final class SltServer {
         this.battles = new Battles(rooms, hub);
         this.reports = new Reports(dataDir);
         this.gallery = new ModeGallery(dataDir, accounts);
+        this.reviews = new RunReviews(dataDir);
+        // the checks of the runs: none on a server published with Cable Club, the official server adds its own jar
+        Room.checks = RunCheck.load();
+        if (!Room.checks.isEmpty()) {
+            Log.info("Serveur : " + Room.checks.size() + " contrôle(s) des parties chargé(s)");
+        }
         rooms.gallery = gallery;
         Room.publishedMode = gallery::published;
         this.name = name == null || name.isBlank() ? "Serveur Cable Club" : name;

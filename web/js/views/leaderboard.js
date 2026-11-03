@@ -9,12 +9,13 @@ import { GAMES, gameName } from '../data/games.js';
 import { modesOfFamily, playersOf } from '../data/modes.js';
 import { modeAvailable } from '../data/rules.js';
 import { mobile } from '../platform.js';
+import { openReport } from './moderation.js';
 
 export function renderLeaderboard(container, { mode = 'soullink' } = {}) {
   const page = h('div');
   container.appendChild(page);
   const modes = modesOfFamily(mode);
-  const st = { mode: modes.find((s) => s.id === mode)?.id || modes[0]?.id || mode, game: '', players: 0, rows: null, error: null, ranked: !!me()?.ranked };
+  const st = { mode: modes.find((s) => s.id === mode)?.id || modes[0]?.id || mode, game: '', players: 0, rows: null, error: null, ranked: !!me()?.ranked, pending: 0 };
   const filters = h('div');
   const results = h('div');
   mount(page, filters, results);
@@ -40,6 +41,7 @@ export function renderLeaderboard(container, { mode = 'soullink' } = {}) {
       const r = await srv.get(`/leaderboard?mode=${encodeURIComponent(st.mode)}&game=${encodeURIComponent(st.game)}&players=${st.players}`);
       st.rows = r.rows || [];
       st.ranked = !!r.ranked;
+      st.pending = Number(r.pending) || 0;
       st.error = null;
     } catch (e) { st.error = e.message; }
     if (alive) draw();
@@ -57,10 +59,14 @@ export function renderLeaderboard(container, { mode = 'soullink' } = {}) {
     }), { kind: 'small primary' }));
     if (st.error) { mount(results, optIn, h('div', { class: 'empty' }, st.error)); return; }
     if (!st.rows) { mount(results, h('p', { class: 'muted small' }, 'Chargement…')); return; }
-    mount(results, optIn,
+    // the player's runs the checks flagged: waiting for a moderator (nothing said of why)
+    const pending = st.pending ? h('div', { class: 'banner mb' }, h('div', { class: 'grow small' },
+      h('b', null, `${st.pending} de vos parties ${st.pending > 1 ? 'sont' : 'est'} en cours de vérification. `),
+      'Elle' + (st.pending > 1 ? 's apparaîtront' : ' apparaîtra') + ' dans ce classement une fois vérifiée' + (st.pending > 1 ? 's.' : '.'))) : null;
+    mount(results, optIn, pending,
       st.rows.length ? h('div', { class: 'card', style: { padding: '4px 14px' } }, h('div', { class: 'list' }, st.rows.map(row)))
         : h('div', { class: 'empty' }, h('b', null, 'Personne pour l’instant'), 'Les parties terminées des joueurs qui ont choisi d’apparaître ici seront classées.'),
-      h('p', { class: 'tiny faint mt' }, 'Classés par victoires, puis le moins de morts par partie, puis la meilleure survie (Pokémon encore en vie à la fin, pour chaque capture). Seules les parties terminées sur ce serveur comptent ; une partie arrêtée avant la fin ne compte pas.'));
+      h('p', { class: 'tiny faint mt' }, 'Classés par victoires, puis le moins de morts par partie, puis la meilleure survie (Pokémon encore en vie à la fin, pour chaque capture). Seules les parties terminées et vérifiées sur ce serveur comptent ; une partie arrêtée avant la fin ne compte pas.'));
   }
 
   function row(r) {
@@ -71,7 +77,8 @@ export function renderLeaderboard(container, { mode = 'soullink' } = {}) {
       avatar(u.name, 1, { size: 's', id: u.id, pic: u.avatar }),
       h('div', { class: 'grow' }, h('b', null, u.name, r.me ? ' (vous)' : ''),
         h('div', { class: 'tiny muted' }, `${r.runs} partie${r.runs > 1 ? 's' : ''} · ${perRun} mort${r.deaths / Math.max(1, r.runs) >= 2 ? 's' : ''} par partie${r.survival == null ? '' : ` · ${r.survival} % de survie`}`)),
-      chip(`${r.wins} victoire${r.wins > 1 ? 's' : ''}`, r.wins ? 'ok' : ''));
+      chip(`${r.wins} victoire${r.wins > 1 ? 's' : ''}`, r.wins ? 'ok' : ''),
+      r.me ? null : btn('', () => openReport({ userId: u.id, name: u.name, leaderboard: st.mode }), { kind: 'small ghost icon-only', iconName: 'flag', title: 'Signaler ces résultats' }));
   }
 
   drawFilters();

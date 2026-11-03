@@ -11,8 +11,8 @@ import java.util.Map;
 /**
  * The finished runs the server recorded (point 3): one line per player of a room that ended, from the summary the
  * room keeps (what the server counted during the run). The statistics of a player and the leaderboards are built
- * from them, and from nothing else. These counts come from the events of each player's game: fit for friends, not
- * for a stake.
+ * from them, and from nothing else. A leaderboard only counts verified runs (point 3e): none flagged by the checks
+ * of the runs unless a moderator cleared it, none a moderator removed.
  */
 final class Records {
 
@@ -20,8 +20,9 @@ final class Records {
     static final int MAX_RANKED = 50;
 
     /** One player's finished run. */
-    record Run(String userId, String mode, String family, String gameId, int players, String outcome, boolean won,
-               long captures, long deaths, long badges, long alive, long at) {
+    record Run(String roomId, String roomName, String userId, String mode, String family, String gameId, int players,
+               String outcome, boolean won, long captures, long deaths, long badges, long alive, long at,
+               List<Map<String, Object>> flags) {
     }
 
     private Records() {
@@ -46,9 +47,11 @@ final class Records {
             }
             // won: the player beat the Champion, or the linked players won together
             boolean won = "champion".equals(Json.str(s, "status")) || (spec.shared() && "victory".equals(outcome));
-            out.add(new Run(Json.str(s, "userId"), r.mode, spec.family(), Json.str(r.game, "gameId"), summary.size(),
+            Room.Member m = r.member(Json.str(s, "userId"));
+            List<Map<String, Object>> flags = m == null ? List.of() : List.copyOf(m.flags);
+            out.add(new Run(r.id, r.name, Json.str(s, "userId"), r.mode, spec.family(), Json.str(r.game, "gameId"), summary.size(),
                     outcome, won, Json.num(s, "captures", 0), Json.num(s, "deaths", 0), Json.num(s, "badges", 0),
-                    Json.num(s, "alive", 0), Json.num(r.ended, "at", 0)));
+                    Json.num(s, "alive", 0), Json.num(r.ended, "at", 0), flags));
         }
         return out;
     }
@@ -73,11 +76,11 @@ final class Records {
      * deaths a run, then the best survival. {@code gameId} null: every game; {@code players} 0: every size of room.
      * An abandoned run does not count.
      */
-    static List<Object> leaderboard(List<Run> runs, Accounts accounts, String mode, String gameId, int players, String viewerId) {
+    static List<Object> leaderboard(List<Run> runs, Accounts accounts, RunReviews reviews, String mode, String gameId,
+                                    int players, String viewerId) {
         Map<String, Totals> byUser = new LinkedHashMap<>();
         for (Run run : runs) {
-            if (!run.mode().equals(mode) || "abandon".equals(run.outcome())
-                    || (gameId != null && !gameId.equals(run.gameId())) || (players > 0 && run.players() != players)) {
+            if (!counts(run, mode, gameId, players) || !verified(run, reviews)) {
                 continue;
             }
             byUser.computeIfAbsent(run.userId(), k -> new Totals()).add(run);
@@ -101,6 +104,55 @@ final class Records {
             row.put("user", u.pub());
             row.put("me", u.id.equals(viewerId));
             out.add(row);
+        }
+        return out;
+    }
+
+    /** The run belongs to this leaderboard (mode, game, size; an abandoned run never counts). */
+    private static boolean counts(Run run, String mode, String gameId, int players) {
+        return run.mode().equals(mode) && !"abandon".equals(run.outcome())
+                && (gameId == null || gameId.equals(run.gameId())) && (players <= 0 || run.players() == players);
+    }
+
+    /** A run the leaderboards count: not removed by a moderator, and, when the checks flagged it, cleared by one. */
+    static boolean verified(Run run, RunReviews reviews) {
+        String verdict = reviews.verdict(run.roomId(), run.userId());
+        return !RunReviews.REMOVED.equals(verdict) && (run.flags().isEmpty() || RunReviews.CLEARED.equals(verdict));
+    }
+
+    /** The viewer's runs of this leaderboard still waiting for a moderator (shown « en cours de vérification »). */
+    static int pending(List<Run> runs, RunReviews reviews, String mode, String gameId, int players, String viewerId) {
+        int n = 0;
+        for (Run run : runs) {
+            if (run.userId().equals(viewerId) && counts(run, mode, gameId, players) && !run.flags().isEmpty()
+                    && reviews.verdict(run.roomId(), run.userId()) == null) {
+                n++;
+            }
+        }
+        return n;
+    }
+
+    /**
+     * The runs for the moderators: those the checks flagged ({@code userId} null), or every finished run of a player
+     * (a report about them), newest first, with the flags and the decision taken.
+     */
+    static List<Object> forModeration(List<Run> runs, Accounts accounts, RunReviews reviews, String userId, String mode) {
+        List<Run> picked = new ArrayList<>();
+        for (Run run : runs) {
+            boolean mine = userId != null && run.userId().equals(userId) && (mode == null || run.mode().equals(mode));
+            if (mine || (userId == null && !run.flags().isEmpty())) {
+                picked.add(run);
+            }
+        }
+        picked.sort(Comparator.comparingLong(Run::at).reversed());
+        List<Object> out = new ArrayList<>();
+        for (Run run : picked.subList(0, Math.min(200, picked.size()))) {
+            Accounts.User u = accounts.get(run.userId());
+            out.add(Json.map("roomId", run.roomId(), "room", run.roomName(), "user", u == null ? Json.map("id", run.userId()) : u.pub(),
+                    "mode", run.mode(), "gameId", run.gameId(), "players", (long) run.players(), "outcome", run.outcome(),
+                    "won", run.won(), "captures", run.captures(), "deaths", run.deaths(), "badges", run.badges(),
+                    "at", run.at(), "flags", new ArrayList<Object>(run.flags()),
+                    "verdict", reviews.verdict(run.roomId(), run.userId())));
         }
         return out;
     }

@@ -23,6 +23,7 @@ final class ServerApi {
     private final Battles battles;
     private final Reports reports;
     private final ModeGallery gallery;
+    private final RunReviews reviews;
     private final Http.Router router = new Http.Router();
 
     ServerApi(SltServer server) {
@@ -35,6 +36,7 @@ final class ServerApi {
         this.battles = server.battles;
         this.reports = server.reports;
         this.gallery = server.gallery;
+        this.reviews = server.reviews;
         routes();
     }
 
@@ -101,6 +103,7 @@ final class ServerApi {
         chat.accountDeleted(u.id);
         reports.forget(u.id);
         gallery.forget(u.id);
+        reviews.forget(u.id);
         avatars.delete(u.id);
         accounts.delete(u);
         for (String f : told) {
@@ -278,6 +281,23 @@ final class ServerApi {
                 Http.ok(ex);
                 return;
             }
+            String leaderboard = Json.str(b, "leaderboard");
+            if (leaderboard != null) {
+                // a player's results in a leaderboard: the moderators look at their runs of that mode
+                ModeSpec spec = ModeSpec.official(leaderboard);
+                if (spec == null) {
+                    throw new Http.Fail(404, "Classement introuvable.");
+                }
+                Accounts.User target = other(Json.str(b, "userId"));
+                if (target.id.equals(u.id)) {
+                    throw new Http.Fail(400, "Vous ne pouvez pas signaler vos propres résultats.");
+                }
+                Map<String, Object> report = reports.add(u, target, "runs:" + spec.id,
+                        Json.map("id", 1L, "text", "Résultats en " + spec.name + " de " + target.display), Json.str(b, "reason"));
+                hub.send(chat.onlineAdmins(), "report", Json.map("open", reports.open(), "report", report));
+                Http.ok(ex);
+                return;
+            }
             Accounts.User about = other(Json.str(b, "userId"));
             if (about.id.equals(u.id)) {
                 throw new Http.Fail(400, "Vous ne pouvez pas vous signaler vous-même.");
@@ -304,6 +324,24 @@ final class ServerApi {
             Accounts.User u = admin(ex);
             reports.done(parse(p.get("id"), -1), u, Json.bool(Http.readJson(ex), "done", true));
             hub.send(chat.onlineAdmins(), "report", Json.map("open", reports.open()));
+            Http.ok(ex);
+        });
+        // the runs for the moderators (point 3e): those the checks flagged, or a player's (?userId=&mode=)
+        r.on("GET", "/api/admin/runs", (ex, p) -> {
+            admin(ex);
+            Map<String, String> q = Http.query(ex);
+            Http.json(ex, 200, Json.map("runs", Records.forModeration(rooms.runs(), accounts, reviews, q.get("userId"), q.get("mode"))));
+        });
+        // a moderator clears a run (it enters the leaderboards) or removes it from them
+        r.on("POST", "/api/admin/runs/review", (ex, p) -> {
+            Accounts.User u = admin(ex);
+            Map<String, Object> b = Http.readJson(ex);
+            String roomId = Json.str(b, "roomId");
+            String userId = Json.str(b, "userId");
+            if (roomId == null || userId == null || rooms.runs().stream().noneMatch(x -> x.roomId().equals(roomId) && x.userId().equals(userId))) {
+                throw new Http.Fail(404, "Partie introuvable.");
+            }
+            reviews.decide(roomId, userId, Json.str(b, "verdict"), u);
             Http.ok(ex);
         });
         // a moderator takes a mode out of the gallery (its rooms keep their copy, but are no longer listed)
@@ -389,9 +427,12 @@ final class ServerApi {
             if (ModeSpec.official(mode) == null) {
                 throw new Http.Fail(400, "Classement inconnu : choisissez un mode officiel.");
             }
-            String game = q.get("game");
-            Http.json(ex, 200, Json.map("rows", Records.leaderboard(rooms.runs(), accounts, mode,
-                    game == null || game.isBlank() ? null : game, (int) parse(q.get("players"), 0), u.id), "ranked", u.ranked));
+            String game = q.get("game") == null || q.get("game").isBlank() ? null : q.get("game");
+            int players = (int) parse(q.get("players"), 0);
+            List<Records.Run> runs = rooms.runs();
+            // only verified runs; the viewer's own still waiting for a moderator are counted apart (point 3e)
+            Http.json(ex, 200, Json.map("rows", Records.leaderboard(runs, accounts, reviews, mode, game, players, u.id),
+                    "pending", (long) Records.pending(runs, reviews, mode, game, players, u.id), "ranked", u.ranked));
         });
         // the gallery of public modes (point 2d): ?q=words, ?mine=1 (my own, those taken out included)
         r.on("GET", "/api/modes/public", (ex, p) -> {

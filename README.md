@@ -43,7 +43,8 @@ publié) et peuvent le signaler aux modérateurs.
 **statistiques** par mode (parties terminées, victoires, captures, morts, survie)
 dans l'onglet Historique ; des **classements** par mode, par jeu et par nombre de
 joueurs (solo à 10), où ne figurent que les joueurs qui l'ont demandé dans leur
-profil.
+profil, et seulement des parties vérifiées (contrôles du serveur, signalement et
+modération : [docs/run-checks.md](docs/run-checks.md)).
 
 Contribuer (modes, modules pour d'autres jeux, code) : [CONTRIBUTING.md](CONTRIBUTING.md) et
 [docs/fan-games.md](docs/fan-games.md) — les fan games reprenant une franchise tierce ne sont pas pris

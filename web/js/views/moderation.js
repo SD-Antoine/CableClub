@@ -12,29 +12,34 @@ const REASONS = [
   ['spam', 'Spam ou publicité'],
   ['cheat', 'Triche ou non-respect des règles d’une salle'],
   ['rom', 'Lien ou aide pour obtenir des jeux (ROM)'],
+  ['run', 'Partie truquée (triche, résultats impossibles)'],
   ['other', 'Autre'],
 ];
 
-/** Reports a player, one of their messages ({ ch, msg, text } given), or a mode of the gallery ({ modeId, text }). */
-export function openReport({ userId = null, name, ch = null, msg = null, text = null, modeId = null }) {
+/**
+ * Reports a player, one of their messages ({ ch, msg, text } given), a mode of the gallery ({ modeId, text }), or a
+ * player's results in a leaderboard ({ leaderboard: the official mode, userId }).
+ */
+export function openReport({ userId = null, name, ch = null, msg = null, text = null, modeId = null, leaderboard = null }) {
   const reason = h('select', { class: 'input' }, REASONS.map(([v, l]) => h('option', { value: v }, l)));
   const details = h('textarea', { class: 'input', rows: 3, maxlength: 250, placeholder: 'Facultatif : ce qui s’est passé.' });
   modal({
-    title: modeId ? 'Signaler un mode publié' : msg ? 'Signaler un message' : `Signaler ${name}`,
+    title: modeId ? 'Signaler un mode publié' : leaderboard ? `Signaler les résultats de ${name}` : msg ? 'Signaler un message' : `Signaler ${name}`,
     body: h('div', { class: 'stack' },
       text ? h('blockquote', { class: 'report-quote' }, h('b', null, name), ' : ', text) : null,
       field('Motif', reason),
       field('Précisions', details),
       h('p', { class: 'tiny faint' }, 'Les modérateurs du serveur reçoivent votre signalement avec ',
-        modeId ? 'le mode' : msg ? 'le message' : 'le profil', '. La personne signalée ne sait pas qui l’a signalée. ',
-        modeId ? '' : 'Pour ne plus voir ses messages, vous pouvez aussi la bloquer depuis son profil.')),
+        modeId ? 'le mode' : leaderboard ? 'ses parties' : msg ? 'le message' : 'le profil', '. La personne signalée ne sait pas qui l’a signalée. ',
+        modeId || leaderboard ? '' : 'Pour ne plus voir ses messages, vous pouvez aussi la bloquer depuis son profil.')),
     actions: [
       { label: 'Annuler', onClick: (close) => close() },
       { label: 'Signaler', kind: 'danger solid', onClick: async (close) => {
         const label = REASONS.find(([v]) => v === reason.value)?.[1] || '';
         try {
           const reasonText = details.value.trim() ? `${label} — ${details.value.trim()}` : label;
-          await srv.post('/report', modeId ? { modeId, reason: reasonText } : { userId, ch, msg, reason: reasonText });
+          await srv.post('/report', modeId ? { modeId, reason: reasonText } : leaderboard ? { leaderboard, userId, reason: reasonText }
+            : { userId, ch, msg, reason: reasonText });
           close();
           toast('Merci : les modérateurs ont reçu votre signalement.', 'ok');
         } catch (e) { errorToast(e); }
@@ -91,6 +96,54 @@ export function legalLinks() {
     link('Politique de confidentialité', 'confidentialite'), ' · ', link('Code source', 'source'));
 }
 
+const VERDICTS = { cleared: ['Vérifiée', 'ok'], removed: ['Retirée des classements', 'danger'] };
+
+/** A finished run for the moderators: what the checks raised, the decision taken, the buttons to take one. */
+function runRow(run, onChange) {
+  const verdict = VERDICTS[run.verdict];
+  const decide = (v) => (e) => act(e.currentTarget, async () => {
+    await srv.post('/admin/runs/review', { roomId: run.roomId, userId: run.user?.id, verdict: v });
+    run.verdict = v;
+    onChange();
+  });
+  return h('div', { class: 'report-row' },
+    h('div', { class: 'small' }, h('b', null, run.user?.name || '?'), h('span', { class: 'faint' },
+      ` · ${run.room || run.roomId} · ${run.mode} · ${run.players === 1 ? 'solo' : `${run.players} joueurs`} · ${dateTime(run.at)}`),
+    verdict ? ' ' : null, verdict ? h('span', { class: `chip ${verdict[1]}` }, verdict[0]) : null),
+    h('div', { class: 'tiny muted' }, `${run.won ? 'Victoire' : run.outcome === 'defeat' ? 'Défaite' : run.outcome} · ${run.captures} captures · ${run.deaths} morts · ${run.badges} badges`),
+    (run.flags || []).length ? h('ul', { class: 'tiny', style: { margin: '4px 0', paddingLeft: '18px' } },
+      run.flags.map((f) => h('li', null, f.text || f.code))) : h('div', { class: 'tiny faint' }, 'Aucun signalement automatique'),
+    h('div', { class: 'row wrap' },
+      btn('Vérifiée', decide('cleared'), { kind: run.verdict === 'cleared' ? 'small' : 'ghost small', iconName: 'check' }),
+      btn('Retirer des classements', decide('removed'), { kind: 'ghost small danger' })));
+}
+
+/** The runs given by {@code path} (/admin/runs…), in a dialog. */
+async function openRuns(path, title) {
+  let runs;
+  try { runs = (await srv.get(path)).runs || []; } catch (e) { errorToast(e); return; }
+  const body = h('div', { class: 'stack' });
+  const draw = () => mount(body, runs.length ? runs.map((r) => runRow(r, draw)) : h('p', { class: 'muted small' }, 'Aucune partie terminée.'));
+  draw();
+  modal({ title, body, wide: true });
+}
+
+/** For the moderators: the runs the checks flagged (point 3e), the newest first; those not decided yet on top. */
+export function flaggedRunsCard() {
+  const box = h('div', { class: 'card stack' }, h('p', { class: 'muted small' }, 'Chargement des parties…'));
+  (async () => {
+    let runs;
+    try { runs = (await srv.get('/admin/runs')).runs || []; } catch (e) { mount(box, h('p', { class: 'muted small' }, e.message)); return; }
+    runs.sort((a, b) => (a.verdict ? 1 : 0) - (b.verdict ? 1 : 0));
+    const draw = () => mount(box,
+      h('b', null, `${runs.filter((r) => !r.verdict).length} partie(s) à vérifier`),
+      h('p', { class: 'tiny faint' }, 'Signalées par les contrôles du serveur : elles n’entrent dans les classements qu’une fois vérifiées.'),
+      runs.length ? runs.map((r) => runRow(r, draw)) : h('p', { class: 'muted small' }, 'Rien à vérifier.'));
+    draw();
+  })();
+  return box;
+}
+
 /** For the moderators: the reports, newest first, with what can be done. */
 export function reportsCard() {
   const box = h('div', { class: 'card stack' }, h('p', { class: 'muted small' }, 'Chargement des signalements…'));
@@ -114,6 +167,9 @@ export function reportsCard() {
             await srv.post(`/chat/global/${r.msgId}/delete`);
             toast('Message supprimé.', 'ok');
           }), { kind: 'ghost small danger' }) : null,
+          // a player's results in a leaderboard: their runs of that mode, to clear or remove one by one
+          String(r.ch).startsWith('runs:') ? btn('Voir ses parties', () => openRuns(`/admin/runs?userId=${encodeURIComponent(r.userId)}&mode=${encodeURIComponent(r.ch.slice(5))}`,
+            `Parties de ${r.userName}`), { kind: 'ghost small', iconName: 'eye' }) : null,
           // a mode of the gallery: taken out of it (the rooms already created keep their copy)
           String(r.ch).startsWith('mode:') ? btn('Retirer de la galerie', (e) => act(e.currentTarget, async () => {
             await srv.post(`/admin/modes/${encodeURIComponent(r.ch.slice(5))}/hide`);

@@ -328,6 +328,9 @@ public final class Room {
         String shown;
         /** Hardcore: the whole team is above the level cap (told once). */
         boolean allOver;
+        /** The run checked (point 3e): the flags the checks raised, and their memory of this run. */
+        final List<Map<String, Object>> flags = new ArrayList<>();
+        final Map<String, Object> checkState = new LinkedHashMap<>();
 
         Map<String, Object> toStore() {
             Map<String, Object> mons = new LinkedHashMap<>();
@@ -339,6 +342,18 @@ public final class Room {
                     "stats", stats.toJson(), "lastZone", lastZone, "hasBalls", hasBalls, "soloUid", soloUid,
                     "capGyms", capGyms == null ? null : java.util.Arrays.stream(capGyms).mapToObj(v -> (Object) (long) v).toList(),
                     "capLeague", (long) capLeague, "hmNext", hmNext);
+        }
+
+        /** What is stored, with the checks' flags and memory when there are some. */
+        Map<String, Object> toStoreChecked() {
+            Map<String, Object> m = toStore();
+            if (!flags.isEmpty()) {
+                m.put("flags", new ArrayList<Object>(flags));
+            }
+            if (!checkState.isEmpty()) {
+                m.put("checkState", checkState);
+            }
+            return m;
         }
 
         static Member fromStore(Map<String, Object> m) {
@@ -380,6 +395,16 @@ public final class Room {
             x.capGyms = ints(Json.arr(m.get("capGyms")), 8);
             x.capLeague = (int) Json.num(m, "capLeague", 0);
             x.hmNext = Json.bool(m, "hmNext", false);
+            List<Object> flags = Json.arr(m.get("flags"));
+            if (flags != null) {
+                for (Object f : flags) {
+                    x.flags.add(Json.obj(f));
+                }
+            }
+            Map<String, Object> checkState = Json.obj(m.get("checkState"));
+            if (checkState != null) {
+                x.checkState.putAll(checkState);
+            }
             return x;
         }
 
@@ -418,6 +443,10 @@ public final class Room {
     ModeSpec customSpec;
     /** Whether an imported mode is in the gallery of public modes (set by the server). */
     static volatile java.util.function.Predicate<ModeSpec> publishedMode = s -> false;
+    /** The checks of the runs (point 3e), loaded by the server: none on a server published with Cable Club. */
+    static volatile List<RunCheck> checks = List.of();
+    /** Flags one run keeps at most (the first ones tell enough). */
+    static final int MAX_FLAGS = 50;
     Map<String, Object> unreadMode;   // an imported mode this version cannot read (the room follows its family)
     /** "public": listed in the public rooms, anybody may join while it is a lobby; "private": invitation or code. */
     String visibility = "private";
@@ -552,6 +581,30 @@ public final class Room {
             return;
         }
         Mode.forRoom(this).handle(new Mode.Ctx(this, m, out), ev);
+        if (!checks.isEmpty()) {
+            check(m, ev);
+        }
+    }
+
+    /** The checks look at the event (point 3e): they may flag the run, never change it. */
+    private void check(Member m, Map<String, Object> ev) {
+        RunCheck.Run run = new RunCheck.Run(id, m.userId, mode, Json.str(game, "gameId"), (int) Json.num(game, "gen", 0),
+                java.util.Collections.unmodifiableMap(rules), m.checkState, System.currentTimeMillis());
+        for (RunCheck c : checks) {
+            List<RunCheck.Flag> raised;
+            try {
+                raised = c.check(run, ev);
+            } catch (RuntimeException | StackOverflowError e) {
+                Log.warn("Contrôle des parties " + c.getClass().getName() + " : " + e);
+                continue;
+            }
+            for (RunCheck.Flag f : raised == null ? List.<RunCheck.Flag>of() : raised) {
+                if (f != null && m.flags.size() < MAX_FLAGS) {
+                    m.flags.add(Json.map("code", f.code(), "text", f.text(), "at", run.now()));
+                    Log.info("Contrôle des parties : salle " + id + ", " + m.name + " (" + f.code() + ")");
+                }
+            }
+        }
     }
 
     /** The per-type handlers, run by the mode's rules (see {@link Mode}). */
@@ -1692,7 +1745,7 @@ public final class Room {
     Map<String, Object> toStore() {
         List<Object> ms = new ArrayList<>();
         for (Member m : members) {
-            ms.add(m.toStore());
+            ms.add(m.toStoreChecked());
         }
         List<Object> zs = new ArrayList<>();
         for (Zone z : zones.values()) {
