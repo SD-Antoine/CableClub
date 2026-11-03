@@ -1,5 +1,20 @@
 # Nouveautés de Cable Club (anciennement SLT)
 
+## Prochaine version (non publiée)
+
+<!-- À renommer « ## x.y.z — date » à la publication (la release et l'application lisent ce titre). -->
+
+- **Créer ses propres modes** : l'onglet « Mes modes » compose un mode à partir d'un mode officiel (joueurs liés ou non, première rencontre ou chromatiques seuls, équipe libre ou d'un seul Pokémon, règles proposées et leurs valeurs, règles fixées, objectifs), vérifié par le serveur à chaque changement. Un mode s'exporte en fichier `.ccmode.json` (ou se copie), s'importe d'un fichier ou d'un texte collé, et sert à créer une salle. Un mode ne contient que des règles et des textes : ni code, ni image, ni son, ni adresse. Un mode qu'un jeu ne peut pas appliquer n'est pas proposé pour ce jeu, avec la raison.
+- **Modes publics** : un mode peut être publié dans la galerie du serveur (rattaché à votre compte), mis à jour ou retiré ; la galerie se parcourt par recherche, les modes les plus joués d'abord. Un mode peut être signalé (« lien ou aide pour obtenir des jeux », par exemple) et retiré par la modération. Une salle d'un mode importé n'est publique que si ce mode est publié tel quel.
+- **Objectifs** : la carte de chaque joueur dans la salle montre ses objectifs (les 8 badges puis le Maître, ou ceux du mode), et le panneau du jeu a un onglet « Objectifs ».
+- **Statistiques** : « Vos statistiques » en tête de l'Historique de chaque mode (parties terminées, victoires, captures, morts, survie, meilleur nombre de badges), d'après les parties enregistrées par le serveur.
+- **Classements** par mode, par jeu et par nombre de joueurs. On n'y figure que si on l'a choisi (Mon profil › « Apparaître dans les classements », désactivé par défaut).
+- **Hardcore** : le Nuzlocke Hardcore se choisit dans « Nouvelle salle » de l'onglet Nuzlocke, et ses salles publiques y sont listées.
+- **Correction** : après un redémarrage du serveur, une salle Shinylocke ou Sololocke pouvait recevoir des règles du Soul Link (clause chromatique, fin à l'équipe entière K.O.). Elle garde maintenant celles de son mode.
+- **Sécurité** : l'application refuse les requêtes d'un site qui se ferait passer pour elle (contrôle de l'hôte de l'API locale) ; un serveur limite le nombre de salles en cours (30 par chef) et de créations (10 par 10 minutes) ; les textes d'un mode sont filtrés (caractères invisibles, adresses déguisées, nom d'un mode officiel) ; un mode retiré par la modération ne peut plus revenir dans la galerie.
+- **Licences** : chaque release joint les sources exactes des cœurs d'émulation livrés (commit ou version de mGBA, DeSmuME et melonDS DS), et le paquet Windows contient `COEURS.txt`. Sur un téléphone Android x86_64, un jeu DS affiche un message clair (melonDS DS n'y est pas livré).
+- Pour les contributeurs : `docs/modes.md` (format des modes), `docs/events.md` (événements lus dans les jeux), `docs/fan-games.md` et `CONTRIBUTING.md` (autres jeux, licences), `docs/rom-patches.md` (ce que Cable Club modifie dans la ROM de salle), `SECURITY.md` (signaler une faille en privé), et un contrôle automatique qui refuse toute ressource d'un jeu dans le dépôt.
+
 ## 0.11.2 — 2026-10-26
 
 - **Mises à jour sur téléphone** : « Mettre à jour » échouait à chaque fois (« empreinte différente ») parce que le fichier de vérification envoyé par GitHub n'était pas lu. C'est corrigé à partir de cette version : installez-la une dernière fois à la main (le fichier `.apk` de la page de téléchargement), les suivantes s'installeront depuis l'application.
