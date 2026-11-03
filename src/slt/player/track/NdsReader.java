@@ -28,11 +28,18 @@ public final class NdsReader implements GameReader {
     }
 
     /**
-     * Black / White / Black 2 / White 2 (party, trainer, money, badges and map verified on Black 2 / White 2).
+     * Black 2 / White 2 (party, trainer, money, badges and map verified on Black 2 / White 2).
      * Poké Balls are in the main item pocket.
      */
     static final Layout GEN5 = new Layout(NdsPkm.GEN5_PARTY_SIZE, 649, 0x18E00, 0x19414, 0x21104, -1,
             0x21100, 0x19504, 0x400, 24, 0x1000, 0x18400, 310, 0x4);
+
+    /**
+     * Black / White: as Black 2 / White 2, with money and badges 0x100 further (party, trainer, money and box names
+     * verified on the French White; at the other offset the money reads 0xFFFFFFFF and the save was never found).
+     */
+    static final Layout BW = new Layout(NdsPkm.GEN5_PARTY_SIZE, 649, 0x18E00, 0x19414, 0x21204, -1,
+            0x21200, 0x19504, 0x400, 24, 0x1000, 0x18400, 310, 0x4);
 
     /*
      * Generation 4: "general" save block (layout of the save file, as documented by save editors),
@@ -69,7 +76,7 @@ public final class NdsReader implements GameReader {
         if (layout == DP || layout == PT) {
             return new int[]{186, 187};
         }
-        return layout == GEN5 ? new int[]{145} : new int[0];
+        return layout == GEN5 || layout == BW ? new int[]{145} : new int[0];
     }
 
     private final Layout layout;
@@ -89,7 +96,8 @@ public final class NdsReader implements GameReader {
 
     public static NdsReader forGame(String game, GameInfo info) {
         return switch (game) {
-            case "black", "white", "black2", "white2" -> new NdsReader(GEN5, game, info);
+            case "black", "white" -> new NdsReader(BW, game, info);
+            case "black2", "white2" -> new NdsReader(GEN5, game, info);
             case "diamond", "pearl" -> new NdsReader(DP, game, info);
             case "platinum" -> new NdsReader(PT, game, info);
             case "heartgold", "soulsilver" -> new NdsReader(HGSS, game, info);
@@ -112,7 +120,7 @@ public final class NdsReader implements GameReader {
 
     /** Generation 5 (Black / White, Black 2 / White 2). */
     public boolean gen5() {
-        return layout == GEN5;
+        return layout == GEN5 || layout == BW;
     }
 
     /** Console address of the current map number (u16) in the live save buffer, -1 until the save is found. */
@@ -129,7 +137,7 @@ public final class NdsReader implements GameReader {
         if (base < 0) {
             return -1;
         }
-        return base + layout.trainerId + trainerShift + (layout == GEN5 ? 0x0D : 8);
+        return base + layout.trainerId + trainerShift + (gen5() ? 0x0D : 8);
     }
 
     @Override
@@ -180,7 +188,7 @@ public final class NdsReader implements GameReader {
             lastWildScan = now;
             lastWild = scanWild(d, party, ot);
         }
-        long money = layout.money >= 0 ? NdsPkm.u32(d, b + layout.money + (layout == GEN5 ? 0 : trainerShift)) : -1;
+        long money = layout.money >= 0 ? NdsPkm.u32(d, b + layout.money + (gen5() ? 0 : trainerShift)) : -1;
         if (money > 9_999_999) {
             money = -1;
         }
@@ -199,7 +207,7 @@ public final class NdsReader implements GameReader {
     }
 
     private int[][] pockets() {
-        if (layout == GEN5) {
+        if (gen5()) {
             return POCKETS_GEN5;
         }
         if (layout == PT) {
@@ -359,7 +367,7 @@ public final class NdsReader implements GameReader {
      */
     private int usualPocket(int item) {
         boolean ball = (item >= 1 && item <= 16) || (item >= 492 && item <= 500) || item == 576;
-        if (layout == GEN5) {
+        if (gen5()) {
             return item >= 17 && item <= 54 ? 3 : 0;
         }
         if (ball) {
@@ -480,7 +488,7 @@ public final class NdsReader implements GameReader {
 
     private boolean trainerOk(byte[] d, int start, int shift, List<Mon> party) {
         int t = start + layout.trainerId + shift;
-        if (t - 0x10 < 0 || t + 2 > d.length || !plausibleName(d, t - 0x10, layout != GEN5)) {
+        if (t - 0x10 < 0 || t + 2 > d.length || !plausibleName(d, t - 0x10, !gen5())) {
             return false;
         }
         int ot = NdsPkm.u16(d, t);
@@ -643,7 +651,7 @@ public final class NdsReader implements GameReader {
         if (live != null && name.equals(live.nickname())) {
             return List.of();
         }
-        byte[] fresh = NdsPkm.withNickname(block, off, name, layout != GEN5);
+        byte[] fresh = NdsPkm.withNickname(block, off, name, !gen5());
         return fresh == null ? null : List.of(new Write(hdr + off, fresh));
     }
 
@@ -723,7 +731,7 @@ public final class NdsReader implements GameReader {
         out.add(new Write(hdr, partyWithout(block, i)));
         if (dead && layout.boxNames >= 0) {
             byte[] name = new byte[0x28];
-            boolean gen4 = layout != GEN5;
+            boolean gen4 = !gen5();
             int n = 0;
             for (char ch : DEAD_BOX_NAME.toCharArray()) {
                 int code = gen4 ? NdsPkm.gen4Code(String.valueOf(ch)) : ch;
