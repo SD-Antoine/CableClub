@@ -143,7 +143,8 @@ final class TrackerHost implements Session.Tracker {
         String platform = name.endsWith(".nds") ? "nds" : name.endsWith(".gba") ? "gba" : "gb";
         TrackerEngine engine = new TrackerEngine(reader, info, saves.resolve("suivi.json"), sink);
         Log.info("Suivi automatique : " + game + " (" + reader.getClass().getSimpleName() + ")");
-        ShinyBoost shiny = ShinyBoost.create(reader, rom);
+        // DS games: the rate in RAM only in scripts until it is proven (point 8b); their ROM gets it otherwise
+        ShinyBoost shiny = ShinyBoost.create(reader, rom, a.containsKey("--shiny-rate"));
         TrackerHost host = new TrackerHost(engine, reader, platform, sync, saves, shiny);
         if (shiny != null && a.containsKey("--shiny-rate")) {
             shiny.setRate(Integer.parseInt(a.get("--shiny-rate"))); // tests (scripts)

@@ -4,15 +4,22 @@ import slt.Log;
 import slt.player.track.GameReader;
 import slt.player.track.GbReader;
 import slt.player.track.Gen3Reader;
+import slt.player.track.NdsPkm;
+import slt.player.track.NdsReader;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 
 /**
  * The room's shiny rate, applied while the game runs (generations 2 and 3;
- * the DS games get it in their ROM). When a wild battle starts, with the
+ * the DS games get it in their ROM, or here: point 8b, being proven). When a wild battle starts, with the
  * chance that brings the game's 1/8192 to the room's rate, the wild Pokémon
  * becomes shiny before it appears, the way the game itself makes a shiny:
  *
@@ -27,6 +34,12 @@ import java.util.Random;
  *       party, the player's trainer ID) gets another personality value that is
  *       shiny, with the same nature, gender and ability; its data is encrypted
  *       again with the new key, in the order the new value gives.</li>
+ *   <li>Generations 4 and 5 (DS): when the field goes away (the battle
+ *       transition), every copy of the wild Pokémon in the RAM gets another
+ *       personality value that is shiny, with the same nature (generation 4:
+ *       value % 25), gender (low byte) and ability (generation 4: bit 0,
+ *       generation 5: bit 16); its blocks move to the order of the new value and
+ *       its party part is encrypted again with it.</li>
  * </ul>
  */
 final class ShinyBoost {
@@ -42,6 +55,7 @@ final class ShinyBoost {
     private static final String[] ORDERS = {"GAEM", "GAME", "GEAM", "GEMA", "GMAE", "GMEA", "AGEM", "AGME", "AEGM", "AEMG",
         "AMGE", "AMEG", "EGAM", "EGMA", "EAGM", "EAMG", "EMGA", "EMAG", "MGAE", "MGEA", "MAGE", "MAEG", "MEGA", "MEAG"};
     private static final int UNOWN = 201;
+    private static final int WURMPLE = 265;
 
     private final GameReader reader;
     private final Random rng = new Random();
@@ -57,12 +71,26 @@ final class ShinyBoost {
     // generation 3: the last wild personality looked at
     private long lastPid = -1;
 
+    // DS: the wild personalities already decided (each one once: the field flickers during the transition), the
+    // calls left to look for them (the tracker calls every 30 images: about 4 seconds)
+    private static final int DS_WINDOW = 8;
+    private final Set<Long> dsDecided = new LinkedHashSet<>();
+    private Set<Long> dsBoxes = Set.of();
+    private boolean dsField = true;
+    private int dsLeft;
+
     private ShinyBoost(GameReader reader) {
         this.reader = reader;
     }
 
-    /** The boost for this game, or null when it does not apply (generation 1, DS games, unknown ROM layout). */
-    static ShinyBoost create(GameReader reader, Path rom) {
+    /**
+     * The boost for this game, or null when it does not apply (generation 1, unknown ROM layout; DS games unless
+     * {@code ds}: their rate is still written in the ROM of the room, the RAM way being proven, point 8b).
+     */
+    static ShinyBoost create(GameReader reader, Path rom, boolean ds) {
+        if (reader instanceof NdsReader) {
+            return ds ? new ShinyBoost(reader) : null;
+        }
         ShinyBoost b = new ShinyBoost(reader);
         if (reader instanceof GbReader gb && gb.gen() == 2) {
             try {
@@ -99,7 +127,7 @@ final class ShinyBoost {
         return rate;
     }
 
-    /** Called before every image of the game. */
+    /** Called by the tracker (every 30 images). */
     void tick(Live live) {
         if (chance <= 0) {
             gbDecided = false;
@@ -110,6 +138,8 @@ final class ShinyBoost {
             tickGen2(live);
         } else if (reader instanceof Gen3Reader g3) {
             tickGen3(live, g3);
+        } else if (reader instanceof NdsReader nds) {
+            tickNds(live, nds);
         }
     }
 
@@ -268,6 +298,104 @@ final class ShinyBoost {
             long hi = lo ^ tsv ^ rng.nextInt(8);
             long np = (hi << 16) | lo;
             if (np != pid && np % 25 == nature) {
+                return np;
+            }
+        }
+        return -1;
+    }
+
+    // ------------------------------------------------------- generations 4-5
+
+    private void tickNds(Live live, NdsReader nds) {
+        boolean field = nds.fieldShown();
+        boolean opened = !field && dsField;
+        if (opened) {
+            // the field went away: a battle may start; looked at for a few seconds, also while the transition
+            // flickers (the field comes back for a few images: verified on Platinum, SoulSilver and White 2)
+            dsLeft = DS_WINDOW;
+        }
+        dsField = field;
+        if (dsLeft-- <= 0) {
+            return;
+        }
+        long[] ram = NdsReader.ram();
+        byte[] d = live.read(ram[0], (int) ram[1]);
+        if (d == null) {
+            return;
+        }
+        if (opened) {
+            dsBoxes = nds.boxPersonalities(d); // what the PC holds now: never wild, even taken out of its box later
+        }
+        for (Map.Entry<Long, List<int[]>> e : nds.wildCopies(d).entrySet()) {
+            long pid = e.getKey();
+            if (dsBoxes.contains(pid) || !dsDecided.add(pid)) {
+                continue;
+            }
+            while (dsDecided.size() > 64) {
+                dsDecided.remove(dsDecided.iterator().next());
+            }
+            int first = e.getValue().get(0)[0];
+            long ids = NdsPkm.trainer(d, first);
+            if (ids < 0) {
+                dsDecided.remove(pid); // being written: looked at again with the next image
+                continue;
+            }
+            int species = (int) (ids >>> 32);
+            long tsv = (ids & 0xFFFF) ^ ((ids >>> 16) & 0xFFFF);
+            boolean gen5 = nds.gen5();
+            // Unown's letter comes from its personality in generation 4; already shiny: nothing to do
+            if ((!gen5 && species == UNOWN) || ((pid >>> 16) ^ (pid & 0xFFFF) ^ tsv) < 8 || rng.nextDouble() >= chance) {
+                continue;
+            }
+            // the battle already made its own copies (personality in clear): too late, it would show the old one
+            if (elsewhere(d, pid, e.getValue())) {
+                Log.info("Taux de chromatiques : Pokémon sauvage vu trop tard, laissé tel quel");
+                continue;
+            }
+            long np = dsShinyPid(pid, tsv, gen5, species == WURMPLE, rng);
+            if (np < 0) {
+                continue;
+            }
+            boolean ok = true;
+            for (int[] copy : e.getValue()) {
+                byte[] out = NdsPkm.withPersonality(d, copy[0], copy[1], np);
+                ok &= out != null && live.write(ram[0] + copy[0], out);
+            }
+            dsDecided.add(np);
+            Log.info("Taux de chromatiques : Pokémon sauvage chromatique (1/" + rate + "), " + e.getValue().size()
+                    + " copie(s)" + (ok ? "" : ", écriture incomplète"));
+        }
+    }
+
+    /** Whether {@code pid} is found in {@code d} outside the encrypted copies (the battle's own structures). */
+    static boolean elsewhere(byte[] d, long pid, List<int[]> copies) {
+        Set<Integer> known = new HashSet<>();
+        for (int[] c : copies) {
+            known.add(c[0]);
+        }
+        int b0 = (int) (pid & 0xFF);
+        for (int off = 0; off + 4 <= d.length; off += 2) {
+            if ((d[off] & 0xFF) == b0 && NdsPkm.u32At(d, off) == pid && !known.contains(off)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * A shiny personality value for a DS game that keeps what the game draws from it: the low byte (gender; ability
+     * in generation 4), the nature (generation 4: value % 25; generation 5 keeps it apart), the ability (generation 5:
+     * bit 16), and for Wurmple its evolution ((value >> 16) % 10 under 5 or not; with the nature too, a few values
+     * have no answer: -1, the Pokémon stays as it is).
+     */
+    static long dsShinyPid(long pid, long tsv, boolean gen5, boolean wurmple, Random rng) {
+        long low = pid & 0xFF;
+        for (int i = 0; i < 100_000; i++) {
+            long lo = ((long) rng.nextInt(256) << 8) | low;
+            long hi = lo ^ tsv ^ rng.nextInt(8);
+            long np = (hi << 16) | lo;
+            boolean same = gen5 ? ((np >>> 16) & 1) == ((pid >>> 16) & 1) : np % 25 == pid % 25;
+            if (np != pid && same && (!wurmple || ((np >>> 16) % 10 < 5) == ((pid >>> 16) % 10 < 5))) {
                 return np;
             }
         }

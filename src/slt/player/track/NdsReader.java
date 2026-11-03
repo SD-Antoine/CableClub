@@ -16,6 +16,8 @@ public final class NdsReader implements GameReader {
     private static final int RAM_SIZE = 4 << 20;
     /** Full scans for wild Pokémon are spaced out (they read the whole 4 MB). */
     private static final long WILD_SCAN_NS = 900_000_000L;
+    /** The save buffer of generation 5, day care included (after the boxes, unlike generation 4). */
+    private static final int SAVE_SPAN_GEN5 = 0x26000;
 
     /**
      * Save buffer layout of one family (offsets from the start of the save buffer):
@@ -82,8 +84,8 @@ public final class NdsReader implements GameReader {
     private final Layout layout;
     private final String game;
     private final GameInfo info;
-    private long base = -1;
-    private int trainerShift;
+    private volatile long base = -1;
+    private volatile int trainerShift;
     private long lastWildScan;
     private List<Mon> lastWild = List.of();
     private volatile boolean fieldShown;
@@ -111,6 +113,16 @@ public final class NdsReader implements GameReader {
      */
     public void fieldShown(boolean on) {
         fieldShown = on;
+    }
+
+    /** Whether the field is shown (ShinyBoost: a wild battle starts when it goes away). */
+    public boolean fieldShown() {
+        return fieldShown;
+    }
+
+    /** Console address and size of the main RAM, where the Pokémon structures are (ShinyBoost). */
+    public static long[] ram() {
+        return new long[]{RAM, RAM_SIZE};
     }
 
     /** The game ("white2"…). */
@@ -539,6 +551,81 @@ public final class NdsReader implements GameReader {
             }
         }
         return out;
+    }
+
+    /**
+     * Every copy, in the image {@code d} of the main RAM, of the Pokémon that look wild right now (the player's ID, not
+     * an egg, not in the party), by personality: the offsets of the party structures, then of the box structures (the
+     * first 136 bytes) that carry the same personality and checksum. A Pokémon with a copy in the save buffer is the
+     * player's (PC, day care: its summary screen makes a party copy that looks wild) and is left out. Empty until the
+     * save is found.
+     */
+    public java.util.Map<Long, List<int[]>> wildCopies(byte[] d) {
+        java.util.Map<Long, List<int[]>> out = new java.util.LinkedHashMap<>();
+        long at = base;
+        if (at < 0) {
+            return out;
+        }
+        int b = (int) (at - RAM);
+        List<Mon> party = partyAt(d, b + layout.party);
+        if (party == null) {
+            return out;
+        }
+        int ot = NdsPkm.u16(d, b + layout.trainerId + trainerShift);
+        long[] mine = party.stream().mapToLong(Mon::uid).toArray();
+        int size = layout.partySize;
+        for (int off = 0; off + size <= d.length && out.size() <= 8; off += 4) {
+            if (!NdsPkm.plausible(d, off, size)) {
+                continue;
+            }
+            Mon mon = NdsPkm.decode(d, off, size, layout.maxSpecies, RAM);
+            if (mon != null && mon.otId() == ot && !mon.egg() && !contains(mine, mon.uid())) {
+                out.computeIfAbsent(mon.uid(), k -> new ArrayList<>()).add(new int[]{off, size});
+            }
+        }
+        for (java.util.Map.Entry<Long, List<int[]>> e : out.entrySet()) {
+            int first = e.getValue().get(0)[0];
+            for (int off = 0; off + NdsPkm.BOX_SIZE <= d.length; off += 4) {
+                if (NdsPkm.u32(d, off) == e.getKey() && d[off + 4] == 0 && d[off + 5] == 0
+                        && NdsPkm.u16(d, off + 6) == NdsPkm.u16(d, first + 6) && !covered(e.getValue(), off)) {
+                    e.getValue().add(new int[]{off, NdsPkm.BOX_SIZE});
+                }
+            }
+        }
+        int span = gen5() ? SAVE_SPAN_GEN5 : layout.boxes + layout.boxCount * layout.boxStride;
+        out.values().removeIf(copies -> copies.stream().anyMatch(c -> c[0] >= b && c[0] < b + span));
+        return out;
+    }
+
+    /**
+     * The personalities of the Pokémon in the boxes of the PC, in the image {@code d} of the main RAM (ShinyBoost: a
+     * Pokémon held in the PC screen is out of its box, and looks wild). Empty until the save is found.
+     */
+    public java.util.Set<Long> boxPersonalities(byte[] d) {
+        java.util.Set<Long> out = new java.util.HashSet<>();
+        long at = base;
+        if (at < 0) {
+            return out;
+        }
+        int b = (int) (at - RAM) + layout.boxes;
+        for (int box = 0; box < layout.boxCount; box++) {
+            for (int slot = 0; slot < 30; slot++) {
+                int off = b + box * layout.boxStride + slot * NdsPkm.BOX_SIZE;
+                if (off + 4 <= d.length && NdsPkm.u32(d, off) != 0) {
+                    out.add(NdsPkm.u32(d, off));
+                }
+            }
+        }
+        return out;
+    }
+
+    private static boolean covered(List<int[]> copies, int off) {
+        for (int[] c : copies) {
+            if (c[0] == off) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static boolean contains(long[] a, long v) {

@@ -36,6 +36,7 @@ import java.util.Locale;
  * followtrace RIGHT 50 a/0/8/1 816 / findfollower a/0/8/1 297 862   (HeartGold: the Pokémon following and its texture)
  * followtable             (HeartGold / SoulSilver: the table of the followers in the RAM: entries that differ from the usual ones)
  * btxsheet NARC 1,2,3 NAME [zoom] / btxcount NARC FIRST LAST / words ADDR COUNT   (textures of a NARC of the ROM, memory)
+ * wildscan N [walk]       (DS games: the copies of the wild Pokémon in the RAM, N images; walk: up and down until the field goes away)
  * </pre>
  */
 final class ScriptRunner {
@@ -172,6 +173,51 @@ final class ScriptRunner {
                     long addr = Long.parseLong(t[1], 16);
                     int len = Integer.parseInt(t[2]);
                     System.out.println("MEM " + t[1] + " " + java.util.HexFormat.of().formatHex(Ram.bytes(seg(addr, len))));
+                    break;
+                }
+                case "wildscan": {
+                    // wildscan [frames]: DS games, the copies of the wild Pokémon in the RAM (party and box structures),
+                    // and every other place their personality is found (unencrypted copies of the battle), image by image
+                    if (!(tracker instanceof TrackerHost th) || !(th.engine().reader() instanceof slt.player.track.NdsReader nds)) {
+                        throw new IllegalStateException("wildscan : jeu DS et suivi (--game) seulement");
+                    }
+                    int n = t.length > 1 ? Integer.parseInt(t[1]) : 1;
+                    long[] ram = slt.player.track.NdsReader.ram();
+                    String last = null;
+                    // wildscan N walk: up and down in the grass until the field goes away, then N images looked at
+                    if (t.length > 2 && "walk".equals(t[2])) {
+                        for (int i = 0; i < 20_000 && nds.fieldShown() || i < 60; i++) {
+                            input.mask = mask((i / 16) % 2 == 0 ? "UP" : "DOWN");
+                            frames(1);
+                        }
+                        input.mask = 0;
+                    }
+                    for (int i = 0; i < n; i++) {
+                        byte[] d = Ram.bytes(seg(ram[0], (int) ram[1]));
+                        StringBuilder sb = new StringBuilder();
+                        for (java.util.Map.Entry<Long, java.util.List<int[]>> e : nds.wildCopies(d).entrySet()) {
+                            sb.append(String.format(" pid %08x :", e.getKey()));
+                            java.util.Set<Integer> known = new java.util.HashSet<>();
+                            for (int[] c : e.getValue()) {
+                                sb.append(String.format(" %08x/%d", ram[0] + c[0], c[1]));
+                                known.add(c[0]);
+                            }
+                            for (int off = 0; off + 4 <= d.length; off += 2) {
+                                if (!known.contains(off) && (((d[off] & 0xFFL) | (d[off + 1] & 0xFFL) << 8 | (d[off + 2] & 0xFFL) << 16
+                                        | (d[off + 3] & 0xFFL) << 24) == e.getKey())) {
+                                    sb.append(String.format(" brut@%08x", ram[0] + off));
+                                }
+                            }
+                        }
+                        String now = "champ=" + nds.fieldShown() + (sb.length() == 0 ? " aucun" : sb.toString());
+                        if (!now.equals(last)) {
+                            System.out.println("WILD image " + frame + " : " + now);
+                            last = now;
+                        }
+                        if (i + 1 < n) {
+                            frames(1);
+                        }
+                    }
                     break;
                 }
                 case "sram": {
@@ -542,6 +588,10 @@ final class ScriptRunner {
                 sample = presence.sample(core);
                 if (tracker instanceof TrackerHost th) {
                     th.fieldFree(sample == null ? null : sample.free());
+                    // as the session does: DS games scan for wild Pokémon only when the field is away
+                    if (th.engine().reader() instanceof slt.player.track.NdsReader nds) {
+                        nds.fieldShown(sample != null && ("free".equals(sample.status()) || "dialogue".equals(sample.status())));
+                    }
                 }
             }
         }
