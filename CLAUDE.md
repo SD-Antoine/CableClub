@@ -110,7 +110,12 @@ node tests/battleteam.test.mjs   # équipes des combats dans le simulateur
 node tests/capabilities.test.mjs # ce que l'interface propose pour chaque jeu (capacités)
 node tests/objectives.test.mjs   # objectifs des modes et progression des joueurs
 node tests/assets-check.mjs      # aucune ressource tierce dans le dépôt (--package <dossier> : un paquet)
+.\tests\security\security-tests.ps1      # tests de sécurité et fuzzers (contrôle Host, JSON, sauvegardes DS, modes, galerie)
+.\tests\security\start-test-server.ps1   # instance de test locale (127.0.0.1:47399), seule cible permise des scans
 ```
+
+La CI (`checks.yml`, à chaque push et pull request) lance les ressources tierces, `golden.ps1`, les tests
+`node` de l'interface et `security-tests.ps1` ; `release.yml` les relance avant de publier.
 
 Toute modification de `src/slt/server/Room.java` (ou de ce qu'il appelle) passe par `tests\golden.ps1`.
 Une référence réécrite avec `-Update` se relit dans le diff et se justifie dans le message de commit.
