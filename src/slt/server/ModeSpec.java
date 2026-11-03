@@ -303,6 +303,8 @@ final class ModeSpec {
     private static final Set<String> KEYS = Set.of("schemaVersion", "id", "name", "description", "author", "license",
             "players", "needs", "engine", "rules", "win", "lose", "objectives");
     private static final Pattern ID = Pattern.compile("[a-z0-9]+(-[a-z0-9]+)*");
+    /** Encoded data (a picture, a sound, a file) hidden in a text: a data URI, or a long run of base64. */
+    private static final Pattern ENCODED = Pattern.compile("(?i)\\bdata:[a-z-]+/|[A-Za-z0-9+/=]{64,}");
     /** An address, a link or a domain name: never in a mode (no link to a ROM, a picture, a site). */
     private static final Pattern ADDRESS = Pattern.compile("(?i)[a-z][a-z0-9+.-]*://|\\bwww\\.|\\b[a-z0-9-]+\\."
             + "(com|net|org|fr|io|app|gg|xyz|ru|info|me|co|ly|link|be|ch|de|uk|eu|es|it|tk|top|site|online|zip)\\b");
@@ -520,6 +522,9 @@ final class ModeSpec {
         }
         if (t.codePoints().anyMatch(c -> hidden(c) && !(lines && c == '\n')) || t.indexOf('<') >= 0 || t.indexOf('>') >= 0) {
             throw fail("« " + key + " » : caractères de contrôle, invisibles ou balises interdits.");
+        }
+        if (ENCODED.matcher(t).find()) {
+            throw fail("« " + key + " » : pas de données encodées (image, son ou fichier) dans un mode.");
         }
         // an address written with look-alike letters or dots (ｒｏｍ．ｃｏｍ, rom。com) is an address too
         if (ADDRESS.matcher(t).find() || ADDRESS.matcher(Normalizer.normalize(t, Normalizer.Form.NFKC).replace('\u3002', '.')).find()) {

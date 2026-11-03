@@ -8,10 +8,38 @@
 # security audit (point 9): reports stay local until a flaw is fixed; scan runs never enter the repo
 /docs/security/
 /tests/security/strix_runs/
+# game files, saves, firmwares, ROM patches and emulator states: never in the repository (point 6; the same list
+# as tests/assets-check.mjs, which also fails the CI on them)
 *.gb
 *.gbc
+*.cgb
+*.sgb
 *.gba
+*.agb
 *.nds
+*.dsi
+*.srl
+*.3ds
+*.cia
 *.sav
+*.dsv
+*.sgm
 *.srm
+*.duc
+*.ips
+*.ups
+*.bps
+*.xdelta
+*.ppf
+*.aps
+*.state
+*.mst
+*.ml0
+*.ss[0-9]
+*.st[0-9]
+*.sa[0-9]
+*.dst
+bios*.bin
+firmware*.bin
+gba_bios*
 /site/dist/

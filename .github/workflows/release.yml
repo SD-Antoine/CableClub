@@ -41,6 +41,11 @@ jobs:
           if ($tag -ne $version) { throw "Le tag v$tag ne correspond pas a src\slt\Version.java ($version)" }
           "VERSION=$version" | Out-File -Append -Encoding ascii $env:GITHUB_ENV
 
+      # no third-party resource in the repository (point 6): ROM, save, BIOS, ROM patch, unreviewed picture or archive
+      - name: Ressources tierces (dépôt)
+        shell: powershell
+        run: node tests\assets-check.mjs
+
       - name: Tests
         shell: powershell
         run: .\tests\golden.ps1
@@ -53,6 +58,11 @@ jobs:
       - name: Tests de sécurité
         shell: powershell
         run: .\tests\security\security-tests.ps1
+
+      # nor in the package: no game file, nothing whose header is the one of a cartridge
+      - name: Ressources tierces (paquet)
+        shell: powershell
+        run: node tests\assets-check.mjs --package dist\CableClub
 
       # --------------------------------------------------- Windows code signing (SignPath)
       - name: SignPath

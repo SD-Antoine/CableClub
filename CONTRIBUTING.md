@@ -14,8 +14,10 @@ ceux qui y contribuent : une contribution qui ne les respecte pas est refusée, 
 - **Aucune fonction qui envoie une ROM** ou une ressource d'un jeu par le réseau.
 - **Aucun secret** (clé de signature, mot de passe, jeton).
 
-Les hooks du dépôt bloquent l'ajout des fichiers de jeu et de sauvegarde les plus courants ; ils ne
-remplacent pas votre vigilance.
+Les hooks du dépôt et la CI (`node tests/assets-check.mjs`, à chaque push et pull request) refusent
+les fichiers de jeu, de sauvegarde et de firmware, les patchs de ROM, les états d'émulateur, tout fichier
+dont l'en-tête est celui d'une cartouche, et toute image, son, police ou archive qui n'a pas été vérifiée
+(`tests/assets-allowlist.txt`). Ils ne remplacent pas votre vigilance.
 
 ## Licences
 
@@ -53,7 +55,7 @@ Le cadre est dans `docs/fan-games.md`. En résumé :
   accord.
 - Commentaires du code en anglais, textes visibles en français ; suivre le style du fichier modifié.
 - Petits commits atomiques, messages en français.
-- Avant de proposer : `.\tests\golden.ps1` (arbitre), `.\tests\security\security-tests.ps1`,
+- Avant de proposer : `node tests/assets-check.mjs`, `.\tests\golden.ps1` (arbitre), `.\tests\security\security-tests.ps1`,
   `node tests/capabilities.test.mjs`, `node tests/objectives.test.mjs`. Un changement de l'arbitre
   (`src/slt/server/Room.java` et ce qu'il appelle) passe par les scénarios golden.
 - Ne jamais toucher à un comportement marqué « ✓ vérifié » (README, CHANGELOG) sans un test de

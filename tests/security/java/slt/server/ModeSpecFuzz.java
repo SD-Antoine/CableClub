@@ -69,6 +69,8 @@ public final class ModeSpecFuzz {
             {"description", "La ROM sur rom﹒com"}, {"description", "voir WWW.exemple.test"},
             {"name", "Nuzlocke Hardcore"}, {"name", "soul  link"}, {"name", "ＳＯＵＬ ＬＩＮＫ"},
             {"author", "Cable Club"}, {"author", "cableclub"},
+            {"description", "Icône : data:image/png;base64,iVBORw0KGgo"},
+            {"description", "Fichier : " + "QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo".repeat(3)},
         };
         int failed = 0;
         for (String[] c : cases) {

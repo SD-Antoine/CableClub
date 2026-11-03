@@ -1,0 +1,27 @@
+# On every push and pull request: no third-party resource enters the repository (point 6, legal guardrail 1).
+# Fails on a ROM, a save, a BIOS or firmware, a ROM patch, an emulator state, a file whose header is the one of a
+# cartridge (whatever its name), or a picture, sound, font or archive that is not in tests/assets-allowlist.txt.
+name: Contrôles
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  ressources:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Ressources tierces
+        run: |
+          node tests/assets-check.mjs
+          node tests/assets-check.test.mjs

@@ -7,7 +7,9 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 
-const GAME_FILES = new Set(['.gb', '.gbc', '.gba', '.nds', '.sav', '.dsv', '.sgm', '.srm']);
+// the same list as tests/assets-check.mjs (which fails the CI on them): game files, saves, ROM patches, emulator states
+const GAME_FILES = new Set(['.gb', '.gbc', '.gba', '.agb', '.nds', '.dsi', '.srl', '.3ds', '.cia', '.cgb', '.sgb',
+    '.sav', '.dsv', '.sgm', '.srm', '.duc', '.ips', '.ups', '.bps', '.xdelta', '.ppf', '.aps', '.state', '.mst', '.ml0']);
 const MEDIA = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.ico', '.bmp', '.avif', '.tif', '.tiff',
     '.wav', '.mp3', '.ogg', '.oga', '.flac', '.m4a', '.aac', '.opus', '.mid', '.midi', '.mp4', '.webm']);
 
@@ -38,7 +40,7 @@ function inRepo(p) {
 function gameFile(name) {
     const base = path.basename(name.replace(/^["']|["']$/g, '')).toLowerCase();
     return GAME_FILES.has(path.extname(base))
-        || /^(bios|firmware).*\.bin$/.test(base) || base.startsWith('gba_bios');
+        || /^(bios|firmware).*\.bin$/.test(base) || base.startsWith('gba_bios') || /\.(ss|st|sa)\d$|\.dst$/.test(base);
 }
 
 function warnings(rel) {

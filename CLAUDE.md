@@ -103,6 +103,7 @@ ROM de salle : `client/RoomRoms.java` la génère **localement** depuis la copie
 node tests/battleteam.test.mjs   # équipes des combats dans le simulateur
 node tests/capabilities.test.mjs # ce que l'interface propose pour chaque jeu (capacités)
 node tests/objectives.test.mjs   # objectifs des modes et progression des joueurs
+node tests/assets-check.mjs      # aucune ressource tierce dans le dépôt (--package <dossier> : un paquet)
 ```
 
 Toute modification de `src/slt/server/Room.java` (ou de ce qu'il appelle) passe par `tests\golden.ps1`.
@@ -141,7 +142,11 @@ Hooks du projet (`.claude/settings.json`, script `.claude/hooks/guard.mjs`) :
   de `RoomRoms.java`, `ServerLink.java` ou `ServerApi.java` (aucun envoi réseau de ROM), et à l'ajout
   d'une image, d'un son ou d'une vidéo dans `web/`, `site/` ou `docs/` (pas de ressource d'un jeu).
 Ils ne voient que les outils de Claude Code : un commit fait ailleurs (GitHub Desktop…) n'est pas
-contrôlé par eux.
+contrôlé par eux. La CI le fait (point 6) : `tests/assets-check.mjs` (workflow `checks.yml` à chaque push
+et pull request, et deux étapes de `release.yml`, dépôt puis paquet) refuse ROM, sauvegarde, BIOS,
+firmware, patch de ROM, état d'émulateur, tout fichier dont l'en-tête est celui d'une cartouche (quel que
+soit son nom), et toute image, son, police ou archive absente de `tests/assets-allowlist.txt` (chemin +
+SHA-256 : un fichier ajouté ou modifié se regarde avant d'y être inscrit, `--list` donne les lignes).
 
 ## Règles de travail
 
