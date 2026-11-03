@@ -53,6 +53,11 @@ classiques. Générations 1 à 5. Version dans `src/slt/Version.java`, historiqu
      lit les sprites dans la ROM du joueur à l'exécution), `MapChange`.
    - `ShinyBoost.java` : taux de chromatiques par écriture en RAM (gén. 2-3).
    - `ScriptRunner.java` : lecteur sans fenêtre piloté par script (tests hors interface).
+   - Autres jeux (point 4) : cadre dans `docs/fan-games.md` ; manifeste d'adaptateur `adapter.json`
+     vérifié par `src/slt/server/AdapterManifest.java` (catégories `homebrew` et `licensed` seulement :
+     un fan game reprenant une franchise tierce est refusé ; empreintes du fichier, jamais le fichier).
+     Pas encore chargé par l'application (4b). Licence d'un module vérifiée par un mainteneur avant
+     fusion (`CONTRIBUTING.md`).
 3. **Interface** — `web/` (HTML/CSS/JS modules, sans framework ni bundler ; seul `web/js/vendor/`
    contient du code tiers) et l'application locale `src/slt/client/` (`LocalApi` sur 127.0.0.1,
    `ServerLink`, `Library`, `RoomRoms`, `Players`, `Updates`).

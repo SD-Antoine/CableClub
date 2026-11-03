@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "id": "jardin-des-lucioles",
+  "game": {
+    "name": "Le Jardin des Lucioles (exemple fictif)",
+    "version": "1.0",
+    "platform": "gba",
+    "crc32": "0BADC0DE",
+    "sha1": "0123456789abcdef0123456789abcdef01234567"
+  },
+  "category": "homebrew",
+  "gameLicense": {
+    "name": "CC-BY-4.0",
+    "url": "https://example.org/jardin-des-lucioles/LICENSE"
+  },
+  "module": {
+    "author": "Pseudo de l’auteur du module",
+    "license": "GPL-3.0-or-later"
+  },
+  "base": "emerald",
+  "capabilities": {
+    "shinies": true,
+    "heldItems": true,
+    "presence": false,
+    "trainerBattles": false,
+    "autoEnd": false
+  }
+}

@@ -45,6 +45,10 @@ dans l'onglet Historique ; des **classements** par mode, par jeu et par nombre d
 joueurs (solo à 10), où ne figurent que les joueurs qui l'ont demandé dans leur
 profil.
 
+Contribuer (modes, modules pour d'autres jeux, code) : [CONTRIBUTING.md](CONTRIBUTING.md) et
+[docs/fan-games.md](docs/fan-games.md) — les fan games reprenant une franchise tierce ne sont pas pris
+en charge.
+
 **[⬇ Télécharger la dernière version](https://github.com/SD-Antoine/CableClub/releases/latest)**
 (`CableClub-x.y.z-windows-x64.zip` : décompressez-le et lancez `CableClub.exe`, rien à
 installer). Les nouveautés de chaque version sont dans [CHANGELOG.md](CHANGELOG.md).
