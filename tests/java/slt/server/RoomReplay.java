@@ -126,22 +126,32 @@ public final class RoomReplay {
         r.id = "salle";
         r.code = "CODE01";
         r.name = Json.str(sc, "title");
-        String mode = Json.str(sc, "mode");
-        if (mode == null || !Room.MODES.contains(mode)) {
-            throw new Bad("mode inconnu : " + mode);
+        Map<String, Object> modeFile = Json.obj(sc.get("modeFile"));
+        if (modeFile != null) {
+            // a mode described in the scenario: read as an imported mode would be (point 2)
+            r.customSpec = ModeSpec.parse(Json.stringify(modeFile), false);
+            r.mode = r.customSpec.id;
+        } else {
+            String mode = Json.str(sc, "mode");
+            if (mode == null || !Room.modes().contains(mode)) {
+                throw new Bad("mode inconnu : " + mode);
+            }
+            r.mode = mode;
         }
-        r.mode = mode;
         Map<String, Object> game = Json.obj(sc.get("game"));
         if (game == null) {
             throw new Bad("jeu absent");
         }
         r.game = Json.map("gameId", Json.str(game, "id"), "name", Json.str(game, "name"), "gen", Json.num(game, "gen", 0));
-        r.rules = Room.defaultRules(r.mode);
+        r.rules = r.spec().defaults();
         Map<String, Object> rules = Json.obj(sc.get("rules"));
         if (rules != null) {
             for (Map.Entry<String, Object> e : rules.entrySet()) {
                 if (!r.rules.containsKey(e.getKey())) {
                     throw new Bad("règle inconnue du mode " + r.mode + " : " + e.getKey());
+                }
+                if (r.spec().locked(e.getKey())) {
+                    throw new Bad("règle fixée par le mode " + r.mode + " : " + e.getKey());
                 }
                 r.rules.put(e.getKey(), e.getValue());
             }

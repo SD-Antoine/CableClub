@@ -2,14 +2,18 @@ package slt.server;
 
 import slt.Json;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
 /**
- * A game mode seen as an ordered list of rules applied to each event (point 1c of the evolution plan). The
- * mode-specific logic moves out of {@link Room}'s handlers step by step: wild encounters are handled by the mode's
- * {@link EncounterLogic} (1c-1); every other event still goes through Room's existing handlers ({@link LegacyDispatch})
- * until its own step. The server stays the referee and the directives stay the only channel to the adapters.
+ * A game mode seen as an ordered list of rules applied to each event (point 1c of the evolution plan), built from its
+ * declarative file (point 2, {@link ModeSpec}). The file chooses three primitives of the engine — the players are
+ * linked or not, the first wild Pokémon of a zone counts or only shinies do, the team is free or holds one Pokémon —
+ * and every combination runs on the same {@link Engine}. Wild encounters are handled by the engine
+ * ({@link EncounterRule}); every other event still goes through Room's handlers ({@link LegacyDispatch}), which ask the
+ * engine where the modes differ. The server stays the referee and the directives stay the only channel to the
+ * adapters.
  */
 final class Mode {
 
@@ -31,7 +35,7 @@ final class Mode {
         }
     }
 
-    /** How a family of modes treats wild encounters: Soul Link, each player's own run, Shinylocke. */
+    /** How the mode treats wild encounters. */
     interface EncounterLogic {
 
         /** The kind of a wild Pokémon: zone, shiny, used, dupe, legendary, cancelled, notshiny or noballs. */
@@ -87,11 +91,7 @@ final class Mode {
         }
     }
 
-    /**
-     * How a family of modes judges a Pokémon that joins a player (point 1c-2): the starter, a Pokémon given by a
-     * character, a capture made with a full team, the one kept for the HMs, and what linking it to its zone means.
-     * Room keeps the steps common to every mode (recording it, telling a starter, a gift and a wild capture apart).
-     */
+    /** How the mode judges a Pokémon that joins a player (Room keeps the steps common to every mode). */
     interface CaptureLogic {
 
         /** The first Pokémon received: the starter. */
@@ -113,11 +113,7 @@ final class Mode {
         String bonusSuffix();
     }
 
-    /**
-     * How a family of modes runs a player's adventure (points 1c-3 to 1c-5): what a death and a whole team knocked
-     * out mean. Families: Soul Link (deaths are shared through the links), each player's own run (Nuzlocke,
-     * Shinylocke), Sololocke (one Pokémon at a time).
-     */
+    /** How the mode runs a player's adventure: deaths, team, Hardcore, start and end. */
     interface RunLogic {
 
         /** When deaths start to count, as told to a player whose Pokémon fell before: "… commence <this>". */
@@ -129,16 +125,19 @@ final class Mode {
         /** The whole team of the player is knocked out (already written in the journal). */
         void whiteout(Room r, Room.Member m, Room.Out out);
 
-        /** Whether living Pokémon of the team may be sent to the PC (Sololocke, Hardcore level cap): own runs only. */
+        /** The player lost their run (Sololocke without a Pokémon left, for example): what it means for the room. */
+        void playerLost(Room r, Room.Member m, Room.Out out);
+
+        /** Whether living Pokémon of the team may be sent to the PC (one Pokémon, Hardcore level cap). */
         boolean parksTeam();
 
-        /** Sololocke "les autres vont au PC": one living Pokémon in the team. */
+        /** "Les autres vont au PC": one living Pokémon in the team. */
         boolean soloTeam(Room r);
 
-        /** The Hardcore option applies (level cap, no items in battle, a team knocked out loses): own runs only. */
+        /** The Hardcore option applies (level cap, no items in battle, a team knocked out loses). */
         boolean hardcore(Room r);
 
-        /** The classic rules are applied in the games (items, Fly, battle style "Set"): own runs only. */
+        /** The classic rules are applied in the games (items, Fly, battle style "Set"). */
         boolean classicRules();
 
         /** Said at the launch when deaths only count from the first Poké Ball (rule "startWithBalls"). */
@@ -150,48 +149,38 @@ final class Mode {
         /** The room is running and has not started yet: start it if its condition is met. */
         void checkStart(Room r, Room.Out out);
 
-        /** The player beat the Champion and the run ends by itself (rule "autoEnd"): does the room end? */
+        /** The player beat the Champion and the run ends by itself: does the room end? */
         void champion(Room r, Room.Member m, Room.Out out);
     }
 
-    private static final EncounterLogic SOUL_LINK = new SoulLinkEncounters();
-    private static final EncounterLogic INDIVIDUAL = new IndividualEncounters();
-    private static final EncounterLogic SHINYLOCKE = new ShinylockeEncounters();
-    private static final CaptureLogic SOUL_LINK_CAPTURES = new SoulLinkCaptures();
-    private static final CaptureLogic INDIVIDUAL_CAPTURES = new IndividualCaptures();
-    private static final CaptureLogic SHINYLOCKE_CAPTURES = new ShinylockeCaptures();
-    private static final RunLogic SOUL_LINK_RUN = new SoulLinkRun();
-    private static final RunLogic INDIVIDUAL_RUN = new IndividualRun();
-    private static final RunLogic SOLOLOCKE_RUN = new SololockeRun();
-
-    private final String id;
-    private final EncounterLogic encounters;
-    private final CaptureLogic captures;
-    private final RunLogic run;
+    private final ModeSpec spec;
+    private final Engine engine;
     private final List<Rule> rules;
 
-    Mode(String id, EncounterLogic encounters, CaptureLogic captures, RunLogic run, List<Rule> rules) {
-        this.id = id;
-        this.encounters = encounters;
-        this.captures = captures;
-        this.run = run;
-        this.rules = rules;
-    }
-
-    RunLogic run() {
-        return run;
+    private Mode(ModeSpec spec, Engine engine) {
+        this.spec = spec;
+        this.engine = engine;
+        this.rules = List.of(new EncounterRule(engine), new LegacyDispatch());
     }
 
     String id() {
-        return id;
+        return spec.id;
+    }
+
+    ModeSpec spec() {
+        return spec;
     }
 
     EncounterLogic encounters() {
-        return encounters;
+        return engine;
     }
 
     CaptureLogic captures() {
-        return captures;
+        return engine;
+    }
+
+    RunLogic run() {
+        return engine;
     }
 
     /** Runs every rule of the mode on the event, in order. */
@@ -201,21 +190,23 @@ final class Mode {
         }
     }
 
-    /** The mode of a room: its encounter and capture logic, then Room's handlers for the events not moved yet. */
+    /** The engines of the 8 combinations of primitives (each stateless, made once). */
+    private static final Engine[] ENGINES = new Engine[8];
+
+    static {
+        for (int i = 0; i < ENGINES.length; i++) {
+            ENGINES[i] = new Engine((i & 1) != 0, (i & 2) != 0, (i & 4) != 0);
+        }
+    }
+
+    /** The mode of a room: its file, run by the engine of its primitives. */
     static Mode forRoom(Room room) {
-        return switch (room.mode) {
-            case "shinylocke" -> of(room.mode, SHINYLOCKE, SHINYLOCKE_CAPTURES, INDIVIDUAL_RUN);
-            case "nuzlocke" -> of(room.mode, INDIVIDUAL, INDIVIDUAL_CAPTURES, INDIVIDUAL_RUN);
-            case "sololocke" -> of(room.mode, INDIVIDUAL, INDIVIDUAL_CAPTURES, SOLOLOCKE_RUN);
-            default -> of(room.mode, SOUL_LINK, SOUL_LINK_CAPTURES, SOUL_LINK_RUN);
-        };
+        ModeSpec spec = room.spec();
+        int i = (spec.shared() ? 1 : 0) | (spec.shiniesOnly() ? 2 : 0) | (spec.solo() ? 4 : 0);
+        return new Mode(spec, ENGINES[i]);
     }
 
-    private static Mode of(String id, EncounterLogic enc, CaptureLogic captures, RunLogic run) {
-        return new Mode(id, enc, captures, run, List.of(new EncounterRule(enc), new LegacyDispatch()));
-    }
-
-    /** Wild encounters (start and end), through the mode's encounter logic. */
+    /** Wild encounters (start and end), through the engine. */
     private static final class EncounterRule implements Rule {
         private final EncounterLogic logic;
 
@@ -244,14 +235,54 @@ final class Mode {
         }
     }
 
-    // ------------------------------------------------------------ Soul Link
+    // ============================================================== engine
 
-    /** The room shares its zones: the first Pokémon of each zone links the players; knocking it out loses the zone. */
-    private static final class SoulLinkEncounters implements EncounterLogic {
+    /**
+     * The engine of one combination of primitives. {@code shared}: the players' Pokémon of a zone are linked (Soul
+     * Link) — otherwise each player has their own run. {@code shinies}: only shinies may be caught (Shinylocke) —
+     * otherwise the first wild Pokémon of each zone counts. {@code solo}: one living Pokémon in the team (Sololocke).
+     * The historical modes are four of the eight combinations; the others combine the same pieces.
+     */
+    private static final class Engine implements EncounterLogic, CaptureLogic, RunLogic {
+
+        private final boolean shared;
+        private final boolean shinies;
+        private final boolean solo;
+
+        Engine(boolean shared, boolean shinies, boolean solo) {
+            this.shared = shared;
+            this.shinies = shinies;
+            this.solo = solo;
+        }
+
+        // ------------------------------------------------------ encounters
 
         @Override
         public String classify(Room r, Room.Member m, String key, int species, boolean shiny) {
-            if (!m.hasBalls && r.rule("startWithBalls")) {
+            // linked players wait for their own first Poké Ball; a player alone for the start of their run
+            boolean noBalls = shared ? !m.hasBalls && r.rule("startWithBalls") : !r.started(m);
+            if (shinies) {
+                // only shinies may be caught, anywhere (one per zone if the room wants)
+                if (noBalls) {
+                    return "noballs";
+                }
+                if (Room.LEGENDARIES.contains(species) && !r.rule("legendaries")) {
+                    return "legendary";
+                }
+                if (!shiny) {
+                    return "notshiny";
+                }
+                Room.Zone z = r.zones.get(key);
+                Room.Entry mine = z == null ? null : z.entries.get(m.userId);
+                if (r.rule("oneShinyPerZone") && mine != null && "caught".equals(mine.result)) {
+                    return "used";
+                }
+                if (r.rule("dupesClause") && r.ownedFamily(m, species, key, shared)) {
+                    return "dupe";
+                }
+                return "zone";
+            }
+            if (noBalls) {
                 return "noballs";
             }
             if (shiny && r.rule("shinyClause")) {
@@ -261,13 +292,13 @@ final class Mode {
                 return "legendary";
             }
             Room.Zone z = r.zones.get(key);
-            if (z != null && "cancelled".equals(z.status)) {
+            if (shared && z != null && "cancelled".equals(z.status)) {
                 return "cancelled";
             }
             if (z != null && z.entries.containsKey(m.userId)) {
                 return "used";
             }
-            if (r.rule("dupesClause") && r.ownedFamily(m, species, key, true)) {
+            if (r.rule("dupesClause") && r.ownedFamily(m, species, key, shared)) {
                 return "dupe";
             }
             return "zone";
@@ -275,6 +306,13 @@ final class Mode {
 
         @Override
         public String zoneHint(Room r, Room.Zone z, Room.Entry mine) {
+            if (shinies) {
+                return mine != null && "caught".equals(mine.result) && r.rule("oneShinyPerZone")
+                        ? " — chromatique déjà capturé ici" : "";
+            }
+            if (!shared) {
+                return mine != null ? " — première rencontre déjà faite ici" : "";
+            }
             if (mine != null) {
                 return " — capture déjà faite ici";
             }
@@ -283,23 +321,36 @@ final class Mode {
 
         @Override
         public void start(Ctx ctx, Map<String, Object> ev) {
+            Room r = ctx.room;
             Room.Member m = ctx.member;
+            Room.Out out = ctx.out;
             String zone = Room.zoneName(Json.str(ev, "zone"));
             String key = Room.zoneKey(zone);
-            String kind = classify(ctx.room, m, key, (int) Json.num(ev, "species", 0), Json.bool(ev, "shiny", false));
+            String kind = classify(r, m, key, (int) Json.num(ev, "species", 0), Json.bool(ev, "shiny", false));
             EncounterLogic.open(ctx, ev, zone, key, kind);
             switch (kind) {
-                case "zone" -> ctx.out.notice(m, "info", "Première rencontre de " + zone + " : elle compte pour le Soul Link.");
-                case "shiny" -> ctx.out.notice(m, "ok", "Chromatique ! Capture libre (clause chromatique), sans lien.");
-                case "used" -> ctx.out.notice(m, "warn", zone + " : vous y avez déjà capturé ou mis K.O. un Pokémon. Capture interdite.");
-                case "cancelled" -> ctx.out.notice(m, "warn", zone + " est annulée pour la salle. Capture interdite.");
-                case "dupe" -> ctx.out.notice(m, "warn",
-                        "Doublon : cette lignée d'évolution est déjà dans la salle. Rencontre ignorée, fuyez ou mettez-le K.O.");
-                case "legendary" -> ctx.out.notice(m, "warn", "Légendaire interdit par les règles : ne le capturez pas.");
-                case "noballs" -> ctx.out.notice(m, "info",
-                        "Pas encore de Poké Ball : cette rencontre ne compte pas pour le " + ctx.room.runName() + ".");
+                case "zone" -> {
+                    if (shinies) {
+                        out.notice(m, "ok", "Chromatique ! Vous pouvez le capturer.");
+                    } else if (shared) {
+                        out.notice(m, "info", "Première rencontre de " + zone + " : elle compte pour le " + r.runName() + ".");
+                    } else {
+                        out.notice(m, "info", "Première rencontre de " + zone + " : c'est votre seule chance ici (fuir ou le battre l'épuise).");
+                    }
+                }
+                case "shiny" -> out.notice(m, "ok", "Chromatique ! Capture libre (clause chromatique), sans lien.");
+                case "used" -> out.notice(m, "warn", zone + (shinies ? " : vous y avez déjà capturé un chromatique."
+                        : shared ? " : vous y avez déjà capturé ou mis K.O. un Pokémon." : " : vous y avez déjà rencontré un Pokémon.")
+                        + " Capture interdite.");
+                case "cancelled" -> out.notice(m, "warn", zone + " est annulée pour la salle. Capture interdite.");
+                case "dupe" -> out.notice(m, "warn", shared
+                        ? "Doublon : cette lignée d'évolution est déjà dans la salle. Rencontre ignorée, fuyez ou mettez-le K.O."
+                        : "Doublon : vous avez déjà cette lignée d'évolution. Rencontre ignorée, fuyez ou mettez-le K.O.");
+                case "legendary" -> out.notice(m, "warn", "Légendaire interdit par les règles : ne le capturez pas.");
+                case "noballs" -> out.notice(m, "info",
+                        "Pas encore de Poké Ball : cette rencontre ne compte pas pour le " + r.runName() + ".");
                 default -> {
-                    // nothing to say
+                    // not shiny (said at the capture), or nothing to say
                 }
             }
         }
@@ -310,10 +361,37 @@ final class Mode {
             if (e == null) {
                 return;
             }
+            Room r = ctx.room;
             Room.Member m = ctx.member;
             Room.Out out = ctx.out;
             boolean killed = Json.bool(ev, "wildFainted", false);
             String who = e.speciesName == null ? "#" + e.species : e.speciesName;
+            String did = m.name + (killed ? " met K.O. " : " quitte le combat contre ") + who;
+            if (shinies) {
+                // a battle never uses up a zone: only a shiny caught does
+                if (killed) {
+                    m.stats.wildKills++;
+                }
+                out.log(m, killed ? "kill" : "flee", did + " (" + e.zone + ")", Json.map("zone", e.zone));
+                return;
+            }
+            if (!shared) {
+                if (killed) {
+                    m.stats.wildKills++;
+                }
+                if (!"zone".equals(e.kind)) {
+                    out.log(m, killed ? "kill" : "flee", did + " (" + e.zone + ")", Json.map("zone", e.zone));
+                    return;
+                }
+                // the first Pokémon of the zone got away or was beaten: no second chance in this zone
+                Room.Zone z = r.zone(e.zoneKey, e.zone);
+                if (!z.entries.containsKey(m.userId)) {
+                    z.entries.put(m.userId, entry(e, killed ? "killed" : "fled"));
+                }
+                out.log(m, killed ? "kill" : "flee", did + ", première rencontre de " + e.zone + " : pas de seconde chance ici",
+                        Json.map("zone", e.zone));
+                return;
+            }
             if (!killed) {
                 out.log(m, "flee", m.name + " quitte le combat contre " + who, Json.map("zone", e.zone));
                 return;
@@ -324,34 +402,58 @@ final class Mode {
                 return;
             }
             // the first Pokémon of the zone is dead: the zone is lost for the whole room
-            Room.Zone z = ctx.room.zone(e.zoneKey, e.zone);
+            Room.Zone z = r.zone(e.zoneKey, e.zone);
+            z.entries.put(m.userId, entry(e, "killed"));
+            out.log(m, "kill", m.name + " met K.O. " + who + ", premier Pokémon de " + e.zone + " : zone annulée",
+                    Json.map("zone", e.zone));
+            r.cancel(z, out);
+        }
+
+        private static Room.Entry entry(Room.Encounter e, String result) {
             Room.Entry entry = new Room.Entry();
-            entry.result = "killed";
+            entry.result = result;
             entry.uid = e.uid;
             entry.species = e.species;
             entry.speciesName = e.speciesName;
             entry.level = e.level;
             entry.at = System.currentTimeMillis();
-            z.entries.put(m.userId, entry);
-            out.log(m, "kill", m.name + " met K.O. " + who + ", premier Pokémon de " + e.zone + " : zone annulée",
-                    Json.map("zone", e.zone));
-            ctx.room.cancel(z, out);
+            return entry;
         }
-    }
 
-    /** The room's players are linked: a starter or a gift links through its zone, a shiny or a second gift does not. */
-    private static final class SoulLinkCaptures implements CaptureLogic {
+        // -------------------------------------------------------- captures
 
         @Override
         public void starter(Room r, Room.Member m, Room.MonRec rec, Room.Out out) {
-            // the first Pokémon received is the starter: linked with the other starters
-            r.link(m, rec, r.zone(Room.STARTER, "Départ"), null, out);
+            if (shared) {
+                // the first Pokémon received is the starter: linked with the other starters
+                r.link(m, rec, r.zone(Room.STARTER, "Départ"), null, out);
+            } else {
+                r.bonus(m, rec, "Pokémon de départ", out);
+            }
+            if (!shared || solo) {
+                r.parkCheck(m, out);
+            }
         }
 
         @Override
         public void gift(Room r, Room.Member m, Room.MonRec rec, String zone, Room.Out out) {
+            if (shinies) {
+                // a gift is kept when it is shiny; it never links
+                if (rec.shiny) {
+                    r.bonus(m, rec, "Pokémon offert chromatique", out);
+                } else if (!r.rule("giftPokemon")) {
+                    r.release(m, rec, "interdit : Pokémon offert non chromatique", out);
+                } else {
+                    r.bonus(m, rec, "Pokémon offert", out);
+                }
+                return;
+            }
             if (!r.rule("giftPokemon")) {
                 r.release(m, rec, "interdit : Pokémon offert ou échangé", out);
+                return;
+            }
+            if (!shared) {
+                r.bonus(m, rec, "Pokémon offert", out);
                 return;
             }
             Room.Zone z = r.zones.get(Room.zoneKey(zone));
@@ -364,16 +466,19 @@ final class Mode {
 
         @Override
         public boolean notepad(Room r) {
-            return false;
+            return !shared && r.rule("honorNotepad");
         }
 
         @Override
         public boolean hmException(Room r) {
-            return false;
+            return !shared && r.rule("honorCsException");
         }
 
         @Override
         public void linked(Room r, Room.Member m, Room.MonRec rec, Room.Zone z, Room.Out out) {
+            if (!shared) {
+                return; // alone: nobody to link with, the Pokémon is simply the player's for the zone
+            }
             if (z.nickname != null) {
                 rec.nickname = z.nickname;
             }
@@ -394,423 +499,158 @@ final class Mode {
 
         @Override
         public String bonusSuffix() {
-            return ", sans lien";
-        }
-    }
-
-    // ------------------------------------------------- Nuzlocke, Sololocke
-
-    /** Each player alone: the first wild Pokémon met in a zone is the only one that can be caught there. */
-    private static final class IndividualEncounters implements EncounterLogic {
-
-        @Override
-        public String classify(Room r, Room.Member m, String key, int species, boolean shiny) {
-            if (!r.started(m)) {
-                return "noballs";
-            }
-            if (shiny && r.rule("shinyClause")) {
-                return "shiny";
-            }
-            if (Room.LEGENDARIES.contains(species) && !r.rule("legendaries")) {
-                return "legendary";
-            }
-            Room.Zone z = r.zones.get(key);
-            if (z != null && z.entries.containsKey(m.userId)) {
-                return "used";
-            }
-            if (r.rule("dupesClause") && r.ownedFamily(m, species, key, false)) {
-                return "dupe";
-            }
-            return "zone";
+            return shared ? ", sans lien" : "";
         }
 
-        @Override
-        public String zoneHint(Room r, Room.Zone z, Room.Entry mine) {
-            return mine != null ? " — première rencontre déjà faite ici" : "";
-        }
-
-        @Override
-        public void start(Ctx ctx, Map<String, Object> ev) {
-            Room.Member m = ctx.member;
-            String zone = Room.zoneName(Json.str(ev, "zone"));
-            String key = Room.zoneKey(zone);
-            String kind = classify(ctx.room, m, key, (int) Json.num(ev, "species", 0), Json.bool(ev, "shiny", false));
-            EncounterLogic.open(ctx, ev, zone, key, kind);
-            switch (kind) {
-                case "zone" -> ctx.out.notice(m, "info",
-                        "Première rencontre de " + zone + " : c'est votre seule chance ici (fuir ou le battre l'épuise).");
-                case "shiny" -> ctx.out.notice(m, "ok", "Chromatique ! Capture libre (clause chromatique), sans lien.");
-                case "used" -> ctx.out.notice(m, "warn", zone + " : vous y avez déjà rencontré un Pokémon. Capture interdite.");
-                case "dupe" -> ctx.out.notice(m, "warn",
-                        "Doublon : vous avez déjà cette lignée d'évolution. Rencontre ignorée, fuyez ou mettez-le K.O.");
-                case "legendary" -> ctx.out.notice(m, "warn", "Légendaire interdit par les règles : ne le capturez pas.");
-                case "noballs" -> ctx.out.notice(m, "info",
-                        "Pas encore de Poké Ball : cette rencontre ne compte pas pour le " + ctx.room.runName() + ".");
-                default -> {
-                    // nothing to say
-                }
-            }
-        }
-
-        @Override
-        public void end(Ctx ctx, Map<String, Object> ev) {
-            Room.Encounter e = EncounterLogic.closing(ctx, ev);
-            if (e == null) {
-                return;
-            }
-            Room.Member m = ctx.member;
-            boolean killed = Json.bool(ev, "wildFainted", false);
-            String who = e.speciesName == null ? "#" + e.species : e.speciesName;
-            if (killed) {
-                m.stats.wildKills++;
-            }
-            String did = m.name + (killed ? " met K.O. " : " quitte le combat contre ") + who;
-            if (!"zone".equals(e.kind)) {
-                ctx.out.log(m, killed ? "kill" : "flee", did + " (" + e.zone + ")", Json.map("zone", e.zone));
-                return;
-            }
-            // the first Pokémon of the zone got away or was beaten: no second chance in this zone
-            Room.Zone z = ctx.room.zone(e.zoneKey, e.zone);
-            if (!z.entries.containsKey(m.userId)) {
-                Room.Entry entry = new Room.Entry();
-                entry.result = killed ? "killed" : "fled";
-                entry.uid = e.uid;
-                entry.species = e.species;
-                entry.speciesName = e.speciesName;
-                entry.level = e.level;
-                entry.at = System.currentTimeMillis();
-                z.entries.put(m.userId, entry);
-            }
-            ctx.out.log(m, killed ? "kill" : "flee", did + ", première rencontre de " + e.zone + " : pas de seconde chance ici",
-                    Json.map("zone", e.zone));
-        }
-    }
-
-    /** Each player alone: nobody to link with; the classic rules (full team, HMs) may apply. */
-    private static class IndividualCaptures implements CaptureLogic {
-
-        @Override
-        public void starter(Room r, Room.Member m, Room.MonRec rec, Room.Out out) {
-            r.bonus(m, rec, "Pokémon de départ", out);
-            r.parkCheck(m, out);
-        }
-
-        @Override
-        public void gift(Room r, Room.Member m, Room.MonRec rec, String zone, Room.Out out) {
-            if (!r.rule("giftPokemon")) {
-                r.release(m, rec, "interdit : Pokémon offert ou échangé", out);
-                return;
-            }
-            r.bonus(m, rec, "Pokémon offert", out);
-        }
-
-        @Override
-        public boolean notepad(Room r) {
-            return r.rule("honorNotepad");
-        }
-
-        @Override
-        public boolean hmException(Room r) {
-            return r.rule("honorCsException");
-        }
-
-        @Override
-        public void linked(Room r, Room.Member m, Room.MonRec rec, Room.Zone z, Room.Out out) {
-            // alone: nobody to link with, the Pokémon is simply the player's for the zone
-        }
-
-        @Override
-        public String bonusSuffix() {
-            return "";
-        }
-    }
-
-    // ------------------------------------------------------------ Shinylocke
-
-    /** A gift is kept when it is shiny; otherwise as in the other runs of one player. */
-    private static final class ShinylockeCaptures extends IndividualCaptures {
-
-        @Override
-        public void gift(Room r, Room.Member m, Room.MonRec rec, String zone, Room.Out out) {
-            if (rec.shiny) {
-                r.bonus(m, rec, "Pokémon offert chromatique", out);
-                return;
-            }
-            if (!r.rule("giftPokemon")) {
-                r.release(m, rec, "interdit : Pokémon offert non chromatique", out);
-                return;
-            }
-            r.bonus(m, rec, "Pokémon offert", out);
-        }
-    }
-
-    /** Only shinies may be caught, anywhere (one per zone if the room wants); a battle never uses up a zone. */
-    private static final class ShinylockeEncounters implements EncounterLogic {
-
-        @Override
-        public String classify(Room r, Room.Member m, String key, int species, boolean shiny) {
-            if (!r.started(m)) {
-                return "noballs";
-            }
-            if (Room.LEGENDARIES.contains(species) && !r.rule("legendaries")) {
-                return "legendary";
-            }
-            if (!shiny) {
-                return "notshiny";
-            }
-            Room.Zone z = r.zones.get(key);
-            Room.Entry mine = z == null ? null : z.entries.get(m.userId);
-            if (r.rule("oneShinyPerZone") && mine != null && "caught".equals(mine.result)) {
-                return "used";
-            }
-            if (r.rule("dupesClause") && r.ownedFamily(m, species, key, false)) {
-                return "dupe";
-            }
-            return "zone";
-        }
-
-        @Override
-        public String zoneHint(Room r, Room.Zone z, Room.Entry mine) {
-            return mine != null && "caught".equals(mine.result) && r.rule("oneShinyPerZone")
-                    ? " — chromatique déjà capturé ici" : "";
-        }
-
-        @Override
-        public void start(Ctx ctx, Map<String, Object> ev) {
-            Room.Member m = ctx.member;
-            String zone = Room.zoneName(Json.str(ev, "zone"));
-            String key = Room.zoneKey(zone);
-            String kind = classify(ctx.room, m, key, (int) Json.num(ev, "species", 0), Json.bool(ev, "shiny", false));
-            EncounterLogic.open(ctx, ev, zone, key, kind);
-            switch (kind) {
-                case "zone" -> ctx.out.notice(m, "ok", "Chromatique ! Vous pouvez le capturer.");
-                case "used" -> ctx.out.notice(m, "warn", zone + " : vous y avez déjà capturé un chromatique. Capture interdite.");
-                case "dupe" -> ctx.out.notice(m, "warn",
-                        "Doublon : vous avez déjà cette lignée d'évolution. Rencontre ignorée, fuyez ou mettez-le K.O.");
-                case "legendary" -> ctx.out.notice(m, "warn", "Légendaire interdit par les règles : ne le capturez pas.");
-                case "noballs" -> ctx.out.notice(m, "info",
-                        "Pas encore de Poké Ball : cette rencontre ne compte pas pour le " + ctx.room.runName() + ".");
-                default -> {
-                    // not shiny: said at the capture (released)
-                }
-            }
-        }
-
-        @Override
-        public void end(Ctx ctx, Map<String, Object> ev) {
-            Room.Encounter e = EncounterLogic.closing(ctx, ev);
-            if (e == null) {
-                return;
-            }
-            Room.Member m = ctx.member;
-            boolean killed = Json.bool(ev, "wildFainted", false);
-            String who = e.speciesName == null ? "#" + e.species : e.speciesName;
-            if (killed) {
-                m.stats.wildKills++;
-            }
-            ctx.out.log(m, killed ? "kill" : "flee", m.name + (killed ? " met K.O. " : " quitte le combat contre ") + who
-                    + " (" + e.zone + ")", Json.map("zone", e.zone));
-        }
-    }
-
-    // ================================================================ runs
-
-    /** Soul Link: a death kills the linked souls of the partners; a team knocked out ends the room's run. */
-    private static final class SoulLinkRun implements RunLogic {
+        // ------------------------------------------------------------ runs
 
         @Override
         public String startsWhen() {
-            return "quand chaque joueur a une Poké Ball.";
+            return shared ? "quand chaque joueur a une Poké Ball." : "à votre première Poké Ball.";
         }
 
         @Override
         public void died(Room r, Room.Member m, Room.MonRec rec, Room.Out out) {
-            if (rec.bonus || rec.zoneKey == null) {
-                return;
-            }
-            Room.Zone z = r.zones.get(rec.zoneKey);
-            if (z == null || "cancelled".equals(z.status) || "dead".equals(z.status)) {
-                return;
-            }
-            z.status = "dead";
-            r.namingQueue.remove(z.key);
-            for (Map.Entry<String, Room.Entry> x : z.entries.entrySet()) {
-                Room.Member owner = r.member(x.getKey());
-                if (owner == null || owner == m) {
-                    continue;
+            List<Room.Member> owners = new ArrayList<>();
+            List<Room.MonRec> fallen = new ArrayList<>();
+            if (shared && !rec.bonus && rec.zoneKey != null) {
+                Room.Zone z = r.zones.get(rec.zoneKey);
+                if (z != null && !"cancelled".equals(z.status) && !"dead".equals(z.status)) {
+                    z.status = "dead";
+                    r.namingQueue.remove(z.key);
+                    for (Map.Entry<String, Room.Entry> x : z.entries.entrySet()) {
+                        Room.Member owner = r.member(x.getKey());
+                        if (owner == null || owner == m) {
+                            continue;
+                        }
+                        Room.MonRec linked = owner.mons.get(x.getValue().uid);
+                        if (linked != null && "alive".equals(linked.status)) {
+                            linked.status = "dead";
+                            linked.reason = "âme liée à " + rec.label();
+                            // not counted in the partner's deaths: only the player whose Pokémon fell first is
+                            out.log(owner, "death", "☠ " + linked.label() + " de " + owner.name + " meurt avec son âme liée", null);
+                            out.notice(owner, "danger", linked.label() + " est mort : son âme liée de " + m.name + " est tombée.");
+                            owners.add(owner);
+                            fallen.add(linked);
+                        }
+                    }
                 }
-                Room.MonRec linked = owner.mons.get(x.getValue().uid);
-                if (linked != null && "alive".equals(linked.status)) {
-                    linked.status = "dead";
-                    linked.reason = "âme liée à " + rec.label();
-                    // not counted in the partner's deaths: only the player whose Pokémon fell first is
-                    out.log(owner, "death", "☠ " + linked.label() + " de " + owner.name + " meurt avec son âme liée", null);
-                    out.notice(owner, "danger", linked.label() + " est mort : son âme liée de " + m.name + " est tombée.");
+            }
+            if (solo) {
+                // the Pokémon alone decides: another one of the PC takes over, or the run is lost
+                r.soloFallen(m, rec, out);
+                for (int i = 0; i < owners.size(); i++) {
+                    r.soloFallen(owners.get(i), fallen.get(i), out);
                 }
             }
         }
 
         @Override
         public void whiteout(Room r, Room.Member m, Room.Out out) {
-            if (r.rule("wipeEndsRun") && r.linkStarted) {
-                m.status = "wiped";
-                r.finish("defeat", "L'équipe de " + m.name + " est tombée.", out);
-            }
-        }
-
-        @Override
-        public boolean parksTeam() {
-            return false;
-        }
-
-        @Override
-        public boolean soloTeam(Room r) {
-            return false;
-        }
-
-        @Override
-        public boolean hardcore(Room r) {
-            return false;
-        }
-
-        @Override
-        public boolean classicRules() {
-            return false;
-        }
-
-        @Override
-        public String launchNotice(Room r) {
-            return "Le Soul Link commencera vraiment quand chaque joueur aura une Poké Ball : d'ici là, un Pokémon K.O. ne meurt pas.";
-        }
-
-        @Override
-        public boolean started(Room r, Room.Member m) {
-            return r.linkStarted;
-        }
-
-        /** The Soul Link really starts when every player has had a Poké Ball (until then, nobody dies). */
-        @Override
-        public void checkStart(Room r, Room.Out out) {
-            if (r.rule("startWithBalls") && !r.members.stream().allMatch(x -> x.hasBalls)) {
+            if (!shared && hardcoreWipe(r, m, out)) {
                 return;
             }
-            r.linkStarted = true;
-            out.log(null, "start", r.rule("startWithBalls")
-                    ? "Tout le monde a des Poké Balls : le Soul Link commence vraiment. Désormais, un Pokémon K.O. est mort."
-                    : "Le Soul Link commence : un Pokémon K.O. est mort.", null);
-            for (Room.Member x : r.members) {
-                out.notice(x, "warn", "Le Soul Link commence : désormais, un Pokémon K.O. est mort, avec son âme liée.");
+            if (solo || !r.spec().loses("teamWiped") || !r.rule("wipeEndsRun")) {
+                return; // one Pokémon: its death already decided (soloFallen)
             }
-        }
-
-        @Override
-        public void champion(Room r, Room.Member m, Room.Out out) {
-            boolean all = r.members.stream().allMatch(x -> "champion".equals(x.status));
-            if ("first".equals(r.ruleText("endWhen")) || all) {
-                r.finish("victory", m.name + " a battu le Maître de la Ligue.", out);
-            }
-        }
-    }
-
-    /** Each player's own run (Nuzlocke, Shinylocke): a death is the player's alone; a team knocked out loses the run. */
-    private static class IndividualRun implements RunLogic {
-
-        @Override
-        public String startsWhen() {
-            return "à votre première Poké Ball.";
-        }
-
-        @Override
-        public void died(Room r, Room.Member m, Room.MonRec rec, Room.Out out) {
-            // nobody is linked: the death is this player's alone
-        }
-
-        @Override
-        public void whiteout(Room r, Room.Member m, Room.Out out) {
-            if (hardcoreWipe(r, m, out)) {
+            if (shared) {
+                if (r.linkStarted) {
+                    m.status = "wiped";
+                    r.finish("defeat", "L'équipe de " + m.name + " est tombée.", out);
+                }
                 return;
             }
-            if (r.rule("wipeEndsRun") && r.started(m) && !"wiped".equals(m.status)) {
+            if (r.started(m) && !"wiped".equals(m.status)) {
                 m.status = "wiped";
-                out.log(m, "wipe", "☠ " + m.name + " a perdu son Nuzlocke : toute son équipe est tombée.", null);
-                r.endWhenAllDone(out);
-            }
-        }
-
-        @Override
-        public boolean parksTeam() {
-            return true;
-        }
-
-        @Override
-        public boolean soloTeam(Room r) {
-            return false;
-        }
-
-        @Override
-        public boolean hardcore(Room r) {
-            return r.rule("hardcore");
-        }
-
-        @Override
-        public boolean classicRules() {
-            return true;
-        }
-
-        @Override
-        public String launchNotice(Room r) {
-            return "Le " + r.runName() + " de chaque joueur commence à sa première Poké Ball : d'ici là, un Pokémon K.O. ne meurt pas.";
-        }
-
-        @Override
-        public boolean started(Room r, Room.Member m) {
-            return !r.rule("startWithBalls") || m.hasBalls;
-        }
-
-        @Override
-        public void checkStart(Room r, Room.Out out) {
-            r.linkStarted = true; // nobody waits for the others: each player's rules start with their own first Poké Ball
-        }
-
-        /** Each player's own run: it ends with the first Champion, or when every player has beaten the League or lost. */
-        @Override
-        public void champion(Room r, Room.Member m, Room.Out out) {
-            if ("first".equals(r.ruleText("endWhen"))) {
-                r.finish("victory", m.name + " a battu le Maître de la Ligue.", out);
-            } else {
+                out.log(m, "wipe", "☠ " + m.name + " a perdu son " + r.runName() + " : toute son équipe est tombée.", null);
                 r.endWhenAllDone(out);
             }
         }
 
         /** Hardcore: a whiteout loses the run, whatever the other rules say. */
-        static boolean hardcoreWipe(Room r, Room.Member m, Room.Out out) {
+        private boolean hardcoreWipe(Room r, Room.Member m, Room.Out out) {
             if (!r.rule("hardcore") || !r.started(m) || "wiped".equals(m.status) || "champion".equals(m.status)) {
                 return false;
             }
             m.status = "wiped";
-            out.log(m, "wipe", "☠ " + m.name + " a perdu son " + r.runName() + " Hardcore : toute son équipe est tombée.", null);
+            String run = r.runName().contains("Hardcore") ? r.runName() : r.runName() + " Hardcore";
+            out.log(m, "wipe", "☠ " + m.name + " a perdu son " + run + " : toute son équipe est tombée.", null);
             r.endWhenAllDone(out);
             return true;
         }
-    }
-
-    /** Sololocke: the death of the Pokémon alone decides (another one of the PC takes over, or the run is lost). */
-    private static final class SololockeRun extends IndividualRun {
 
         @Override
-        public void died(Room r, Room.Member m, Room.MonRec rec, Room.Out out) {
-            r.soloFallen(m, rec, out);
+        public void playerLost(Room r, Room.Member m, Room.Out out) {
+            if (shared) {
+                r.finish("defeat", "L'équipe de " + m.name + " est tombée.", out);
+            } else {
+                r.endWhenAllDone(out);
+            }
         }
 
         @Override
-        public void whiteout(Room r, Room.Member m, Room.Out out) {
-            // the death of the Pokémon already decided (soloFallen), unless Hardcore loses the run here
-            hardcoreWipe(r, m, out);
+        public boolean parksTeam() {
+            return !shared || solo;
         }
 
         @Override
         public boolean soloTeam(Room r) {
-            return "auto".equals(r.ruleText("soloParty"));
+            return solo && "auto".equals(r.ruleText("soloParty"));
+        }
+
+        @Override
+        public boolean hardcore(Room r) {
+            return !shared && r.rule("hardcore");
+        }
+
+        @Override
+        public boolean classicRules() {
+            return !shared;
+        }
+
+        @Override
+        public String launchNotice(Room r) {
+            return shared
+                    ? "Le " + r.runName() + " commencera vraiment quand chaque joueur aura une Poké Ball : d'ici là, un Pokémon K.O. ne meurt pas."
+                    : "Le " + r.runName() + " de chaque joueur commence à sa première Poké Ball : d'ici là, un Pokémon K.O. ne meurt pas.";
+        }
+
+        @Override
+        public boolean started(Room r, Room.Member m) {
+            return shared ? r.linkStarted : !r.rule("startWithBalls") || m.hasBalls;
+        }
+
+        @Override
+        public void checkStart(Room r, Room.Out out) {
+            if (!shared) {
+                r.linkStarted = true; // nobody waits for the others: each player's rules start with their own first Poké Ball
+                return;
+            }
+            // the linked run really starts when every player has had a Poké Ball (until then, nobody dies)
+            if (r.rule("startWithBalls") && !r.members.stream().allMatch(x -> x.hasBalls)) {
+                return;
+            }
+            r.linkStarted = true;
+            out.log(null, "start", r.rule("startWithBalls")
+                    ? "Tout le monde a des Poké Balls : le " + r.runName() + " commence vraiment. Désormais, un Pokémon K.O. est mort."
+                    : "Le " + r.runName() + " commence : un Pokémon K.O. est mort.", null);
+            for (Room.Member x : r.members) {
+                out.notice(x, "warn", "Le " + r.runName() + " commence : désormais, un Pokémon K.O. est mort, avec son âme liée.");
+            }
+        }
+
+        @Override
+        public void champion(Room r, Room.Member m, Room.Out out) {
+            if (shared) {
+                boolean all = r.members.stream().allMatch(x -> "champion".equals(x.status));
+                if ("first".equals(r.ruleText("endWhen")) || all) {
+                    r.finish("victory", m.name + " a battu le Maître de la Ligue.", out);
+                }
+            } else if ("first".equals(r.ruleText("endWhen"))) {
+                r.finish("victory", m.name + " a battu le Maître de la Ligue.", out);
+            } else {
+                r.endWhenAllDone(out);
+            }
         }
     }
 }

@@ -16,10 +16,15 @@ classiques. Générations 1 à 5. Version dans `src/slt/Version.java`, historiqu
    - `Room.java` : l'état de la salle et les mécanismes communs (zones, liens, journal, directives) ;
      `event()` passe chaque événement au mode de la salle, puis `dispatch()` (le `switch` sur les
      types) pour ceux qui n'ont pas encore de règle propre.
-   - `Mode.java` : ce qui distingue les modes, choisi une seule fois dans `Mode.forRoom` — rencontres
-     (`EncounterLogic`), captures (`CaptureLogic`), morts, équipe, Hardcore, démarrage et fin
-     (`RunLogic`), en familles Soul Link / partie individuelle / Shinylocke / Sololocke. Aucun handler
-     de `Room` ne teste plus le mode ; un nouveau comportement de mode s'ajoute dans `Mode.java`.
+   - `Mode.java` : le moteur des modes — rencontres (`EncounterLogic`), captures (`CaptureLogic`),
+     morts, équipe, Hardcore, démarrage et fin (`RunLogic`) — composé de trois primitives (joueurs
+     liés ou non, première rencontre ou chromatiques seuls, équipe libre ou d'un seul Pokémon) ; les
+     8 combinaisons tournent sur le même `Engine`. Aucun handler de `Room` ne teste le mode.
+   - `ModeSpec.java` : un mode est un fichier déclaratif `.ccmode.json` (format : `docs/modes.md`) —
+     catalogue fermé des règles, validateur strict (pas de code, de binaire, d'image ni d'adresse ;
+     `honorNoEvolution`, écrite dans la ROM, réservée aux modes officiels), registre des modes
+     officiels (`web/js/data/modes/`). `ModeSpecTest` vérifie que les fichiers officiels redonnent
+     exactement les règles d'avant ; chaque nouvelle combinaison a son scénario golden.
    - `Rooms.java` : salles, journal, écrans en direct (JPEG relayés), copies cloud des sauvegardes.
    - `ServerApi.java`, `Accounts.java`, `Hub.java` (présence, flux SSE).
    - Définitions des règles côté interface : `web/js/data/rules.js` (clé, type, libellé).

@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "id": "shinylocke",
+  "name": "Shinylocke",
+  "description": "Chacun sa partie, et seuls les Pokémon chromatiques peuvent être capturés ; un Pokémon K.O. est mort.",
+  "author": "Cable Club",
+  "license": "CC0-1.0",
+  "players": { "min": 1, "max": 10 },
+  "needs": ["shinies"],
+  "engine": { "links": "none", "encounters": "shiniesOnly", "team": "free" },
+  "rules": {
+    "dupesClause": false, "giftPokemon": false, "legendaries": true, "naming": "free",
+    "pauseForNaming": false, "deathBox": true, "refundCancelled": false, "wipeEndsRun": true, "endWhen": "all",
+    "autoEnd": true, "startWithBalls": true, "saveStates": false,
+    "honorNoHealItems": false, "honorNoHeldItems": false, "honorNoMultiExp": false, "honorNoMasterBall": false,
+    "honorNoEvolution": false, "honorNoFly": false, "honorNoRepel": false, "honorSetMode": false,
+    "honorCsException": false, "honorNotepad": false, "hardcore": false, "hardcoreItems": "report",
+    "oneShinyPerZone": false
+  },
+  "win": ["champion"],
+  "lose": ["teamWiped"],
+  "objectives": []
+}

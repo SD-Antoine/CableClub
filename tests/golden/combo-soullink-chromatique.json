@@ -1,0 +1,45 @@
+{
+  "title": "Combinaison inédite : joueurs liés et seuls les chromatiques (Soul Link chromatique)",
+  "modeFile": {
+    "schemaVersion": 1, "id": "soullink-chromatique", "name": "Soul Link chromatique",
+    "description": "Les chromatiques capturés dans une même zone sont liés entre les joueurs.",
+    "author": "Testeur", "license": "CC0-1.0", "players": { "min": 2, "max": 4 }, "needs": ["shinies"],
+    "engine": { "links": "shared", "encounters": "shiniesOnly", "team": "free" },
+    "rules": { "dupesClause": true, "giftPokemon": false, "legendaries": true, "naming": "free", "pauseForNaming": false,
+      "deathBox": true, "refundCancelled": true, "wipeEndsRun": true, "endWhen": "all", "autoEnd": true,
+      "startWithBalls": true, "oneShinyPerZone": true },
+    "win": ["champion"], "lose": ["teamWiped"], "objectives": []
+  },
+  "game": {"id": "ruby", "name": "Pokémon Rubis", "gen": 3},
+  "players": [
+    {"id": "alice", "name": "Alice", "families": {"253": 252, "254": 252, "256": 255, "257": 255, "259": 258, "260": 258, "262": 261, "264": 263, "266": 265, "267": 265, "268": 265, "269": 265, "271": 270, "272": 270, "274": 273, "275": 273, "277": 276, "279": 278}},
+    {"id": "bob", "name": "Bob", "families": {"253": 252, "254": 252, "256": 255, "257": 255, "259": 258, "260": 258, "262": 261, "264": 263, "266": 265, "267": 265, "268": 265, "269": 265, "271": 270, "272": 270, "274": 273, "275": 273, "277": 276, "279": 278}}
+  ],
+  "steps": [
+    {"do": "launch"},
+    {"by": "alice", "events": [
+      {"type": "capture", "uid": "1001", "species": 252, "speciesName": "Arcko", "level": 5, "nickname": "ARCKO", "zone": "Route 101", "origin": "new", "inParty": true, "fainted": false, "shiny": false},
+      {"type": "balls", "has": true}]},
+    {"by": "bob", "note": "les Pokémon de départ se lient, puis le lien commence", "events": [
+      {"type": "capture", "uid": "2001", "species": 258, "speciesName": "Gobou", "level": 5, "nickname": "GOBOU", "zone": "Route 101", "origin": "new", "inParty": true, "fainted": false, "shiny": false},
+      {"type": "balls", "has": true}]},
+    {"by": "alice", "note": "mettre K.O. un non-chromatique n’annule pas la zone ; un chromatique y est capturé", "events": [
+      {"type": "location", "map": 17, "zone": "Route 102"},
+      {"type": "encounter", "phase": "start", "uid": "1002", "species": 270, "speciesName": "Nénupiot", "level": 3, "zone": "Route 102", "shiny": false, "balls": 5},
+      {"type": "encounter", "phase": "end", "outcome": "failed", "wildFainted": true, "uid": "1002", "species": 270, "speciesName": "Nénupiot", "level": 3, "zone": "Route 102", "shiny": false, "balls": 5},
+      {"type": "encounter", "phase": "start", "uid": "1003", "species": 265, "speciesName": "Chenipotte", "level": 3, "zone": "Route 102", "shiny": true, "balls": 5},
+      {"type": "capture", "uid": "1003", "species": 265, "speciesName": "Chenipotte", "level": 3, "nickname": "CHENIPOTTE", "zone": "Route 102", "origin": "wild", "inParty": true, "fainted": false, "shiny": true}]},
+    {"by": "bob", "note": "le chromatique de Bob sur la même route forme le lien", "events": [
+      {"type": "location", "map": 17, "zone": "Route 102"},
+      {"type": "encounter", "phase": "start", "uid": "2002", "species": 263, "speciesName": "Zigzaton", "level": 3, "zone": "Route 102", "shiny": true, "balls": 5},
+      {"type": "capture", "uid": "2002", "species": 263, "speciesName": "Zigzaton", "level": 3, "nickname": "ZIGZATON", "zone": "Route 102", "origin": "wild", "inParty": true, "fainted": false, "shiny": true}]},
+    {"by": "alice", "note": "un second chromatique dans la zone, puis un Pokémon offert non chromatique", "events": [
+      {"type": "encounter", "phase": "start", "uid": "1004", "species": 261, "speciesName": "Medhyèna", "level": 4, "zone": "Route 102", "shiny": true, "balls": 4},
+      {"type": "capture", "uid": "1004", "species": 261, "speciesName": "Medhyèna", "level": 4, "nickname": "MEDHYENA", "zone": "Route 102", "origin": "wild", "inParty": true, "fainted": false, "shiny": true},
+      {"type": "capture", "uid": "1005", "species": 280, "speciesName": "Tarsal", "level": 5, "nickname": "TARSAL", "zone": "Route 104", "origin": "trade", "inParty": false, "fainted": false, "shiny": false}]},
+    {"by": "alice", "note": "le chromatique d’Alice tombe : celui de Bob meurt avec lui", "events": [
+      {"type": "faint", "uid": "1003", "species": 265, "speciesName": "Chenipotte", "level": 8, "nickname": "CHENIPOTTE", "zone": "Route 104", "doomed": false}]},
+    {"by": "bob", "note": "équipe de Bob K.O. : défaite de la salle", "events": [
+      {"type": "whiteout"}]}
+  ]
+}

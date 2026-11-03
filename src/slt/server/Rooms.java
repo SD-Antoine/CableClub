@@ -290,7 +290,7 @@ public final class Rooms {
                 "platform", Json.str(game, "platform"), "romCode", Json.str(game, "romCode"), "lang", Json.str(game, "lang"),
                 "crc", Json.str(game, "crc"));
         String mode = Json.str(body, "mode");
-        r.mode = mode != null && Room.MODES.contains(mode) ? mode : "soullink";
+        r.mode = mode != null && Room.modes().contains(mode) ? mode : "soullink";
         // the mode needs what the game can do (Shinylocke: shinies, none in generation 1)
         String missing = Capabilities.missingForMode(r.mode, gameId, (int) Json.num(game, "gen", 0));
         if (missing != null) {
@@ -303,8 +303,10 @@ public final class Rooms {
         r.rules = Room.defaultRules(r.mode);
         Map<String, Object> rules = Json.obj(body.get("rules"));
         if (rules != null) {
+            // a rule the mode fixes keeps its value, as does a value the rule does not allow
+            ModeSpec spec = r.spec();
             for (Map.Entry<String, Object> e : rules.entrySet()) {
-                if (r.rules.containsKey(e.getKey())) {
+                if (r.rules.containsKey(e.getKey()) && !spec.locked(e.getKey()) && ModeSpec.allows(e.getKey(), e.getValue())) {
                     r.rules.put(e.getKey(), e.getValue());
                 }
             }

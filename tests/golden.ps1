@@ -33,8 +33,8 @@ if ($LASTEXITCODE -ne 0) { throw 'Compilation du harnais impossible' }
 $java = Join-Path $JavaHome 'bin\java.exe'
 # the capabilities of the games are read from web\js\data (point 1d), whatever the current directory
 $web = "-Dslt.web=$(Join-Path $Root 'web')"
-# the event-schema and capabilities checks first (points 1b, 1d), then the scenarios
-foreach ($check in @('slt.server.EventSchemaTest', 'slt.server.CapabilitiesTest')) {
+# the event-schema, capabilities and mode-file checks first (points 1b, 1d, 2a), then the scenarios
+foreach ($check in @('slt.server.EventSchemaTest', 'slt.server.CapabilitiesTest', 'slt.server.ModeSpecTest')) {
     & $java '--enable-preview' '-Dstdout.encoding=UTF-8' $web '-cp' $Classes $check
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }

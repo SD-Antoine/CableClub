@@ -1,0 +1,329 @@
+# Combinaison inédite : joueurs liés, un seul Pokémon et seuls les chromatiques
+mode soullink-solo-chromatique, Pokémon Cristal, génération 2, joueurs alice (chef), bob
+règles {"dupesClause":false,"giftPokemon":false,"legendaries":true,"naming":"free","pauseForNaming":false,"deathBox":true,"refundCancelled":false,"endWhen":"all","autoEnd":true,"startWithBalls":true,"soloParty":"auto","soloLoss":"next","oneShinyPerZone":false}
+
+1. alice (chef) : launch
+  journal launch : L'aventure commence ! 2 joueur(s) sur Pokémon Cristal.
+  journal info : Le Soul Link solo chromatique commencera vraiment quand chaque joueur aura une Poké Ball : d'ici là, un Pokémon K.O. ne meurt pas.
+  directives [alice] room="salle", doomed=[], release=[], nicknames={}, pause=null, refunds=[], deathBox=true, shinyNum=0, shinyRate=0, park=[], parkWhy={}, levelCap=-1, setMode=false, ban=[], noHeld=false, noFly=false, saveStates=false, state="running", open=true, trade=null
+  directives [bob] room="salle", doomed=[], release=[], nicknames={}, pause=null, refunds=[], deathBox=true, shinyNum=0, shinyRate=0, park=[], parkWhy={}, levelCap=-1, setMode=false, ban=[], noHeld=false, noFly=false, saveStates=false, state="running", open=true, trade=null
+
+2. alice : capture, balls
+  journal capture [alice] : Alice capture HERICENDRE (Héricendre) N.5 (Départ)  {"zone":"Départ","species":155,"speciesName":"Héricendre","level":5,"shiny":false}
+  journal balls [alice] : Alice a ses premières Poké Balls
+
+3. bob : capture, balls
+  journal capture [bob] : Bob capture KAIMINUS (Kaiminus) N.5 (Départ)  {"zone":"Départ","species":158,"speciesName":"Kaiminus","level":5,"shiny":false}
+  journal link : Lien formé : Départ
+  journal balls [bob] : Bob a ses premières Poké Balls
+  journal start : Tout le monde a des Poké Balls : le Soul Link solo chromatique commence vraiment. Désormais, un Pokémon K.O. est mort.
+  avis [alice] warn : Le Soul Link solo chromatique commence : désormais, un Pokémon K.O. est mort, avec son âme liée.
+  avis [bob] warn : Le Soul Link solo chromatique commence : désormais, un Pokémon K.O. est mort, avec son âme liée.
+
+4. alice : location, encounter start, capture, party
+  journal zone [alice] : Alice entre dans Route 29  {"zone":"Route 29"}
+  journal encounter [alice] : Alice rencontre Hoothoot N.3 ✨ (Route 29)  {"species":163,"speciesName":"Hoothoot","level":3,"zone":"Route 29","shiny":true,"kind":"zone"}
+  journal capture [alice] : Alice capture HOOTHOOT (Hoothoot) N.3 (Route 29)  {"zone":"Route 29","species":163,"speciesName":"Hoothoot","level":3,"shiny":true}
+  avis [alice] ok : Chromatique ! Vous pouvez le capturer.
+  avis [alice] info : Soul Link solo chromatique : un seul Pokémon dans l'équipe (HERICENDRE (Héricendre)), les autres vont au PC.
+  directives [alice] park=["1002"], parkWhy={"1002":"solo"}
+
+5. bob : location, encounter start, capture, party
+  journal zone [bob] : Bob entre dans Route 29  {"zone":"Route 29"}
+  journal encounter [bob] : Bob rencontre Rattata N.3 ✨ (Route 29)  {"species":19,"speciesName":"Rattata","level":3,"zone":"Route 29","shiny":true,"kind":"zone"}
+  journal capture [bob] : Bob capture RATTATA (Rattata) N.3 (Route 29)  {"zone":"Route 29","species":19,"speciesName":"Rattata","level":3,"shiny":true}
+  journal link : Lien formé : Route 29
+  avis [bob] ok : Chromatique ! Vous pouvez le capturer.
+  avis [bob] info : Soul Link solo chromatique : un seul Pokémon dans l'équipe (KAIMINUS (Kaiminus)), les autres vont au PC.
+  directives [bob] park=["2002"], parkWhy={"2002":"solo"}
+
+6. alice : champion
+  journal champion [alice] : 🏆 Alice bat le Maître de la Ligue !
+
+7. bob : champion — tous les deux ont battu le Maître : victoire
+  journal champion [bob] : 🏆 Bob bat le Maître de la Ligue !
+  journal end : Soul Link solo chromatique réussi ! Bob a battu le Maître de la Ligue.  {"outcome":"victory"}
+  fin de l'aventure
+  directives [alice] pause={"reason":"ended","text":"Le Soul Link solo chromatique est terminé."}, state="finished", open=false
+  directives [bob] pause={"reason":"ended","text":"Le Soul Link solo chromatique est terminé."}, state="finished", open=false
+
+État final
+  {
+    "version": 1,
+    "id": "salle",
+    "code": "CODE01",
+    "name": "Combinaison inédite : joueurs liés, un seul Pokémon et seuls les chromatiques",
+    "mode": "soullink-solo-chromatique",
+    "visibility": "private",
+    "leaderId": "alice",
+    "createdAt": 0,
+    "launchedAt": 0,
+    "game": {"gameId":"crystal","name":"Pokémon Cristal","gen":2},
+    "maxPlayers": 2,
+    "state": "finished",
+    "adventureOpen": false,
+    "linkStarted": true,
+    "rules": {
+      "dupesClause": false,
+      "giftPokemon": false,
+      "legendaries": true,
+      "naming": "free",
+      "pauseForNaming": false,
+      "deathBox": true,
+      "refundCancelled": false,
+      "endWhen": "all",
+      "autoEnd": true,
+      "startWithBalls": true,
+      "soloParty": "auto",
+      "soloLoss": "next",
+      "oneShinyPerZone": false
+    },
+    "rando": {},
+    "members": [
+      {
+        "userId": "alice",
+        "name": "Alice",
+        "joinedAt": 0,
+        "slot": 1,
+        "ready": true,
+        "rom": {"status":"ready"},
+        "families": {"17":16,"18":16,"20":19,"153":152,"154":152,"156":155,"157":155,"159":158,"160":158,"162":161,"164":163},
+        "status": "champion",
+        "mons": {
+          "1001": {
+            "uid": "1001",
+            "species": 155,
+            "speciesName": "Héricendre",
+            "level": 5,
+            "nickname": "HERICENDRE",
+            "zoneKey": "depart",
+            "zone": "Départ",
+            "origin": "new",
+            "shiny": false,
+            "bonus": false,
+            "status": "alive",
+            "reason": null,
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          },
+          "1002": {
+            "uid": "1002",
+            "species": 163,
+            "speciesName": "Hoothoot",
+            "level": 3,
+            "nickname": "HOOTHOOT",
+            "zoneKey": "route 29",
+            "zone": "Route 29",
+            "origin": "wild",
+            "shiny": true,
+            "bonus": false,
+            "status": "alive",
+            "reason": null,
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          }
+        },
+        "refunds": [],
+        "stats": {
+          "captures": 2,
+          "deaths": 0,
+          "wildKills": 0,
+          "shinies": 1,
+          "encounters": 1,
+          "trainersBeaten": 0,
+          "badges": 0,
+          "fouls": 0,
+          "itemsBattle": {},
+          "itemsField": {},
+          "bought": {}
+        },
+        "lastZone": "Route 29",
+        "hasBalls": true,
+        "soloUid": "1001",
+        "capGyms": null,
+        "capLeague": 0,
+        "hmNext": false
+      },
+      {
+        "userId": "bob",
+        "name": "Bob",
+        "joinedAt": 0,
+        "slot": 2,
+        "ready": true,
+        "rom": {"status":"ready"},
+        "families": {"17":16,"18":16,"20":19,"153":152,"154":152,"156":155,"157":155,"159":158,"160":158,"162":161,"164":163},
+        "status": "champion",
+        "mons": {
+          "2001": {
+            "uid": "2001",
+            "species": 158,
+            "speciesName": "Kaiminus",
+            "level": 5,
+            "nickname": "KAIMINUS",
+            "zoneKey": "depart",
+            "zone": "Départ",
+            "origin": "new",
+            "shiny": false,
+            "bonus": false,
+            "status": "alive",
+            "reason": null,
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          },
+          "2002": {
+            "uid": "2002",
+            "species": 19,
+            "speciesName": "Rattata",
+            "level": 3,
+            "nickname": "RATTATA",
+            "zoneKey": "route 29",
+            "zone": "Route 29",
+            "origin": "wild",
+            "shiny": true,
+            "bonus": false,
+            "status": "alive",
+            "reason": null,
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          }
+        },
+        "refunds": [],
+        "stats": {
+          "captures": 2,
+          "deaths": 0,
+          "wildKills": 0,
+          "shinies": 1,
+          "encounters": 1,
+          "trainersBeaten": 0,
+          "badges": 0,
+          "fouls": 0,
+          "itemsBattle": {},
+          "itemsField": {},
+          "bought": {}
+        },
+        "lastZone": "Route 29",
+        "hasBalls": true,
+        "soloUid": "2001",
+        "capGyms": null,
+        "capLeague": 0,
+        "hmNext": false
+      }
+    ],
+    "invites": [],
+    "history": [],
+    "zones": [
+      {
+        "key": "depart",
+        "name": "Départ",
+        "status": "linked",
+        "nickname": null,
+        "firstAt": 0,
+        "entries": {
+          "alice": {
+            "result": "caught",
+            "uid": "1001",
+            "species": 155,
+            "speciesName": "Héricendre",
+            "level": 5,
+            "shiny": false,
+            "at": 0,
+            "items": {},
+            "itemNames": {}
+          },
+          "bob": {
+            "result": "caught",
+            "uid": "2001",
+            "species": 158,
+            "speciesName": "Kaiminus",
+            "level": 5,
+            "shiny": false,
+            "at": 0,
+            "items": {},
+            "itemNames": {}
+          }
+        }
+      },
+      {
+        "key": "route 29",
+        "name": "Route 29",
+        "status": "linked",
+        "nickname": null,
+        "firstAt": 0,
+        "entries": {
+          "alice": {
+            "result": "caught",
+            "uid": "1002",
+            "species": 163,
+            "speciesName": "Hoothoot",
+            "level": 3,
+            "shiny": true,
+            "at": 0,
+            "items": {},
+            "itemNames": {}
+          },
+          "bob": {
+            "result": "caught",
+            "uid": "2002",
+            "species": 19,
+            "speciesName": "Rattata",
+            "level": 3,
+            "shiny": true,
+            "at": 0,
+            "items": {},
+            "itemNames": {}
+          }
+        }
+      }
+    ],
+    "namingQueue": [],
+    "ended": {
+      "at": 0,
+      "outcome": "victory",
+      "reason": "Bob a battu le Maître de la Ligue.",
+      "summary": [
+        {
+          "captures": 2,
+          "deaths": 0,
+          "wildKills": 0,
+          "shinies": 1,
+          "encounters": 1,
+          "trainersBeaten": 0,
+          "badges": 0,
+          "fouls": 0,
+          "itemsBattle": {},
+          "itemsField": {},
+          "bought": {},
+          "userId": "alice",
+          "name": "Alice",
+          "status": "champion",
+          "alive": 2
+        },
+        {
+          "captures": 2,
+          "deaths": 0,
+          "wildKills": 0,
+          "shinies": 1,
+          "encounters": 1,
+          "trainersBeaten": 0,
+          "badges": 0,
+          "fouls": 0,
+          "itemsBattle": {},
+          "itemsField": {},
+          "bought": {},
+          "userId": "bob",
+          "name": "Bob",
+          "status": "champion",
+          "alive": 2
+        }
+      ]
+    },
+    "logSeq": 0,
+    "refundSeq": 0,
+    "trades": []
+  }
+Vue en direct [alice] {"zone":"Route 29","party":["1001","1002"],"at":0}
+Vue en direct [bob] {"zone":"Route 29","party":["2001","2002"],"at":0}

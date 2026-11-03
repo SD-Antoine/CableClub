@@ -1,0 +1,343 @@
+# Combinaison inédite : joueurs liés et un seul Pokémon chacun (Soul Link solo)
+mode soullink-solo, Pokémon Rubis, génération 3, joueurs alice (chef), bob
+règles {"shinyClause":true,"dupesClause":true,"giftPokemon":false,"legendaries":true,"naming":"free","pauseForNaming":false,"deathBox":true,"refundCancelled":true,"endWhen":"all","autoEnd":true,"startWithBalls":true,"soloParty":"auto","soloLoss":"next"}
+
+1. alice (chef) : launch
+  journal launch : L'aventure commence ! 2 joueur(s) sur Pokémon Rubis.
+  journal info : Le Soul Link solo commencera vraiment quand chaque joueur aura une Poké Ball : d'ici là, un Pokémon K.O. ne meurt pas.
+  directives [alice] room="salle", doomed=[], release=[], nicknames={}, pause=null, refunds=[], deathBox=true, shinyNum=0, shinyRate=0, park=[], parkWhy={}, levelCap=-1, setMode=false, ban=[], noHeld=false, noFly=false, saveStates=false, state="running", open=true, trade=null
+  directives [bob] room="salle", doomed=[], release=[], nicknames={}, pause=null, refunds=[], deathBox=true, shinyNum=0, shinyRate=0, park=[], parkWhy={}, levelCap=-1, setMode=false, ban=[], noHeld=false, noFly=false, saveStates=false, state="running", open=true, trade=null
+
+2. alice : capture, party, balls
+  journal capture [alice] : Alice capture ARCKO (Arcko) N.5 (Départ)  {"zone":"Départ","species":252,"speciesName":"Arcko","level":5,"shiny":false}
+  journal balls [alice] : Alice a ses premières Poké Balls
+
+3. bob : capture, party, balls
+  journal capture [bob] : Bob capture GOBOU (Gobou) N.5 (Départ)  {"zone":"Départ","species":258,"speciesName":"Gobou","level":5,"shiny":false}
+  journal link : Lien formé : Départ
+  journal balls [bob] : Bob a ses premières Poké Balls
+  journal start : Tout le monde a des Poké Balls : le Soul Link solo commence vraiment. Désormais, un Pokémon K.O. est mort.
+  avis [alice] warn : Le Soul Link solo commence : désormais, un Pokémon K.O. est mort, avec son âme liée.
+  avis [bob] warn : Le Soul Link solo commence : désormais, un Pokémon K.O. est mort, avec son âme liée.
+
+4. alice : location, encounter start, capture, party — une capture liée part au PC (un seul Pokémon dans l’équipe)
+  journal zone [alice] : Alice entre dans Route 101  {"zone":"Route 101"}
+  journal encounter [alice] : Alice rencontre Zigzaton N.3 (Route 101)  {"species":263,"speciesName":"Zigzaton","level":3,"zone":"Route 101","shiny":false,"kind":"zone"}
+  journal capture [alice] : Alice capture ZIGZATON (Zigzaton) N.3 (Route 101)  {"zone":"Route 101","species":263,"speciesName":"Zigzaton","level":3,"shiny":false}
+  avis [alice] info : Première rencontre de Route 101 : elle compte pour le Soul Link solo.
+  avis [alice] info : Soul Link solo : un seul Pokémon dans l'équipe (ARCKO (Arcko)), les autres vont au PC.
+  directives [alice] park=["1002"], parkWhy={"1002":"solo"}
+
+5. bob : location, encounter start, capture, party
+  journal zone [bob] : Bob entre dans Route 101 — déjà capturée par un partenaire  {"zone":"Route 101"}
+  journal encounter [bob] : Bob rencontre Medhyèna N.2 (Route 101)  {"species":261,"speciesName":"Medhyèna","level":2,"zone":"Route 101","shiny":false,"kind":"zone"}
+  journal capture [bob] : Bob capture MEDHYENA (Medhyèna) N.2 (Route 101)  {"zone":"Route 101","species":261,"speciesName":"Medhyèna","level":2,"shiny":false}
+  journal link : Lien formé : Route 101
+  avis [bob] info : Première rencontre de Route 101 : elle compte pour le Soul Link solo.
+  avis [bob] info : Soul Link solo : un seul Pokémon dans l'équipe (GOBOU (Gobou)), les autres vont au PC.
+  directives [bob] park=["2002"], parkWhy={"2002":"solo"}
+
+6. alice : party, faint — le Pokémon seul d’Alice meurt : celui de Bob aussi (âme liée), chacun prend la relève
+  journal death [alice] : ☠ ARCKO (Arcko) de Alice est mort (Départ)
+  journal death [bob] : ☠ GOBOU (Gobou) de Bob meurt avec son âme liée
+  journal solo [alice] : Alice doit choisir un nouveau Pokémon dans le PC
+  journal solo [bob] : Bob doit choisir un nouveau Pokémon dans le PC
+  avis [bob] danger : GOBOU (Gobou) est mort : son âme liée de Alice est tombée.
+  avis [bob] warn : GOBOU (Gobou) est mort : prenez un autre Pokémon vivant dans le PC pour continuer.
+  avis [alice] warn : ARCKO (Arcko) est mort : prenez un autre Pokémon vivant dans le PC pour continuer.
+  directives [alice] doomed=["1001"], park=[], parkWhy={}
+  directives [bob] doomed=["2001"]
+
+7. alice (chef) : rules — désormais la mort du Pokémon seul fait perdre
+  journal rules [alice] : Alice modifie les règles : soloLoss
+
+8. bob : party, faint — le relais de Bob meurt : il perd, et la salle avec lui
+  journal death [bob] : ☠ MEDHYENA (Medhyèna) de Bob est mort (Route 101)
+  journal death [alice] : ☠ ZIGZATON (Zigzaton) de Alice meurt avec son âme liée
+  journal wipe [bob] : ☠ Bob a perdu son Soul Link solo : il ne lui reste aucun Pokémon.
+  journal end : Soul Link solo perdu. L'équipe de Bob est tombée.  {"outcome":"defeat"}
+  avis [alice] danger : ZIGZATON (Zigzaton) est mort : son âme liée de Bob est tombée.
+  fin de l'aventure
+  directives [alice] doomed=["1001","1002"], pause={"reason":"ended","text":"Le Soul Link solo est terminé."}, state="finished", open=false
+  directives [bob] doomed=["2001","2002"], pause={"reason":"ended","text":"Le Soul Link solo est terminé."}, park=[], parkWhy={}, state="finished", open=false
+
+État final
+  {
+    "version": 1,
+    "id": "salle",
+    "code": "CODE01",
+    "name": "Combinaison inédite : joueurs liés et un seul Pokémon chacun (Soul Link solo)",
+    "mode": "soullink-solo",
+    "visibility": "private",
+    "leaderId": "alice",
+    "createdAt": 0,
+    "launchedAt": 0,
+    "game": {"gameId":"ruby","name":"Pokémon Rubis","gen":3},
+    "maxPlayers": 2,
+    "state": "finished",
+    "adventureOpen": false,
+    "linkStarted": true,
+    "rules": {
+      "shinyClause": true,
+      "dupesClause": true,
+      "giftPokemon": false,
+      "legendaries": true,
+      "naming": "free",
+      "pauseForNaming": false,
+      "deathBox": true,
+      "refundCancelled": true,
+      "endWhen": "all",
+      "autoEnd": true,
+      "startWithBalls": true,
+      "soloParty": "auto",
+      "soloLoss": "end"
+    },
+    "rando": {},
+    "members": [
+      {
+        "userId": "alice",
+        "name": "Alice",
+        "joinedAt": 0,
+        "slot": 1,
+        "ready": true,
+        "rom": {"status":"ready"},
+        "families": {"253":252,"254":252,"256":255,"257":255,"259":258,"260":258,"262":261,"264":263,"266":265,"267":265,"268":265,"269":265,"271":270,"272":270,"274":273,"275":273,"277":276,"279":278},
+        "status": "playing",
+        "mons": {
+          "1001": {
+            "uid": "1001",
+            "species": 252,
+            "speciesName": "Arcko",
+            "level": 5,
+            "nickname": "ARCKO",
+            "zoneKey": "depart",
+            "zone": "Départ",
+            "origin": "new",
+            "shiny": false,
+            "bonus": false,
+            "status": "dead",
+            "reason": "K.O.",
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          },
+          "1002": {
+            "uid": "1002",
+            "species": 263,
+            "speciesName": "Zigzaton",
+            "level": 3,
+            "nickname": "ZIGZATON",
+            "zoneKey": "route 101",
+            "zone": "Route 101",
+            "origin": "wild",
+            "shiny": false,
+            "bonus": false,
+            "status": "dead",
+            "reason": "âme liée à MEDHYENA (Medhyèna)",
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          }
+        },
+        "refunds": [],
+        "stats": {
+          "captures": 2,
+          "deaths": 1,
+          "wildKills": 0,
+          "shinies": 0,
+          "encounters": 1,
+          "trainersBeaten": 0,
+          "badges": 0,
+          "fouls": 0,
+          "itemsBattle": {},
+          "itemsField": {},
+          "bought": {}
+        },
+        "lastZone": "Route 101",
+        "hasBalls": true,
+        "soloUid": "1001",
+        "capGyms": null,
+        "capLeague": 0,
+        "hmNext": false
+      },
+      {
+        "userId": "bob",
+        "name": "Bob",
+        "joinedAt": 0,
+        "slot": 2,
+        "ready": true,
+        "rom": {"status":"ready"},
+        "families": {"253":252,"254":252,"256":255,"257":255,"259":258,"260":258,"262":261,"264":263,"266":265,"267":265,"268":265,"269":265,"271":270,"272":270,"274":273,"275":273,"277":276,"279":278},
+        "status": "wiped",
+        "mons": {
+          "2001": {
+            "uid": "2001",
+            "species": 258,
+            "speciesName": "Gobou",
+            "level": 5,
+            "nickname": "GOBOU",
+            "zoneKey": "depart",
+            "zone": "Départ",
+            "origin": "new",
+            "shiny": false,
+            "bonus": false,
+            "status": "dead",
+            "reason": "âme liée à ARCKO (Arcko)",
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          },
+          "2002": {
+            "uid": "2002",
+            "species": 261,
+            "speciesName": "Medhyèna",
+            "level": 2,
+            "nickname": "MEDHYENA",
+            "zoneKey": "route 101",
+            "zone": "Route 101",
+            "origin": "wild",
+            "shiny": false,
+            "bonus": false,
+            "status": "dead",
+            "reason": "K.O.",
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          }
+        },
+        "refunds": [],
+        "stats": {
+          "captures": 2,
+          "deaths": 1,
+          "wildKills": 0,
+          "shinies": 0,
+          "encounters": 1,
+          "trainersBeaten": 0,
+          "badges": 0,
+          "fouls": 0,
+          "itemsBattle": {},
+          "itemsField": {},
+          "bought": {}
+        },
+        "lastZone": "Route 101",
+        "hasBalls": true,
+        "soloUid": "2002",
+        "capGyms": null,
+        "capLeague": 0,
+        "hmNext": false
+      }
+    ],
+    "invites": [],
+    "history": [],
+    "zones": [
+      {
+        "key": "depart",
+        "name": "Départ",
+        "status": "dead",
+        "nickname": null,
+        "firstAt": 0,
+        "entries": {
+          "alice": {
+            "result": "caught",
+            "uid": "1001",
+            "species": 252,
+            "speciesName": "Arcko",
+            "level": 5,
+            "shiny": false,
+            "at": 0,
+            "items": {},
+            "itemNames": {}
+          },
+          "bob": {
+            "result": "caught",
+            "uid": "2001",
+            "species": 258,
+            "speciesName": "Gobou",
+            "level": 5,
+            "shiny": false,
+            "at": 0,
+            "items": {},
+            "itemNames": {}
+          }
+        }
+      },
+      {
+        "key": "route 101",
+        "name": "Route 101",
+        "status": "dead",
+        "nickname": null,
+        "firstAt": 0,
+        "entries": {
+          "alice": {
+            "result": "caught",
+            "uid": "1002",
+            "species": 263,
+            "speciesName": "Zigzaton",
+            "level": 3,
+            "shiny": false,
+            "at": 0,
+            "items": {},
+            "itemNames": {}
+          },
+          "bob": {
+            "result": "caught",
+            "uid": "2002",
+            "species": 261,
+            "speciesName": "Medhyèna",
+            "level": 2,
+            "shiny": false,
+            "at": 0,
+            "items": {},
+            "itemNames": {}
+          }
+        }
+      }
+    ],
+    "namingQueue": [],
+    "ended": {
+      "at": 0,
+      "outcome": "defeat",
+      "reason": "L'équipe de Bob est tombée.",
+      "summary": [
+        {
+          "captures": 2,
+          "deaths": 1,
+          "wildKills": 0,
+          "shinies": 0,
+          "encounters": 1,
+          "trainersBeaten": 0,
+          "badges": 0,
+          "fouls": 0,
+          "itemsBattle": {},
+          "itemsField": {},
+          "bought": {},
+          "userId": "alice",
+          "name": "Alice",
+          "status": "playing",
+          "alive": 0
+        },
+        {
+          "captures": 2,
+          "deaths": 1,
+          "wildKills": 0,
+          "shinies": 0,
+          "encounters": 1,
+          "trainersBeaten": 0,
+          "badges": 0,
+          "fouls": 0,
+          "itemsBattle": {},
+          "itemsField": {},
+          "bought": {},
+          "userId": "bob",
+          "name": "Bob",
+          "status": "wiped",
+          "alive": 0
+        }
+      ]
+    },
+    "logSeq": 0,
+    "refundSeq": 0,
+    "trades": []
+  }
+Vue en direct [alice] {"party":["1001"],"at":0,"zone":"Route 101"}
+Vue en direct [bob] {"party":["2002"],"at":0,"zone":"Route 101"}

@@ -28,15 +28,23 @@ public final class Room {
 
     // ------------------------------------------------------------------ rules
 
-    /** Game modes of the rooms, with the number of players each allows. */
-    public static final Set<String> MODES = Set.of("soullink", "nuzlocke", "sololocke", "shinylocke");
+    /** The official game modes (their files: web/js/data/modes, see {@link ModeSpec}). */
+    static Set<String> modes() {
+        return ModeSpec.officials().keySet();
+    }
+
+    /** The official mode of this id, or the Soul Link for an unknown one. */
+    private static ModeSpec officialOrSoulLink(String mode) {
+        ModeSpec s = ModeSpec.official(mode);
+        return s != null ? s : ModeSpec.official("soullink");
+    }
 
     public static int minPlayers(String mode) {
-        return "soullink".equals(mode) ? 2 : 1;
+        return officialOrSoulLink(mode).minPlayers;
     }
 
     public static int maxPlayers(String mode) {
-        return "soullink".equals(mode) ? 5 : 10;
+        return officialOrSoulLink(mode).maxPlayers;
     }
 
     /**
@@ -55,50 +63,9 @@ public final class Room {
         return defaultRules("soullink");
     }
 
-    /** Rules of a new room of a mode; the leader may change them at any time. */
+    /** Rules of a new room of an official mode (from its file); the leader may change them at any time. */
     public static Map<String, Object> defaultRules(String mode) {
-        Map<String, Object> r = new LinkedHashMap<>();
-        r.put("shinyClause", true);        // a shiny can always be caught (not linked)
-        r.put("dupesClause", true);        // an evolution line already owned in the room is ignored
-        r.put("giftPokemon", false);       // Pokémon given / traded / sold by characters
-        r.put("legendaries", true);        // legendary Pokémon may be caught
-        r.put("naming", "leader");         // "leader": the leader names each link; "free": no naming step
-        r.put("pauseForNaming", true);     // games wait while the leader names a link
-        r.put("deathBox", true);           // dead Pokémon go to a dedicated PC box
-        r.put("refundCancelled", true);    // items used on a cancelled zone are given back
-        r.put("wipeEndsRun", true);        // a whole team down ends the Soul Link (defeat)
-        r.put("endWhen", "all");           // "all": every player beats the Champion; "first": the first one does
-        r.put("autoEnd", true);            // beating the Champion is detected in the game and ends the run
-        r.put("startWithBalls", true);     // deaths count once every player has had a Poké Ball
-        r.put("saveStates", false);        // save states allowed in the player
-        if (!"soullink".equals(mode)) {
-            // each player has their own run: nothing is shared, nobody is linked
-            r.put("shinyClause", false);   // a shiny can be caught even in a zone already used
-            r.put("dupesClause", false);   // an evolution line the player already owns is ignored (they meet another one)
-            r.put("giftPokemon", true);
-            r.put("naming", "free");
-            r.put("pauseForNaming", false);
-            r.put("refundCancelled", false);
-            for (String k : CLASSIC_RULES) {
-                r.put(k, false);
-            }
-            // Hardcore Nuzlocke: level caps, no items in battle, battle style "Set", a whiteout loses the run
-            r.put("hardcore", false);
-            r.put("hardcoreItems", "report");  // an item used in battle: "report" to the room, or "lose" the run
-        }
-        if ("sololocke".equals(mode)) {
-            r.put("soloParty", "auto");    // "auto": a second living Pokémon of the team goes to the PC; "honor": on trust
-            r.put("soloLoss", "next");     // "next": another Pokémon of the PC takes over; "end": the run is lost
-            r.remove("wipeEndsRun");
-            r.remove("honorNoMultiExp");
-            r.remove("honorNotepad");
-        }
-        if ("shinylocke".equals(mode)) {
-            r.put("giftPokemon", false);   // given Pokémon kept even when not shiny
-            r.put("oneShinyPerZone", false);
-            r.remove("shinyClause");
-        }
-        return r;
+        return officialOrSoulLink(mode).defaults();
     }
 
     static final Set<Integer> LEGENDARIES = Set.of(144, 145, 146, 150, 151, 243, 244, 245, 249, 250, 251,
@@ -454,6 +421,8 @@ public final class Room {
     String leaderId;
     /** Game mode of the room (each mode has its tab in the interface). */
     String mode = "soullink";
+    /** The file of a mode imported for this room (point 2b), or null: the official mode of {@link #mode}. */
+    ModeSpec customSpec;
     /** "public": listed in the public rooms, anybody may join while it is a lobby; "private": invitation or code. */
     String visibility = "private";
     long createdAt;
@@ -488,26 +457,26 @@ public final class Room {
         return leaderId.equals(userId);
     }
 
+    /** The file of the room's mode: imported for it, or official. */
+    ModeSpec spec() {
+        return customSpec != null ? customSpec : officialOrSoulLink(mode);
+    }
+
     boolean rule(String key) {
         Object v = rules.get(key);
         if (v instanceof Boolean b) {
             return b;
         }
-        return Boolean.TRUE.equals(defaultRules(mode).get(key));
+        return Boolean.TRUE.equals(spec().defaultOf(key));
     }
 
     String ruleText(String key) {
         Object v = rules.get(key);
-        return v == null ? String.valueOf(defaultRules(mode).get(key)) : v.toString();
+        return v == null ? String.valueOf(spec().defaultOf(key)) : v.toString();
     }
 
     String runName() {
-        return switch (mode) {
-            case "nuzlocke" -> "Nuzlocke";
-            case "sololocke" -> "Sololocke";
-            case "shinylocke" -> "Shinylocke";
-            default -> "Soul Link";
-        };
+        return spec().name;
     }
 
     /** Do the deaths count for this player? Soul Link: once everybody has a Poké Ball; Nuzlocke: once they have theirs. */
@@ -516,17 +485,29 @@ public final class Room {
     }
 
     /**
-     * The leader changes rules: only the rules of the room's mode count; a rule written in the ROM changes only in the
-     * lobby; a rule the game cannot apply is never turned on (see {@link Capabilities}). Returns the rules changed.
+     * The leader changes rules: only the rules of the room's mode count; a rule the mode fixes does not change; a value
+     * must be one the rule allows, and a rule that makes no sense with the mode's primitives keeps its neutral value; a
+     * rule written in the ROM changes only in the lobby; a rule the game cannot apply is never turned on (see
+     * {@link Capabilities}). Returns the rules changed.
      */
     List<String> changeRules(Member leader, String leaderName, Map<String, Object> asked, Out out) {
+        ModeSpec spec = spec();
         List<String> changed = new ArrayList<>();
         for (Map.Entry<String, Object> e : asked.entrySet()) {
-            if (!defaultRules(mode).containsKey(e.getKey())) {
+            if (!spec.offers(e.getKey())) {
                 continue;
             }
             Object before = rules.get(e.getKey());
             if (before == null ? e.getValue() != null : !before.equals(e.getValue())) {
+                if (spec.locked(e.getKey())) {
+                    throw new Http.Fail(409, "Cette règle est fixée par le mode « " + spec.name + " ».");
+                }
+                if (!ModeSpec.allows(e.getKey(), e.getValue())) {
+                    throw new Http.Fail(400, "Valeur impossible pour la règle « " + e.getKey() + " ».");
+                }
+                if (!spec.applies(e.getKey()) && !e.getValue().equals(ModeSpec.neutral(e.getKey()))) {
+                    throw new Http.Fail(409, "Cette règle n'a pas de sens dans le mode « " + spec.name + " ».");
+                }
                 if (ROM_RULES.contains(e.getKey()) && !"lobby".equals(state)) {
                     throw new Http.Fail(409, "Cette règle est écrite dans la ROM de la salle : elle ne peut plus changer une fois l'aventure lancée.");
                 }
@@ -1083,7 +1064,7 @@ public final class Room {
         }
         if (soloNotice) {
             MonRec r = m.mons.get(m.soloUid);
-            out.notice(m, "info", "Sololocke : un seul Pokémon dans l'équipe" + (r != null ? " (" + r.label() + ")" : "")
+            out.notice(m, "info", runName() + " : un seul Pokémon dans l'équipe" + (r != null ? " (" + r.label() + ")" : "")
                     + ", les autres vont au PC.");
         }
         boolean allOver = cap > 0 && fit.isEmpty();
@@ -1154,16 +1135,16 @@ public final class Room {
         return out;
     }
 
-    /** Sololocke: the player's Pokémon is dead. Lost run, or another one of the PC takes over (if any is alive). */
+    /** One Pokémon in the team: the player's Pokémon is dead. Lost run, or another one of the PC takes over (if any). */
     void soloFallen(Member m, MonRec r, Out out) {
-        if ("wiped".equals(m.status)) {
-            return;
+        if ("wiped".equals(m.status) || !"running".equals(state)) {
+            return; // already lost, or the room just ended (a linked death ended it before this player's turn)
         }
         long alive = m.mons.values().stream().filter(x -> "alive".equals(x.status)).count();
         if ("end".equals(ruleText("soloLoss")) || alive == 0) {
             m.status = "wiped";
-            out.log(m, "wipe", "☠ " + m.name + " a perdu son Sololocke" + (alive == 0 ? " : il ne lui reste aucun Pokémon." : "."), null);
-            endWhenAllDone(out);
+            out.log(m, "wipe", "☠ " + m.name + " a perdu son " + runName() + (alive == 0 ? " : il ne lui reste aucun Pokémon." : "."), null);
+            Mode.forRoom(this).run().playerLost(this, m, out);
             return;
         }
         out.notice(m, "warn", r.label() + " est mort : prenez un autre Pokémon vivant dans le PC pour continuer.");
@@ -1317,7 +1298,7 @@ public final class Room {
         }
         m.status = "champion";
         out.log(m, "champion", "🏆 " + m.name + " bat le Maître de la Ligue !", null);
-        if (!rule("autoEnd")) {
+        if (!spec().wins("champion") || !rule("autoEnd")) {
             return; // the leader ends the run by hand
         }
         Mode.forRoom(this).run().champion(this, m, out);

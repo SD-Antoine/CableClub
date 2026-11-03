@@ -1,0 +1,155 @@
+# Nuzlocke Hardcore (mode préréglé) : le Hardcore est fixé par le mode
+mode nuzlocke-hardcore, Pokémon Émeraude, génération 3, joueurs alice (chef)
+règles {"shinyClause":false,"dupesClause":false,"giftPokemon":true,"legendaries":true,"naming":"free","pauseForNaming":false,"deathBox":true,"refundCancelled":false,"wipeEndsRun":true,"endWhen":"all","autoEnd":true,"startWithBalls":true,"saveStates":false,"honorNoHealItems":false,"honorNoHeldItems":false,"honorNoMultiExp":false,"honorNoMasterBall":false,"honorNoEvolution":false,"honorNoFly":false,"honorNoRepel":false,"honorSetMode":false,"honorCsException":false,"honorNotepad":false,"hardcore":true,"hardcoreItems":"report"}
+
+1. alice (chef) : launch — style Défini imposé dès le lancement
+  journal launch : L'aventure commence ! 1 joueur(s) sur Pokémon Émeraude.
+  journal info : Le Nuzlocke Hardcore de chaque joueur commence à sa première Poké Ball : d'ici là, un Pokémon K.O. ne meurt pas.
+  directives [alice] room="salle", doomed=[], release=[], nicknames={}, pause=null, refunds=[], deathBox=true, shinyNum=0, shinyRate=0, park=[], parkWhy={}, levelCap=-1, setMode=true, ban=[], noHeld=false, noFly=false, saveStates=false, state="running", open=true, trade=null
+
+2. alice (chef) : rules — le Hardcore ne se désactive pas
+  refus 409 : Cette règle est fixée par le mode « Nuzlocke Hardcore ».
+
+3. alice : capture, balls, items — un objet en combat : signalé
+  journal capture [alice] : Alice capture POUSSIFEU (Poussifeu) N.5 — Pokémon de départ  {"species":255,"speciesName":"Poussifeu","level":5,"shiny":false,"bonus":true}
+  journal balls [alice] : Alice a ses premières Poké Balls
+  journal item [alice] : Alice utilise 1× Potion en combat  {"item":"Potion","qty":1,"battle":true}
+  journal foul [alice] : ⚠ Hardcore : Alice utilise 1× Potion en combat (interdit)
+  avis [alice] warn : Hardcore : pas d'objets en combat. Potion est signalé à la salle.
+
+4. alice : faint, whiteout — équipe K.O. : partie perdue
+  journal death [alice] : ☠ POUSSIFEU (Poussifeu) de Alice est mort (Départ)
+  journal whiteout [alice] : L'équipe de Alice est entièrement K.O.
+  journal wipe [alice] : ☠ Alice a perdu son Nuzlocke Hardcore : toute son équipe est tombée.
+  journal end : Nuzlocke Hardcore perdu. Toutes les équipes sont tombées.  {"outcome":"defeat"}
+  fin de l'aventure
+  directives [alice] doomed=["1001"], pause={"reason":"ended","text":"Le Nuzlocke Hardcore est terminé."}, state="finished", open=false
+
+État final
+  {
+    "version": 1,
+    "id": "salle",
+    "code": "CODE01",
+    "name": "Nuzlocke Hardcore (mode préréglé) : le Hardcore est fixé par le mode",
+    "mode": "nuzlocke-hardcore",
+    "visibility": "private",
+    "leaderId": "alice",
+    "createdAt": 0,
+    "launchedAt": 0,
+    "game": {"gameId":"emerald","name":"Pokémon Émeraude","gen":3},
+    "maxPlayers": 1,
+    "state": "finished",
+    "adventureOpen": false,
+    "linkStarted": true,
+    "rules": {
+      "shinyClause": false,
+      "dupesClause": false,
+      "giftPokemon": true,
+      "legendaries": true,
+      "naming": "free",
+      "pauseForNaming": false,
+      "deathBox": true,
+      "refundCancelled": false,
+      "wipeEndsRun": true,
+      "endWhen": "all",
+      "autoEnd": true,
+      "startWithBalls": true,
+      "saveStates": false,
+      "honorNoHealItems": false,
+      "honorNoHeldItems": false,
+      "honorNoMultiExp": false,
+      "honorNoMasterBall": false,
+      "honorNoEvolution": false,
+      "honorNoFly": false,
+      "honorNoRepel": false,
+      "honorSetMode": false,
+      "honorCsException": false,
+      "honorNotepad": false,
+      "hardcore": true,
+      "hardcoreItems": "report"
+    },
+    "rando": {},
+    "members": [
+      {
+        "userId": "alice",
+        "name": "Alice",
+        "joinedAt": 0,
+        "slot": 1,
+        "ready": true,
+        "rom": {"status":"ready"},
+        "families": {"256":255,"257":255,"259":258,"260":258,"262":261,"264":263},
+        "status": "wiped",
+        "mons": {
+          "1001": {
+            "uid": "1001",
+            "species": 255,
+            "speciesName": "Poussifeu",
+            "level": 5,
+            "nickname": "POUSSIFEU",
+            "zoneKey": null,
+            "zone": "Départ",
+            "origin": "new",
+            "shiny": false,
+            "bonus": true,
+            "status": "dead",
+            "reason": "K.O.",
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          }
+        },
+        "refunds": [],
+        "stats": {
+          "captures": 1,
+          "deaths": 1,
+          "wildKills": 0,
+          "shinies": 0,
+          "encounters": 0,
+          "trainersBeaten": 0,
+          "badges": 0,
+          "fouls": 1,
+          "itemsBattle": {"Potion":1},
+          "itemsField": {},
+          "bought": {}
+        },
+        "lastZone": null,
+        "hasBalls": true,
+        "soloUid": null,
+        "capGyms": null,
+        "capLeague": 0,
+        "hmNext": false
+      }
+    ],
+    "invites": [],
+    "history": [],
+    "zones": [],
+    "namingQueue": [],
+    "ended": {
+      "at": 0,
+      "outcome": "defeat",
+      "reason": "Toutes les équipes sont tombées.",
+      "summary": [
+        {
+          "captures": 1,
+          "deaths": 1,
+          "wildKills": 0,
+          "shinies": 0,
+          "encounters": 0,
+          "trainersBeaten": 0,
+          "badges": 0,
+          "fouls": 1,
+          "itemsBattle": {"Potion":1},
+          "itemsField": {},
+          "bought": {},
+          "userId": "alice",
+          "name": "Alice",
+          "status": "wiped",
+          "alive": 0
+        }
+      ]
+    },
+    "logSeq": 0,
+    "refundSeq": 0,
+    "trades": []
+  }
+Vue en direct [alice] {}

@@ -77,10 +77,10 @@ public final class CapabilitiesTest {
             }
         }
         for (String mode : Json.obj(d.get("modes")).keySet()) {
-            check(Room.MODES.contains(mode), "mode « " + mode + " » connu");
+            check(Room.modes().contains(mode), "mode « " + mode + " » connu");
         }
         for (String rule : Json.obj(d.get("rules")).keySet()) {
-            check(Room.MODES.stream().anyMatch(m -> Room.defaultRules(m).containsKey(rule)), "règle « " + rule + " » connue");
+            check(Room.modes().stream().anyMatch(m -> Room.defaultRules(m).containsKey(rule)), "règle « " + rule + " » connue");
         }
     }
 

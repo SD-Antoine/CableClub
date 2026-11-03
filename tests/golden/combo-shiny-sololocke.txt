@@ -1,0 +1,208 @@
+# Combinaison inédite : un seul Pokémon et seuls les chromatiques (Shiny Sololocke)
+mode shiny-sololocke, Pokémon Cristal, génération 2, joueurs alice (chef)
+règles {"dupesClause":false,"giftPokemon":false,"legendaries":true,"deathBox":true,"endWhen":"all","autoEnd":true,"startWithBalls":true,"soloParty":"auto","soloLoss":"next","oneShinyPerZone":false}
+
+1. alice (chef) : launch
+  journal launch : L'aventure commence ! 1 joueur(s) sur Pokémon Cristal.
+  journal info : Le Shiny Sololocke de chaque joueur commence à sa première Poké Ball : d'ici là, un Pokémon K.O. ne meurt pas.
+  directives [alice] room="salle", doomed=[], release=[], nicknames={}, pause=null, refunds=[], deathBox=true, shinyNum=0, shinyRate=0, park=[], parkWhy={}, levelCap=-1, setMode=false, ban=[], noHeld=false, noFly=false, saveStates=false, state="running", open=true, trade=null
+
+2. alice : capture, party — Pokémon de départ, avant la première Poké Ball
+  journal capture [alice] : Alice capture HERICENDRE (Héricendre) N.5 — Pokémon de départ  {"species":155,"speciesName":"Héricendre","level":5,"shiny":false,"bonus":true}
+
+3. alice : balls, location, encounter start, capture — pas chromatique : relâché
+  journal balls [alice] : Alice a ses premières Poké Balls
+  journal zone [alice] : Alice entre dans Route 29  {"zone":"Route 29"}
+  journal encounter [alice] : Alice rencontre Roucool N.2 (Route 29)  {"species":16,"speciesName":"Roucool","level":2,"zone":"Route 29","shiny":false,"kind":"notshiny"}
+  journal release [alice] : ROUCOOL (Roucool) de Alice est relâché (pas chromatique)
+  avis [alice] warn : Capture non autorisée (pas chromatique) : ce Pokémon sera retiré de l'équipe.
+  directives [alice] doomed=["1002"], release=["1002"]
+
+4. alice : encounter start, capture, party — un chromatique : gardé, mais il part au PC (un seul Pokémon dans l’équipe)
+  journal encounter [alice] : Alice rencontre Hoothoot N.3 ✨ (Route 29)  {"species":163,"speciesName":"Hoothoot","level":3,"zone":"Route 29","shiny":true,"kind":"zone"}
+  journal capture [alice] : Alice capture HOOTHOOT (Hoothoot) N.3 (Route 29)  {"zone":"Route 29","species":163,"speciesName":"Hoothoot","level":3,"shiny":true}
+  avis [alice] ok : Chromatique ! Vous pouvez le capturer.
+  avis [alice] info : Shiny Sololocke : un seul Pokémon dans l'équipe (HERICENDRE (Héricendre)), les autres vont au PC.
+  directives [alice] park=["1003"], parkWhy={"1003":"solo"}
+
+5. alice : party, faint, party — le Pokémon seul meurt : le chromatique du PC prend la relève
+  journal death [alice] : ☠ HERICENDRE (Héricendre) de Alice est mort (Départ)
+  journal solo [alice] : Alice doit choisir un nouveau Pokémon dans le PC
+  avis [alice] warn : HERICENDRE (Héricendre) est mort : prenez un autre Pokémon vivant dans le PC pour continuer.
+  directives [alice] doomed=["1001","1002"], park=[], parkWhy={}
+
+6. alice : faint — le dernier meurt : partie perdue
+  journal death [alice] : ☠ HOOTHOOT (Hoothoot) de Alice est mort (Route 29)
+  journal wipe [alice] : ☠ Alice a perdu son Shiny Sololocke : il ne lui reste aucun Pokémon.
+  journal end : Shiny Sololocke perdu. Toutes les équipes sont tombées.  {"outcome":"defeat"}
+  fin de l'aventure
+  directives [alice] doomed=["1001","1002","1003"], pause={"reason":"ended","text":"Le Shiny Sololocke est terminé."}, state="finished", open=false
+
+État final
+  {
+    "version": 1,
+    "id": "salle",
+    "code": "CODE01",
+    "name": "Combinaison inédite : un seul Pokémon et seuls les chromatiques (Shiny Sololocke)",
+    "mode": "shiny-sololocke",
+    "visibility": "private",
+    "leaderId": "alice",
+    "createdAt": 0,
+    "launchedAt": 0,
+    "game": {"gameId":"crystal","name":"Pokémon Cristal","gen":2},
+    "maxPlayers": 1,
+    "state": "finished",
+    "adventureOpen": false,
+    "linkStarted": true,
+    "rules": {
+      "dupesClause": false,
+      "giftPokemon": false,
+      "legendaries": true,
+      "deathBox": true,
+      "endWhen": "all",
+      "autoEnd": true,
+      "startWithBalls": true,
+      "soloParty": "auto",
+      "soloLoss": "next",
+      "oneShinyPerZone": false
+    },
+    "rando": {},
+    "members": [
+      {
+        "userId": "alice",
+        "name": "Alice",
+        "joinedAt": 0,
+        "slot": 1,
+        "ready": true,
+        "rom": {"status":"ready"},
+        "families": {"17":16,"18":16,"20":19,"153":152,"154":152,"156":155,"157":155,"159":158,"160":158,"162":161,"164":163},
+        "status": "wiped",
+        "mons": {
+          "1001": {
+            "uid": "1001",
+            "species": 155,
+            "speciesName": "Héricendre",
+            "level": 5,
+            "nickname": "HERICENDRE",
+            "zoneKey": null,
+            "zone": "Départ",
+            "origin": "new",
+            "shiny": false,
+            "bonus": true,
+            "status": "dead",
+            "reason": "K.O.",
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          },
+          "1002": {
+            "uid": "1002",
+            "species": 16,
+            "speciesName": "Roucool",
+            "level": 2,
+            "nickname": "ROUCOOL",
+            "zoneKey": null,
+            "zone": "Route 29",
+            "origin": "wild",
+            "shiny": false,
+            "bonus": false,
+            "status": "released",
+            "reason": "interdit : pas chromatique",
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          },
+          "1003": {
+            "uid": "1003",
+            "species": 163,
+            "speciesName": "Hoothoot",
+            "level": 3,
+            "nickname": "HOOTHOOT",
+            "zoneKey": "route 29",
+            "zone": "Route 29",
+            "origin": "wild",
+            "shiny": true,
+            "bonus": false,
+            "status": "dead",
+            "reason": "K.O.",
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          }
+        },
+        "refunds": [],
+        "stats": {
+          "captures": 2,
+          "deaths": 2,
+          "wildKills": 0,
+          "shinies": 1,
+          "encounters": 2,
+          "trainersBeaten": 0,
+          "badges": 0,
+          "fouls": 0,
+          "itemsBattle": {},
+          "itemsField": {},
+          "bought": {}
+        },
+        "lastZone": "Route 29",
+        "hasBalls": true,
+        "soloUid": "1003",
+        "capGyms": null,
+        "capLeague": 0,
+        "hmNext": false
+      }
+    ],
+    "invites": [],
+    "history": [],
+    "zones": [
+      {
+        "key": "route 29",
+        "name": "Route 29",
+        "status": "open",
+        "nickname": null,
+        "firstAt": 0,
+        "entries": {
+          "alice": {
+            "result": "caught",
+            "uid": "1003",
+            "species": 163,
+            "speciesName": "Hoothoot",
+            "level": 3,
+            "shiny": true,
+            "at": 0,
+            "items": {},
+            "itemNames": {}
+          }
+        }
+      }
+    ],
+    "namingQueue": [],
+    "ended": {
+      "at": 0,
+      "outcome": "defeat",
+      "reason": "Toutes les équipes sont tombées.",
+      "summary": [
+        {
+          "captures": 2,
+          "deaths": 2,
+          "wildKills": 0,
+          "shinies": 1,
+          "encounters": 2,
+          "trainersBeaten": 0,
+          "badges": 0,
+          "fouls": 0,
+          "itemsBattle": {},
+          "itemsField": {},
+          "bought": {},
+          "userId": "alice",
+          "name": "Alice",
+          "status": "wiped",
+          "alive": 0
+        }
+      ]
+    },
+    "logSeq": 0,
+    "refundSeq": 0,
+    "trades": []
+  }
+Vue en direct [alice] {"party":["1001","1003"],"at":0,"zone":"Route 29"}

@@ -1,0 +1,19 @@
+{
+  "title": "Nuzlocke Hardcore (mode préréglé) : le Hardcore est fixé par le mode",
+  "mode": "nuzlocke-hardcore",
+  "game": {"id": "emerald", "name": "Pokémon Émeraude", "gen": 3},
+  "players": [
+    {"id": "alice", "name": "Alice", "families": {"256": 255, "257": 255, "259": 258, "260": 258, "262": 261, "264": 263}}
+  ],
+  "steps": [
+    {"do": "launch", "note": "style Défini imposé dès le lancement"},
+    {"do": "rules", "rules": {"hardcore": false}, "note": "le Hardcore ne se désactive pas"},
+    {"by": "alice", "note": "un objet en combat : signalé", "events": [
+      {"type": "capture", "uid": "1001", "species": 255, "speciesName": "Poussifeu", "level": 5, "nickname": "POUSSIFEU", "zone": "Route 101", "origin": "new", "inParty": true, "fainted": false, "shiny": false},
+      {"type": "balls", "has": true},
+      {"type": "items", "changes": [{"item": 13, "name": "Potion", "delta": -1}], "money": 0, "battle": true, "fight": true}]},
+    {"by": "alice", "note": "équipe K.O. : partie perdue", "events": [
+      {"type": "faint", "uid": "1001", "species": 255, "speciesName": "Poussifeu", "level": 9, "nickname": "POUSSIFEU", "zone": "Route 102", "doomed": false},
+      {"type": "whiteout"}]}
+  ]
+}

@@ -1,0 +1,373 @@
+# Combinaison inédite : joueurs liés et seuls les chromatiques (Soul Link chromatique)
+mode soullink-chromatique, Pokémon Rubis, génération 3, joueurs alice (chef), bob
+règles {"dupesClause":true,"giftPokemon":false,"legendaries":true,"naming":"free","pauseForNaming":false,"deathBox":true,"refundCancelled":true,"wipeEndsRun":true,"endWhen":"all","autoEnd":true,"startWithBalls":true,"oneShinyPerZone":true}
+
+1. alice (chef) : launch
+  journal launch : L'aventure commence ! 2 joueur(s) sur Pokémon Rubis.
+  journal info : Le Soul Link chromatique commencera vraiment quand chaque joueur aura une Poké Ball : d'ici là, un Pokémon K.O. ne meurt pas.
+  directives [alice] room="salle", doomed=[], release=[], nicknames={}, pause=null, refunds=[], deathBox=true, shinyNum=0, shinyRate=0, park=[], parkWhy={}, levelCap=-1, setMode=false, ban=[], noHeld=false, noFly=false, saveStates=false, state="running", open=true, trade=null
+  directives [bob] room="salle", doomed=[], release=[], nicknames={}, pause=null, refunds=[], deathBox=true, shinyNum=0, shinyRate=0, park=[], parkWhy={}, levelCap=-1, setMode=false, ban=[], noHeld=false, noFly=false, saveStates=false, state="running", open=true, trade=null
+
+2. alice : capture, balls
+  journal capture [alice] : Alice capture ARCKO (Arcko) N.5 (Départ)  {"zone":"Départ","species":252,"speciesName":"Arcko","level":5,"shiny":false}
+  journal balls [alice] : Alice a ses premières Poké Balls
+
+3. bob : capture, balls — les Pokémon de départ se lient, puis le lien commence
+  journal capture [bob] : Bob capture GOBOU (Gobou) N.5 (Départ)  {"zone":"Départ","species":258,"speciesName":"Gobou","level":5,"shiny":false}
+  journal link : Lien formé : Départ
+  journal balls [bob] : Bob a ses premières Poké Balls
+  journal start : Tout le monde a des Poké Balls : le Soul Link chromatique commence vraiment. Désormais, un Pokémon K.O. est mort.
+  avis [alice] warn : Le Soul Link chromatique commence : désormais, un Pokémon K.O. est mort, avec son âme liée.
+  avis [bob] warn : Le Soul Link chromatique commence : désormais, un Pokémon K.O. est mort, avec son âme liée.
+
+4. alice : location, encounter start, encounter end, encounter start, capture — mettre K.O. un non-chromatique n’annule pas la zone ; un chromatique y est capturé
+  journal zone [alice] : Alice entre dans Route 102  {"zone":"Route 102"}
+  journal encounter [alice] : Alice rencontre Nénupiot N.3 (Route 102)  {"species":270,"speciesName":"Nénupiot","level":3,"zone":"Route 102","shiny":false,"kind":"notshiny"}
+  journal kill [alice] : Alice met K.O. Nénupiot (Route 102)  {"zone":"Route 102"}
+  journal encounter [alice] : Alice rencontre Chenipotte N.3 ✨ (Route 102)  {"species":265,"speciesName":"Chenipotte","level":3,"zone":"Route 102","shiny":true,"kind":"zone"}
+  journal capture [alice] : Alice capture CHENIPOTTE (Chenipotte) N.3 (Route 102)  {"zone":"Route 102","species":265,"speciesName":"Chenipotte","level":3,"shiny":true}
+  avis [alice] ok : Chromatique ! Vous pouvez le capturer.
+
+5. bob : location, encounter start, capture — le chromatique de Bob sur la même route forme le lien
+  journal zone [bob] : Bob entre dans Route 102  {"zone":"Route 102"}
+  journal encounter [bob] : Bob rencontre Zigzaton N.3 ✨ (Route 102)  {"species":263,"speciesName":"Zigzaton","level":3,"zone":"Route 102","shiny":true,"kind":"zone"}
+  journal capture [bob] : Bob capture ZIGZATON (Zigzaton) N.3 (Route 102)  {"zone":"Route 102","species":263,"speciesName":"Zigzaton","level":3,"shiny":true}
+  journal link : Lien formé : Route 102
+  avis [bob] ok : Chromatique ! Vous pouvez le capturer.
+
+6. alice : encounter start, capture, capture — un second chromatique dans la zone, puis un Pokémon offert non chromatique
+  journal encounter [alice] : Alice rencontre Medhyèna N.4 ✨ (Route 102)  {"species":261,"speciesName":"Medhyèna","level":4,"zone":"Route 102","shiny":true,"kind":"used"}
+  journal release [alice] : MEDHYENA (Medhyèna) de Alice est relâché (zone déjà utilisée)
+  journal release [alice] : TARSAL (Tarsal) de Alice est relâché (Pokémon offert non chromatique)
+  avis [alice] warn : Route 102 : vous y avez déjà capturé un chromatique. Capture interdite.
+  avis [alice] warn : Capture non autorisée (zone déjà utilisée) : ce Pokémon sera retiré de l'équipe.
+  avis [alice] warn : Capture non autorisée (Pokémon offert non chromatique) : ce Pokémon sera retiré de l'équipe.
+  directives [alice] doomed=["1004","1005"], release=["1004","1005"]
+
+7. alice : faint — le chromatique d’Alice tombe : celui de Bob meurt avec lui
+  journal death [alice] : ☠ CHENIPOTTE (Chenipotte) de Alice est mort (Route 102)
+  journal death [bob] : ☠ ZIGZATON (Zigzaton) de Bob meurt avec son âme liée
+  avis [bob] danger : ZIGZATON (Zigzaton) est mort : son âme liée de Alice est tombée.
+  directives [alice] doomed=["1003","1004","1005"]
+  directives [bob] doomed=["2002"]
+
+8. bob : whiteout — équipe de Bob K.O. : défaite de la salle
+  journal whiteout [bob] : L'équipe de Bob est entièrement K.O.
+  journal end : Soul Link chromatique perdu. L'équipe de Bob est tombée.  {"outcome":"defeat"}
+  fin de l'aventure
+  directives [alice] pause={"reason":"ended","text":"Le Soul Link chromatique est terminé."}, state="finished", open=false
+  directives [bob] pause={"reason":"ended","text":"Le Soul Link chromatique est terminé."}, state="finished", open=false
+
+État final
+  {
+    "version": 1,
+    "id": "salle",
+    "code": "CODE01",
+    "name": "Combinaison inédite : joueurs liés et seuls les chromatiques (Soul Link chromatique)",
+    "mode": "soullink-chromatique",
+    "visibility": "private",
+    "leaderId": "alice",
+    "createdAt": 0,
+    "launchedAt": 0,
+    "game": {"gameId":"ruby","name":"Pokémon Rubis","gen":3},
+    "maxPlayers": 2,
+    "state": "finished",
+    "adventureOpen": false,
+    "linkStarted": true,
+    "rules": {
+      "dupesClause": true,
+      "giftPokemon": false,
+      "legendaries": true,
+      "naming": "free",
+      "pauseForNaming": false,
+      "deathBox": true,
+      "refundCancelled": true,
+      "wipeEndsRun": true,
+      "endWhen": "all",
+      "autoEnd": true,
+      "startWithBalls": true,
+      "oneShinyPerZone": true
+    },
+    "rando": {},
+    "members": [
+      {
+        "userId": "alice",
+        "name": "Alice",
+        "joinedAt": 0,
+        "slot": 1,
+        "ready": true,
+        "rom": {"status":"ready"},
+        "families": {"253":252,"254":252,"256":255,"257":255,"259":258,"260":258,"262":261,"264":263,"266":265,"267":265,"268":265,"269":265,"271":270,"272":270,"274":273,"275":273,"277":276,"279":278},
+        "status": "playing",
+        "mons": {
+          "1001": {
+            "uid": "1001",
+            "species": 252,
+            "speciesName": "Arcko",
+            "level": 5,
+            "nickname": "ARCKO",
+            "zoneKey": "depart",
+            "zone": "Départ",
+            "origin": "new",
+            "shiny": false,
+            "bonus": false,
+            "status": "alive",
+            "reason": null,
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          },
+          "1003": {
+            "uid": "1003",
+            "species": 265,
+            "speciesName": "Chenipotte",
+            "level": 3,
+            "nickname": "CHENIPOTTE",
+            "zoneKey": "route 102",
+            "zone": "Route 102",
+            "origin": "wild",
+            "shiny": true,
+            "bonus": false,
+            "status": "dead",
+            "reason": "K.O.",
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          },
+          "1004": {
+            "uid": "1004",
+            "species": 261,
+            "speciesName": "Medhyèna",
+            "level": 4,
+            "nickname": "MEDHYENA",
+            "zoneKey": null,
+            "zone": "Route 102",
+            "origin": "wild",
+            "shiny": true,
+            "bonus": false,
+            "status": "released",
+            "reason": "interdit : zone déjà utilisée",
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          },
+          "1005": {
+            "uid": "1005",
+            "species": 280,
+            "speciesName": "Tarsal",
+            "level": 5,
+            "nickname": "TARSAL",
+            "zoneKey": null,
+            "zone": "Route 104",
+            "origin": "trade",
+            "shiny": false,
+            "bonus": false,
+            "status": "released",
+            "reason": "interdit : Pokémon offert non chromatique",
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          }
+        },
+        "refunds": [],
+        "stats": {
+          "captures": 2,
+          "deaths": 1,
+          "wildKills": 1,
+          "shinies": 1,
+          "encounters": 3,
+          "trainersBeaten": 0,
+          "badges": 0,
+          "fouls": 0,
+          "itemsBattle": {},
+          "itemsField": {},
+          "bought": {}
+        },
+        "lastZone": "Route 102",
+        "hasBalls": true,
+        "soloUid": null,
+        "capGyms": null,
+        "capLeague": 0,
+        "hmNext": false
+      },
+      {
+        "userId": "bob",
+        "name": "Bob",
+        "joinedAt": 0,
+        "slot": 2,
+        "ready": true,
+        "rom": {"status":"ready"},
+        "families": {"253":252,"254":252,"256":255,"257":255,"259":258,"260":258,"262":261,"264":263,"266":265,"267":265,"268":265,"269":265,"271":270,"272":270,"274":273,"275":273,"277":276,"279":278},
+        "status": "wiped",
+        "mons": {
+          "2001": {
+            "uid": "2001",
+            "species": 258,
+            "speciesName": "Gobou",
+            "level": 5,
+            "nickname": "GOBOU",
+            "zoneKey": "depart",
+            "zone": "Départ",
+            "origin": "new",
+            "shiny": false,
+            "bonus": false,
+            "status": "alive",
+            "reason": null,
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          },
+          "2002": {
+            "uid": "2002",
+            "species": 263,
+            "speciesName": "Zigzaton",
+            "level": 3,
+            "nickname": "ZIGZATON",
+            "zoneKey": "route 102",
+            "zone": "Route 102",
+            "origin": "wild",
+            "shiny": true,
+            "bonus": false,
+            "status": "dead",
+            "reason": "âme liée à CHENIPOTTE (Chenipotte)",
+            "at": 0,
+            "hm": false,
+            "hmExp": -1
+          }
+        },
+        "refunds": [],
+        "stats": {
+          "captures": 2,
+          "deaths": 0,
+          "wildKills": 0,
+          "shinies": 1,
+          "encounters": 1,
+          "trainersBeaten": 0,
+          "badges": 0,
+          "fouls": 0,
+          "itemsBattle": {},
+          "itemsField": {},
+          "bought": {}
+        },
+        "lastZone": "Route 102",
+        "hasBalls": true,
+        "soloUid": null,
+        "capGyms": null,
+        "capLeague": 0,
+        "hmNext": false
+      }
+    ],
+    "invites": [],
+    "history": [],
+    "zones": [
+      {
+        "key": "depart",
+        "name": "Départ",
+        "status": "linked",
+        "nickname": null,
+        "firstAt": 0,
+        "entries": {
+          "alice": {
+            "result": "caught",
+            "uid": "1001",
+            "species": 252,
+            "speciesName": "Arcko",
+            "level": 5,
+            "shiny": false,
+            "at": 0,
+            "items": {},
+            "itemNames": {}
+          },
+          "bob": {
+            "result": "caught",
+            "uid": "2001",
+            "species": 258,
+            "speciesName": "Gobou",
+            "level": 5,
+            "shiny": false,
+            "at": 0,
+            "items": {},
+            "itemNames": {}
+          }
+        }
+      },
+      {
+        "key": "route 102",
+        "name": "Route 102",
+        "status": "dead",
+        "nickname": null,
+        "firstAt": 0,
+        "entries": {
+          "alice": {
+            "result": "caught",
+            "uid": "1003",
+            "species": 265,
+            "speciesName": "Chenipotte",
+            "level": 3,
+            "shiny": true,
+            "at": 0,
+            "items": {},
+            "itemNames": {}
+          },
+          "bob": {
+            "result": "caught",
+            "uid": "2002",
+            "species": 263,
+            "speciesName": "Zigzaton",
+            "level": 3,
+            "shiny": true,
+            "at": 0,
+            "items": {},
+            "itemNames": {}
+          }
+        }
+      }
+    ],
+    "namingQueue": [],
+    "ended": {
+      "at": 0,
+      "outcome": "defeat",
+      "reason": "L'équipe de Bob est tombée.",
+      "summary": [
+        {
+          "captures": 2,
+          "deaths": 1,
+          "wildKills": 1,
+          "shinies": 1,
+          "encounters": 3,
+          "trainersBeaten": 0,
+          "badges": 0,
+          "fouls": 0,
+          "itemsBattle": {},
+          "itemsField": {},
+          "bought": {},
+          "userId": "alice",
+          "name": "Alice",
+          "status": "playing",
+          "alive": 1
+        },
+        {
+          "captures": 2,
+          "deaths": 0,
+          "wildKills": 0,
+          "shinies": 1,
+          "encounters": 1,
+          "trainersBeaten": 0,
+          "badges": 0,
+          "fouls": 0,
+          "itemsBattle": {},
+          "itemsField": {},
+          "bought": {},
+          "userId": "bob",
+          "name": "Bob",
+          "status": "wiped",
+          "alive": 1
+        }
+      ]
+    },
+    "logSeq": 0,
+    "refundSeq": 0,
+    "trades": []
+  }
+Vue en direct [alice] {"zone":"Route 102"}
+Vue en direct [bob] {"zone":"Route 102"}

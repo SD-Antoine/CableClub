@@ -69,19 +69,24 @@ final class Capabilities {
         return g != null && Boolean.TRUE.equals(g.get(capability));
     }
 
-    /** Why the game cannot play this mode (the text of the capability it lacks), or null when it can. */
+    /** Why the game cannot play this official mode (the text of the capability it lacks), or null when it can. */
     static String missingForMode(String mode, String gameId, int gen) {
-        return missing("modes", mode, gameId, gen);
+        ModeSpec spec = ModeSpec.official(mode);
+        return spec == null ? null : missingForSpec(spec, gameId, gen);
+    }
+
+    /** Why the game cannot play this mode: what its file needs ("needs"), or null when it can. */
+    static String missingForSpec(ModeSpec spec, String gameId, int gen) {
+        return missing(new java.util.ArrayList<Object>(spec.needs), gameId, gen);
     }
 
     /** Why the game cannot apply this rule, or null when it can. */
     static String missingForRule(String rule, String gameId, int gen) {
-        return missing("rules", rule, gameId, gen);
+        Map<String, Object> t = Json.obj(data().get("rules"));
+        return missing(t == null ? null : Json.arr(t.get(rule)), gameId, gen);
     }
 
-    private static String missing(String table, String key, String gameId, int gen) {
-        Map<String, Object> t = Json.obj(data().get(table));
-        List<Object> needs = t == null ? null : Json.arr(t.get(key));
+    private static String missing(List<Object> needs, String gameId, int gen) {
         if (needs == null || gen <= 0) {
             return null; // nothing needed, or the game is not known: nothing refused
         }

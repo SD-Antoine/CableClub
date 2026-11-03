@@ -1,0 +1,46 @@
+{
+  "title": "Combinaison inédite : joueurs liés et un seul Pokémon chacun (Soul Link solo)",
+  "modeFile": {
+    "schemaVersion": 1, "id": "soullink-solo", "name": "Soul Link solo",
+    "description": "Un Soul Link où chaque joueur n’a qu’un Pokémon dans l’équipe.",
+    "author": "Testeur", "license": "CC0-1.0", "players": { "min": 2, "max": 4 }, "needs": [],
+    "engine": { "links": "shared", "encounters": "firstPerZone", "team": "one" },
+    "rules": { "shinyClause": true, "dupesClause": true, "giftPokemon": false, "legendaries": true, "naming": "free",
+      "pauseForNaming": false, "deathBox": true, "refundCancelled": true, "endWhen": "all", "autoEnd": true,
+      "startWithBalls": true, "soloParty": "auto", "soloLoss": "next" },
+    "win": ["champion"], "lose": ["soloLost"], "objectives": []
+  },
+  "game": {"id": "ruby", "name": "Pokémon Rubis", "gen": 3},
+  "players": [
+    {"id": "alice", "name": "Alice", "families": {"253": 252, "254": 252, "256": 255, "257": 255, "259": 258, "260": 258, "262": 261, "264": 263, "266": 265, "267": 265, "268": 265, "269": 265, "271": 270, "272": 270, "274": 273, "275": 273, "277": 276, "279": 278}},
+    {"id": "bob", "name": "Bob", "families": {"253": 252, "254": 252, "256": 255, "257": 255, "259": 258, "260": 258, "262": 261, "264": 263, "266": 265, "267": 265, "268": 265, "269": 265, "271": 270, "272": 270, "274": 273, "275": 273, "277": 276, "279": 278}}
+  ],
+  "steps": [
+    {"do": "launch"},
+    {"by": "alice", "events": [
+      {"type": "capture", "uid": "1001", "species": 252, "speciesName": "Arcko", "level": 5, "nickname": "ARCKO", "zone": "Route 101", "origin": "new", "inParty": true, "fainted": false, "shiny": false},
+      {"type": "party", "uids": ["1001"]},
+      {"type": "balls", "has": true}]},
+    {"by": "bob", "events": [
+      {"type": "capture", "uid": "2001", "species": 258, "speciesName": "Gobou", "level": 5, "nickname": "GOBOU", "zone": "Route 101", "origin": "new", "inParty": true, "fainted": false, "shiny": false},
+      {"type": "party", "uids": ["2001"]},
+      {"type": "balls", "has": true}]},
+    {"by": "alice", "note": "une capture liée part au PC (un seul Pokémon dans l’équipe)", "events": [
+      {"type": "location", "map": 16, "zone": "Route 101"},
+      {"type": "encounter", "phase": "start", "uid": "1002", "species": 263, "speciesName": "Zigzaton", "level": 3, "zone": "Route 101", "shiny": false, "balls": 5},
+      {"type": "capture", "uid": "1002", "species": 263, "speciesName": "Zigzaton", "level": 3, "nickname": "ZIGZATON", "zone": "Route 101", "origin": "wild", "inParty": true, "fainted": false, "shiny": false},
+      {"type": "party", "uids": ["1001", "1002"]}]},
+    {"by": "bob", "events": [
+      {"type": "location", "map": 16, "zone": "Route 101"},
+      {"type": "encounter", "phase": "start", "uid": "2002", "species": 261, "speciesName": "Medhyèna", "level": 2, "zone": "Route 101", "shiny": false, "balls": 5},
+      {"type": "capture", "uid": "2002", "species": 261, "speciesName": "Medhyèna", "level": 2, "nickname": "MEDHYENA", "zone": "Route 101", "origin": "wild", "inParty": true, "fainted": false, "shiny": false},
+      {"type": "party", "uids": ["2001", "2002"]}]},
+    {"by": "alice", "note": "le Pokémon seul d’Alice meurt : celui de Bob aussi (âme liée), chacun prend la relève", "events": [
+      {"type": "party", "uids": ["1001"]},
+      {"type": "faint", "uid": "1001", "species": 252, "speciesName": "Arcko", "level": 12, "nickname": "ARCKO", "zone": "Route 102", "doomed": false}]},
+    {"do": "rules", "rules": {"soloLoss": "end"}, "note": "désormais la mort du Pokémon seul fait perdre"},
+    {"by": "bob", "note": "le relais de Bob meurt : il perd, et la salle avec lui", "events": [
+      {"type": "party", "uids": ["2002"]},
+      {"type": "faint", "uid": "2002", "species": 261, "speciesName": "Medhyèna", "level": 9, "nickname": "MEDHYENA", "zone": "Route 102", "doomed": false}]}
+  ]
+}

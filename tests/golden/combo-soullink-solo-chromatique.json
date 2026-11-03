@@ -1,0 +1,39 @@
+{
+  "title": "Combinaison inédite : joueurs liés, un seul Pokémon et seuls les chromatiques",
+  "modeFile": {
+    "schemaVersion": 1, "id": "soullink-solo-chromatique", "name": "Soul Link solo chromatique",
+    "description": "Liés, un seul Pokémon chacun, et seuls les chromatiques se capturent.",
+    "author": "Testeur", "license": "CC0-1.0", "players": { "min": 2, "max": 2 }, "needs": ["shinies"],
+    "engine": { "links": "shared", "encounters": "shiniesOnly", "team": "one" },
+    "rules": { "dupesClause": false, "giftPokemon": false, "legendaries": true, "naming": "free", "pauseForNaming": false,
+      "deathBox": true, "refundCancelled": false, "endWhen": "all", "autoEnd": true, "startWithBalls": true,
+      "soloParty": "auto", "soloLoss": "next", "oneShinyPerZone": false },
+    "win": ["champion"], "lose": ["soloLost"], "objectives": [{"type": "badges", "count": 8}, {"type": "champion"}]
+  },
+  "game": {"id": "crystal", "name": "Pokémon Cristal", "gen": 2},
+  "players": [
+    {"id": "alice", "name": "Alice", "families": {"153": 152, "154": 152, "156": 155, "157": 155, "159": 158, "160": 158, "162": 161, "164": 163, "17": 16, "18": 16, "20": 19}},
+    {"id": "bob", "name": "Bob", "families": {"153": 152, "154": 152, "156": 155, "157": 155, "159": 158, "160": 158, "162": 161, "164": 163, "17": 16, "18": 16, "20": 19}}
+  ],
+  "steps": [
+    {"do": "launch"},
+    {"by": "alice", "events": [
+      {"type": "capture", "uid": "1001", "species": 155, "speciesName": "Héricendre", "level": 5, "nickname": "HERICENDRE", "zone": "Bourg Geon", "origin": "new", "inParty": true, "fainted": false, "shiny": false},
+      {"type": "balls", "has": true}]},
+    {"by": "bob", "events": [
+      {"type": "capture", "uid": "2001", "species": 158, "speciesName": "Kaiminus", "level": 5, "nickname": "KAIMINUS", "zone": "Bourg Geon", "origin": "new", "inParty": true, "fainted": false, "shiny": false},
+      {"type": "balls", "has": true}]},
+    {"by": "alice", "events": [
+      {"type": "location", "map": 3, "zone": "Route 29"},
+      {"type": "encounter", "phase": "start", "uid": "1002", "species": 163, "speciesName": "Hoothoot", "level": 3, "zone": "Route 29", "shiny": true, "balls": 5},
+      {"type": "capture", "uid": "1002", "species": 163, "speciesName": "Hoothoot", "level": 3, "nickname": "HOOTHOOT", "zone": "Route 29", "origin": "wild", "inParty": true, "fainted": false, "shiny": true},
+      {"type": "party", "uids": ["1001", "1002"]}]},
+    {"by": "bob", "events": [
+      {"type": "location", "map": 3, "zone": "Route 29"},
+      {"type": "encounter", "phase": "start", "uid": "2002", "species": 19, "speciesName": "Rattata", "level": 3, "zone": "Route 29", "shiny": true, "balls": 5},
+      {"type": "capture", "uid": "2002", "species": 19, "speciesName": "Rattata", "level": 3, "nickname": "RATTATA", "zone": "Route 29", "origin": "wild", "inParty": true, "fainted": false, "shiny": true},
+      {"type": "party", "uids": ["2001", "2002"]}]},
+    {"by": "alice", "events": [{"type": "champion"}]},
+    {"by": "bob", "note": "tous les deux ont battu le Maître : victoire", "events": [{"type": "champion"}]}
+  ]
+}

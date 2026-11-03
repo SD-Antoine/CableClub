@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "soullink",
+  "name": "Soul Link",
+  "description": "Les Pokémon capturés dans une même zone sont liés entre les joueurs : quand l’un tombe, ses âmes liées meurent avec lui.",
+  "author": "Cable Club",
+  "license": "CC0-1.0",
+  "players": { "min": 2, "max": 5 },
+  "needs": [],
+  "engine": { "links": "shared", "encounters": "firstPerZone", "team": "free" },
+  "rules": {
+    "shinyClause": true, "dupesClause": true, "giftPokemon": false, "legendaries": true, "naming": "leader",
+    "pauseForNaming": true, "deathBox": true, "refundCancelled": true, "wipeEndsRun": true, "endWhen": "all",
+    "autoEnd": true, "startWithBalls": true, "saveStates": false
+  },
+  "win": ["champion"],
+  "lose": ["teamWiped"],
+  "objectives": []
+}

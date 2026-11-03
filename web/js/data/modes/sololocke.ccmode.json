@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "sololocke",
+  "name": "Sololocke",
+  "description": "Un Nuzlocke avec un seul Pokémon dans l’équipe : les autres vont au PC, et un autre prend la relève quand il meurt.",
+  "author": "Cable Club",
+  "license": "CC0-1.0",
+  "players": { "min": 1, "max": 10 },
+  "needs": [],
+  "engine": { "links": "none", "encounters": "firstPerZone", "team": "one" },
+  "rules": {
+    "shinyClause": false, "dupesClause": false, "giftPokemon": true, "legendaries": true, "naming": "free",
+    "pauseForNaming": false, "deathBox": true, "refundCancelled": false, "endWhen": "all",
+    "autoEnd": true, "startWithBalls": true, "saveStates": false,
+    "honorNoHealItems": false, "honorNoHeldItems": false, "honorNoMasterBall": false,
+    "honorNoEvolution": false, "honorNoFly": false, "honorNoRepel": false, "honorSetMode": false,
+    "honorCsException": false, "hardcore": false, "hardcoreItems": "report", "soloParty": "auto", "soloLoss": "next"
+  },
+  "win": ["champion"],
+  "lose": ["soloLost"],
+  "objectives": []
+}

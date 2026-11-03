@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "id": "nuzlocke-hardcore",
+  "name": "Nuzlocke Hardcore",
+  "description": "Le Nuzlocke avec l’option Hardcore toujours active : plafond de niveau, pas d’objets en combat, mode Défini, équipe K.O. = partie perdue.",
+  "author": "Cable Club",
+  "license": "CC0-1.0",
+  "players": { "min": 1, "max": 10 },
+  "needs": [],
+  "engine": { "links": "none", "encounters": "firstPerZone", "team": "free" },
+  "rules": {
+    "shinyClause": false, "dupesClause": false, "giftPokemon": true, "legendaries": true, "naming": "free",
+    "pauseForNaming": false, "deathBox": true, "refundCancelled": false, "wipeEndsRun": true, "endWhen": "all",
+    "autoEnd": true, "startWithBalls": true, "saveStates": false,
+    "honorNoHealItems": false, "honorNoHeldItems": false, "honorNoMultiExp": false, "honorNoMasterBall": false,
+    "honorNoEvolution": false, "honorNoFly": false, "honorNoRepel": false, "honorSetMode": false,
+    "honorCsException": false, "honorNotepad": false,
+    "hardcore": { "default": true, "locked": true }, "hardcoreItems": "report"
+  },
+  "win": ["champion"],
+  "lose": ["teamWiped"],
+  "objectives": [{ "type": "champion" }]
+}
