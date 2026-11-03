@@ -31,7 +31,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Compilation des tests de sécurité impossible
 
 $failed = 0
 # the mode files (official modes, catalog of rules) are read from web\ as in development
-foreach ($cls in @('slt.client.LocalApiHostTest', 'slt.JsonFuzz', 'slt.client.DsSavesFuzz', 'slt.server.ModeSpecFuzz')) {
+foreach ($cls in @('slt.client.LocalApiHostTest', 'slt.JsonFuzz', 'slt.client.DsSavesFuzz', 'slt.server.ModeSpecFuzz', 'slt.server.RoomsLimitTest')) {
     & (Join-Path $JavaHome 'bin\java.exe') '--enable-preview' '-Dstdout.encoding=UTF-8' "-Dslt.web=$(Join-Path $Root 'web')" '-cp' "$Classes;$Upr" $cls
     if ($LASTEXITCODE -ne 0) { $failed++ }
 }

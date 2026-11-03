@@ -106,6 +106,26 @@ public final class ModeSpecTest {
         failsWith(() -> Rooms.importMode(mode(m -> m.put("id", "nuzlocke"))), 400, "mode officiel");
         check(Rooms.importMode(mode(m -> { })).id.equals("mon-mode"), "un mode à soi s'importe");
 
+        // a room saved by an older version: a mode the validator now refuses still reads (its texts cleaned)
+        Room old = room("nuzlocke");
+        Map<String, Object> saved = old.toStore();
+        Map<String, Object> oldMode = Json.parseObject(mode(m -> {
+            m.put("name", "Soul Link");
+            m.put("description", "Texte ‮inversé");
+        }));
+        saved.put("mode", "mon-mode");
+        saved.put("modeFile", oldMode);
+        Room reread = Room.fromStore(Json.parseObject(Json.stringify(saved)));
+        check(reread.customSpec != null && reread.spec().name.equals("Soul Link")
+                && reread.spec().description.equals("Texte inversé"), "mode stocké refusé aujourd'hui : relu, textes nettoyés");
+        // one that no longer reads at all (a rule gone from the catalog): the room follows its family, file kept
+        oldMode.put("rules", Json.map("autoEnd", true, "endWhen", "all", "wipeEndsRun", true, "teleport", true));
+        saved.put("modeFile", oldMode);
+        reread = Room.fromStore(Json.parseObject(Json.stringify(saved)));
+        check(reread.customSpec == null && "nuzlocke".equals(reread.mode) && reread.spec().id.equals("nuzlocke"),
+                "mode stocké illisible : la salle suit le Nuzlocke");
+        check(Json.stringify(reread.toStore().get("modeFile")).equals(Json.stringify(oldMode)), "mode stocké illisible : fichier gardé tel quel");
+
         // what an imported mode may not do: each refused with a clear message
         refused(mode(m -> m.put("script", "x")), "champ inconnu « script »");
         refused(mode(m -> m.put("schemaVersion", 2)), "schemaVersion");

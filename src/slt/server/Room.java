@@ -2,6 +2,7 @@ package slt.server;
 
 import slt.Http;
 import slt.Json;
+import slt.Log;
 
 import java.text.Normalizer;
 import java.util.ArrayDeque;
@@ -415,6 +416,7 @@ public final class Room {
     String mode = "soullink";
     /** The file of a mode imported for this room (point 2b), or null: the official mode of {@link #mode}. */
     ModeSpec customSpec;
+    Map<String, Object> unreadMode;   // an imported mode this version cannot read (the room follows its family)
     /** "public": listed in the public rooms, anybody may join while it is a lobby; "private": invitation or code. */
     String visibility = "private";
     long createdAt;
@@ -1702,6 +1704,8 @@ public final class Room {
                 "refundSeq", refundSeq, "trades", storedTrades());
         if (customSpec != null) {
             store.put("modeFile", customSpec.toJson()); // the room keeps its own copy of an imported mode
+        } else if (unreadMode != null) {
+            store.put("modeFile", unreadMode); // kept as it was: a later version may read it again
         }
         return store;
     }
@@ -1715,8 +1719,15 @@ public final class Room {
         r.mode = Json.str(m, "mode") == null ? "soullink" : Json.str(m, "mode");
         Map<String, Object> modeFile = Json.obj(m.get("modeFile"));
         if (modeFile != null) {
-            // read again as when it was imported: a mode the validator no longer accepts stops here, loudly
-            r.customSpec = ModeSpec.parse(Json.stringify(modeFile), false);
+            // read again (ModeSpec.stored: a later, stricter validator does not make the room unreadable); a mode
+            // that no longer reads at all gives way to the official mode of its family, its file kept as it was
+            r.customSpec = ModeSpec.stored(Json.stringify(modeFile));
+            if (r.customSpec == null) {
+                Map<String, Object> engine = Json.obj(modeFile.get("engine"));
+                r.mode = ModeSpec.family(Json.str(engine, "links"), Json.str(engine, "encounters"), Json.str(engine, "team"));
+                r.unreadMode = modeFile;
+                Log.warn("Salle " + r.id + " : mode importé illisible, la salle suit le mode " + r.mode + ".");
+            }
         }
         r.visibility = "public".equals(Json.str(m, "visibility")) ? "public" : "private";
         r.createdAt = Json.num(m, "createdAt", 0);

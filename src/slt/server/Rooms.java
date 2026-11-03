@@ -12,8 +12,10 @@ import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Deque;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -31,6 +33,11 @@ public final class Rooms {
     private static final Pattern GAME_ID = Pattern.compile("[a-z0-9]{2,16}");
     private static final int MAX_SCREEN = 400_000;
     private static final int MAX_SAVE = 4 * 1024 * 1024;
+    /** Rooms a player may lead that are not over (lobby or running): each one is a file on the server's disk. */
+    static final int MAX_OPEN_ROOMS = 30;
+    /** Rooms a player may create in a window of time. */
+    static final int MAX_CREATIONS = 10;
+    static final long CREATION_WINDOW_MS = 10 * 60_000L;
 
     private record Screen(long seq, byte[] jpeg, long at) {
     }
@@ -42,6 +49,7 @@ public final class Rooms {
     private final Hub hub;
     private final Map<String, Room> rooms = new ConcurrentHashMap<>();
     private final Map<String, Screen> screens = new ConcurrentHashMap<>();
+    final Map<String, Deque<Long>> creations = new ConcurrentHashMap<>();   // by user: when they created a room
     /** A room was deleted (its chat goes with it). */
     volatile java.util.function.Consumer<String> onDeleted = id -> { };
 
@@ -279,6 +287,34 @@ public final class Rooms {
 
     // --------------------------------------------------------------- lobby
 
+    /**
+     * A player creates rooms within bounds (security audit, R-4): at most {@link #MAX_OPEN_ROOMS} of their rooms not
+     * over, and {@link #MAX_CREATIONS} creations in {@link #CREATION_WINDOW_MS}.
+     */
+    void limitCreation(String userId, long now) {
+        int open = 0;
+        for (Room r : rooms.values()) {
+            synchronized (r) {
+                if (userId.equals(r.leaderId) && ("lobby".equals(r.state) || "running".equals(r.state))) {
+                    open++;
+                }
+            }
+        }
+        if (open >= MAX_OPEN_ROOMS) {
+            throw new Http.Fail(409, "Vous menez déjà " + open + " salles en cours : terminez ou supprimez-en une avant d'en créer une autre.");
+        }
+        Deque<Long> times = creations.computeIfAbsent(userId, k -> new ArrayDeque<>());
+        synchronized (times) {
+            while (!times.isEmpty() && times.peekFirst() < now - CREATION_WINDOW_MS) {
+                times.pollFirst();
+            }
+            if (times.size() >= MAX_CREATIONS) {
+                throw new Http.Fail(429, "Doucement : vous avez créé beaucoup de salles. Réessayez dans quelques minutes.");
+            }
+            times.addLast(now);
+        }
+    }
+
     /** A mode file brought by a player: checked like any mode file, and never under the name of an official mode. */
     static ModeSpec importMode(String text) {
         ModeSpec spec = ModeSpec.parse(text, false);
@@ -294,6 +330,7 @@ public final class Rooms {
         if (gameId == null || !GAME_ID.matcher(gameId).matches()) {
             throw new Http.Fail(400, "Choisissez le jeu de la salle.");
         }
+        limitCreation(user.id, System.currentTimeMillis());
         Room r = new Room();
         r.id = Ids.id(10);
         r.code = Ids.code(6);

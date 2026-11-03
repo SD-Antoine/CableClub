@@ -145,7 +145,13 @@ final class ModeSpec {
      * shinies (Shinylocke), then the team of one (Sololocke), else the Nuzlocke.
      */
     String family() {
-        return shared() ? "soullink" : shiniesOnly() ? "shinylocke" : solo() ? "sololocke" : "nuzlocke";
+        return family(links, encounters, team);
+    }
+
+    /** The family of these primitives (also for a mode file that no longer reads: its raw "engine"). */
+    static String family(String links, String encounters, String team) {
+        return SHARED.equals(links) ? "soullink" : SHINIES_ONLY.equals(encounters) ? "shinylocke"
+                : ONE.equals(team) ? "sololocke" : "nuzlocke";
     }
 
     /** The rules of a new room of this mode (a copy: the room changes it). */
@@ -307,6 +313,32 @@ final class ModeSpec {
      * written in the ROM of the room.
      */
     static ModeSpec parse(String text, boolean official) {
+        return parse(text, official, false);
+    }
+
+    /**
+     * The copy of an imported mode a room keeps, read again when the server starts. It was checked when it was
+     * imported: a later, stricter version of the validator must not make the room unreadable. A text it would now
+     * refuse is cleaned instead (hidden characters and markup removed, cut to its length); the shape, the rules and
+     * the end conditions are checked as always. Null when even that fails (a rule gone from the catalog…): the room
+     * then falls back to the official mode of its family.
+     */
+    static ModeSpec stored(String text) {
+        try {
+            return parse(text, false, false);
+        } catch (Http.Fail strict) {
+            try {
+                ModeSpec spec = parse(text, false, true);
+                Log.warn("Mode « " + spec.id + " » relu avec ses textes nettoyés : " + strict.getMessage());
+                return spec;
+            } catch (Http.Fail e) {
+                Log.warn("Mode stocké illisible : " + e.getMessage());
+                return null;
+            }
+        }
+    }
+
+    private static ModeSpec parse(String text, boolean official, boolean lenient) {
         if (text == null || text.isEmpty()) {
             throw fail("fichier vide.");
         }
@@ -329,15 +361,15 @@ final class ModeSpec {
         }
         Builder b = new Builder();
         b.official = official;
-        b.id = string(m, "id", 3, 32, true);
+        b.id = string(m, "id", 3, 32, true, false);
         if (!ID.matcher(b.id).matches()) {
             throw fail("« id » : lettres minuscules, chiffres et tirets seulement.");
         }
-        b.name = string(m, "name", 1, 40, true);
-        b.description = string(m, "description", 0, 600, false);
-        b.author = string(m, "author", 1, 40, true);
-        b.license = string(m, "license", 1, 40, true);
-        if (!official) {
+        b.name = string(m, "name", 1, 40, true, lenient);
+        b.description = string(m, "description", 0, 600, false, lenient);
+        b.author = string(m, "author", 1, 40, true, lenient);
+        b.license = string(m, "license", 1, 40, true, lenient);
+        if (!official && !lenient) {
             // an imported mode never passes off as an official one, nor as a mode of Cable Club
             for (ModeSpec o : officials().values()) {
                 if (fold(b.name).equals(fold(o.name))) {
@@ -460,7 +492,7 @@ final class ModeSpec {
         return new Http.Fail(400, "Mode invalide : " + message);
     }
 
-    private static String string(Map<String, Object> m, String key, int min, int max, boolean required) {
+    private static String string(Map<String, Object> m, String key, int min, int max, boolean required, boolean lenient) {
         Object o = m.get(key);
         if (o == null && !required) {
             return "";
@@ -469,10 +501,23 @@ final class ModeSpec {
             throw fail("« " + key + " » : texte attendu.");
         }
         String t = Normalizer.normalize(s.strip(), Normalizer.Form.NFC);
+        boolean lines = "description".equals(key);
+        if (lenient) {
+            // a stored copy: what would now be refused is taken out (a text checked when it was imported)
+            StringBuilder kept = new StringBuilder();
+            t.codePoints().filter(c -> (!hidden(c) || (lines && c == '\n')) && c != '<' && c != '>').forEach(kept::appendCodePoint);
+            t = kept.toString().strip();
+            if (t.codePointCount(0, t.length()) > max) {
+                t = t.substring(0, t.offsetByCodePoints(0, max)).strip();
+            }
+            if (t.codePointCount(0, t.length()) < min) {
+                throw fail("« " + key + " » : " + min + " à " + max + " caractères.");
+            }
+            return t;
+        }
         if (t.codePointCount(0, t.length()) < min || t.codePointCount(0, t.length()) > max) {
             throw fail("« " + key + " » : " + min + " à " + max + " caractères.");
         }
-        boolean lines = "description".equals(key);
         if (t.codePoints().anyMatch(c -> hidden(c) && !(lines && c == '\n')) || t.indexOf('<') >= 0 || t.indexOf('>') >= 0) {
             throw fail("« " + key + " » : caractères de contrôle, invisibles ou balises interdits.");
         }
