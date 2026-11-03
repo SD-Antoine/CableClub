@@ -30,8 +30,9 @@ $javacArgs = @('-encoding', 'UTF-8', '--release', '21', '--enable-preview', '-Xl
 if ($LASTEXITCODE -ne 0) { throw 'Compilation des tests de sécurité impossible' }
 
 $failed = 0
-foreach ($cls in @('slt.client.LocalApiHostTest', 'slt.JsonFuzz', 'slt.client.DsSavesFuzz')) {
-    & (Join-Path $JavaHome 'bin\java.exe') '--enable-preview' '-Dstdout.encoding=UTF-8' '-cp' "$Classes;$Upr" $cls
+# the mode files (official modes, catalog of rules) are read from web\ as in development
+foreach ($cls in @('slt.client.LocalApiHostTest', 'slt.JsonFuzz', 'slt.client.DsSavesFuzz', 'slt.server.ModeSpecFuzz')) {
+    & (Join-Path $JavaHome 'bin\java.exe') '--enable-preview' '-Dstdout.encoding=UTF-8' "-Dslt.web=$(Join-Path $Root 'web')" '-cp' "$Classes;$Upr" $cls
     if ($LASTEXITCODE -ne 0) { $failed++ }
 }
 exit $failed

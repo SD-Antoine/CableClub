@@ -45,8 +45,12 @@ fichiers de ce format (`web/js/data/modes/`), lus et vérifiés comme les autres
 | `lose` | `teamWiped` (équipe entière K.O., règle `wipeEndsRun`, équipe libre) ou `soloLost` (le Pokémon seul meurt, règle `soloLoss`, équipe d'un seul) |
 | `objectives` | buts affichés (point 3), sans effet sur l'arbitrage : `champion`, `badges` (`count` 1–8), `captures` (`count` 1–500) |
 
-Textes : pas de caractères de contrôle, pas de `<` ni `>`, **aucune adresse ni nom de domaine** (pas de
-lien vers une ROM, une image ou un site). Fichier de 32 Ko au plus.
+Textes : pas de caractères de contrôle ni de caractères invisibles (contrôles bidirectionnels qui
+inversent un texte, caractères de largeur nulle), pas de `<` ni `>`, retour à la ligne dans
+`description` seulement, **aucune adresse ni nom de domaine** (pas de lien vers une ROM, une image ou
+un site), même écrite avec des lettres ou des points d'apparence voisine (`ｒｏｍ．ｃｏｍ`, `rom。com`).
+Un mode importé ne reprend ni le nom d'un mode officiel (à la casse, aux espaces et aux formes
+voisines près) ni « Cable Club » dans son nom ou son auteur. Fichier de 32 Ko au plus.
 
 ## Primitives (`engine`)
 

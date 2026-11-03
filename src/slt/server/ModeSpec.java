@@ -9,11 +9,13 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -335,6 +337,17 @@ final class ModeSpec {
         b.description = string(m, "description", 0, 600, false);
         b.author = string(m, "author", 1, 40, true);
         b.license = string(m, "license", 1, 40, true);
+        if (!official) {
+            // an imported mode never passes off as an official one, nor as a mode of Cable Club
+            for (ModeSpec o : officials().values()) {
+                if (fold(b.name).equals(fold(o.name))) {
+                    throw fail("« name » : « " + o.name + " » est le nom d'un mode officiel, choisissez-en un autre.");
+                }
+            }
+            if (fold(b.name).contains("cableclub") || fold(b.author).contains("cableclub")) {
+                throw fail("« name », « author » : « Cable Club » est réservé aux modes officiels.");
+            }
+        }
 
         Map<String, Object> players = object(m, "players", Set.of("min", "max"));
         b.minPlayers = integer(players, "players.min", 1, 10);
@@ -455,17 +468,37 @@ final class ModeSpec {
         if (!(o instanceof String s)) {
             throw fail("« " + key + " » : texte attendu.");
         }
-        String t = s.strip();
+        String t = Normalizer.normalize(s.strip(), Normalizer.Form.NFC);
         if (t.codePointCount(0, t.length()) < min || t.codePointCount(0, t.length()) > max) {
             throw fail("« " + key + " » : " + min + " à " + max + " caractères.");
         }
-        if (t.chars().anyMatch(c -> c < 0x20 && c != '\n') || t.indexOf('<') >= 0 || t.indexOf('>') >= 0) {
-            throw fail("« " + key + " » : caractères de contrôle ou balises interdits.");
+        boolean lines = "description".equals(key);
+        if (t.codePoints().anyMatch(c -> hidden(c) && !(lines && c == '\n')) || t.indexOf('<') >= 0 || t.indexOf('>') >= 0) {
+            throw fail("« " + key + " » : caractères de contrôle, invisibles ou balises interdits.");
         }
-        if (ADDRESS.matcher(t).find()) {
+        // an address written with look-alike letters or dots (ｒｏｍ．ｃｏｍ, rom。com) is an address too
+        if (ADDRESS.matcher(t).find() || ADDRESS.matcher(Normalizer.normalize(t, Normalizer.Form.NFKC).replace('\u3002', '.')).find()) {
             throw fail("« " + key + " » : pas d'adresse ni de lien dans un mode.");
         }
         return t;
+    }
+
+    /**
+     * A character that does not show as itself: controls (C0, DEL, C1), format characters (bidi controls that
+     * reorder a text, zero width characters that hide a word or an address), lone surrogates, private use, line and
+     * paragraph separators.
+     */
+    private static boolean hidden(int c) {
+        return switch (Character.getType(c)) {
+            case Character.CONTROL, Character.FORMAT, Character.SURROGATE, Character.PRIVATE_USE, Character.UNASSIGNED,
+                    Character.LINE_SEPARATOR, Character.PARAGRAPH_SEPARATOR -> true;
+            default -> false;
+        };
+    }
+
+    /** A name as it reads, to compare two names: compatibility forms, case, spaces and hyphens set aside. */
+    private static String fold(String text) {
+        return Normalizer.normalize(text, Normalizer.Form.NFKC).toLowerCase(Locale.ROOT).replaceAll("[\\s\\-_.]+", "");
     }
 
     private static Map<String, Object> object(Map<String, Object> m, String key, Set<String> keys) {
