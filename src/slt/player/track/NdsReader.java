@@ -16,6 +16,16 @@ public final class NdsReader implements GameReader {
     private static final int RAM_SIZE = 4 << 20;
     /** Full scans for wild Pokémon are spaced out (they read the whole 4 MB). */
     private static final long WILD_SCAN_NS = 900_000_000L;
+    /**
+     * Generation 5: the map of the save buffer only changes at a door; outside it keeps the map of the last one (the
+     * French White on Route 1, still Nuvema; White 2 in Floccesy, still Route 19). The game's place-name panels know
+     * the real one: their block in the heap starts with this magic and the name of its source file, then the current
+     * map further on (measured on the French White and White 2: towns, routes, buildings, gates). Gone during a battle.
+     */
+    private static final byte[] PLACE_NAME = "field_place_name.c".getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+    private static final long PLACE_NAME_MAGIC = 0x194E0093L;
+    private static final int PLACE_NAME_MAP_BW = 0x5E;
+    private static final int PLACE_NAME_MAP_B2W2 = 0x66;
     /** The save buffer of generation 5, day care included (after the boxes, unlike generation 4). */
     private static final int SAVE_SPAN_GEN5 = 0x26000;
 
@@ -30,7 +40,7 @@ public final class NdsReader implements GameReader {
     }
 
     /**
-     * Black 2 / White 2 (party, trainer, money, badges and map verified on Black 2 / White 2).
+     * Black 2 / White 2 (party, trainer, money, badges and map of the last door verified on Black 2 / White 2).
      * Poké Balls are in the main item pocket.
      */
     static final Layout GEN5 = new Layout(NdsPkm.GEN5_PARTY_SIZE, 649, 0x18E00, 0x19414, 0x21104, -1,
@@ -89,6 +99,9 @@ public final class NdsReader implements GameReader {
     private long lastWildScan;
     private List<Mon> lastWild = List.of();
     private volatile boolean fieldShown;
+    private int placeName = -1;
+    private int lastPlace = -1;
+    private int lastSaved = -1;
 
     public NdsReader(Layout layout, String game, GameInfo info) {
         this.layout = layout;
@@ -186,7 +199,8 @@ public final class NdsReader implements GameReader {
         if (layout.badgesExtra >= 0) {
             badges += Integer.bitCount(d[b + layout.badgesExtra + trainerShift] & 0xFF);
         }
-        int map = layout.map >= 0 ? NdsPkm.u16(d, b + layout.map) : -1;
+        int saved = layout.map >= 0 ? NdsPkm.u16(d, b + layout.map) : -1;
+        int map = gen5() ? liveMap(d, saved) : saved;
         if (map >= 0 && info != null && info.hasMaps() && info.map(map) == null) {
             map = -1;
         }
@@ -210,7 +224,7 @@ public final class NdsReader implements GameReader {
         if (hof.length > 0 && map >= 0) {
             cleared = 0;
             for (int h : hof) {
-                if (map == h && badges >= 8) {
+                if (saved == h && badges >= 8) {
                     cleared = 1;
                 }
             }
@@ -551,6 +565,58 @@ public final class NdsReader implements GameReader {
             }
         }
         return out;
+    }
+
+    /**
+     * Generation 5: the map the player is on. Without the place-name block (battle, menus) it stays the last one known,
+     * unless the map of the save changed meanwhile (a door); without any, the map of the save.
+     */
+    private int liveMap(byte[] d, int saved) {
+        int place = placeNameMap(d);
+        if (place >= 0) {
+            lastPlace = place;
+        } else if (saved != lastSaved) {
+            lastPlace = -1;
+        }
+        lastSaved = saved;
+        return lastPlace >= 0 ? lastPlace : saved;
+    }
+
+    /** The current map in the place-name block of the game, found once and looked at again each time; -1 if none. */
+    private int placeNameMap(byte[] d) {
+        int value = placeName < 0 ? -1 : placeNameAt(d, placeName);
+        if (value >= 0) {
+            return value;
+        }
+        placeName = -1;
+        for (int off = 0; off + PLACE_NAME.length + 0x70 <= d.length; off += 4) {
+            if (NdsPkm.u32(d, off) == PLACE_NAME_MAGIC) {
+                value = placeNameAt(d, off);
+                if (value >= 0) {
+                    placeName = off;
+                    return value;
+                }
+            }
+        }
+        return -1;
+    }
+
+    private int placeNameAt(byte[] d, int off) {
+        if (NdsPkm.u32(d, off) != PLACE_NAME_MAGIC || off + 4 + PLACE_NAME.length > d.length) {
+            return -1;
+        }
+        for (int i = 0; i < PLACE_NAME.length; i++) {
+            if (d[off + 4 + i] != PLACE_NAME[i]) {
+                return -1;
+            }
+        }
+        int at = off + 4 + (layout == BW ? PLACE_NAME_MAP_BW : PLACE_NAME_MAP_B2W2);
+        if (at + 2 > d.length) {
+            return -1;
+        }
+        int value = NdsPkm.u16(d, at);
+        boolean known = info != null && info.hasMaps() ? info.map(value) != null : value < 0x400;
+        return value > 0 && known ? value : -1;
     }
 
     /**
