@@ -87,6 +87,8 @@ public final class DsShinyTest {
         int base = 0x200000;
         put16(ram, base + 0x18E00, 6);
         put16(ram, base + 0x18E04, 1);
+        put16(ram, base + 4, 'B');
+        put16(ram, base + 6, 0xFFFF);
         byte[] mine = pokemon(0x11112222L, tid, sid, 25, 10, true, rng);
         System.arraycopy(mine, 0, ram, base + 0x18E08, size);
         put16(ram, base + 0x19404, 'A');
@@ -149,7 +151,7 @@ public final class DsShinyTest {
     }
 
     /** A made-up party Pokémon, encrypted as the DS games store it. */
-    private static byte[] pokemon(long pid, int tid, int sid, int species, int level, boolean gen5, Random rng) {
+    static byte[] pokemon(long pid, int tid, int sid, int species, int level, boolean gen5, Random rng) {
         int size = gen5 ? NdsPkm.GEN5_PARTY_SIZE : NdsPkm.GEN4_PARTY_SIZE;
         int[] blocks = new int[64]; // A, B, C, D in this order, 16 words each
         blocks[0] = species;

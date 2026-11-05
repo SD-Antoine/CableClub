@@ -28,6 +28,13 @@ public final class NdsReader implements GameReader {
     private static final int PLACE_NAME_MAP_B2W2 = 0x66;
     /** The save buffer of generation 5, day care included (after the boxes, unlike generation 4). */
     private static final int SAVE_SPAN_GEN5 = 0x26000;
+    /**
+     * Unreadable readings in a row of the party of the save found (one reading every 30 images): from the first
+     * number, it may have moved, and only a buffer of the same trainer takes over; from the second, the game was
+     * reset, another save may be playing. A reading alone proves nothing: the save stays where it was found.
+     */
+    private static final int MOVED_READS = 6;
+    private static final int RESET_READS = 120;
 
     /**
      * Save buffer layout of one family (offsets from the start of the save buffer):
@@ -96,6 +103,9 @@ public final class NdsReader implements GameReader {
     private final GameInfo info;
     private volatile long base = -1;
     private volatile int trainerShift;
+    /** The trainer of the save found (ID and name), null until its party has a Pokémon. */
+    private String player;
+    private int unreadable;
     private long lastWildScan;
     private List<Mon> lastWild = List.of();
     private volatile boolean fieldShown;
@@ -182,17 +192,32 @@ public final class NdsReader implements GameReader {
             return null;
         }
         byte[] d = ram.data;
-        if (base < 0 || partyAt(d, (int) (base - RAM) + layout.party) == null) {
-            base = locate(d);
+        if (base < 0) {
+            base = locate(d, null);
             if (base < 0) {
                 return null;
             }
         }
-        int b = (int) (base - RAM);
-        List<Mon> party = partyAt(d, b + layout.party);
+        List<Mon> party = partyAt(d, (int) (base - RAM) + layout.party);
         if (party == null) {
-            base = -1;
-            return null;
+            unreadable++;
+            if (unreadable >= RESET_READS) {
+                player = null;
+                unreadable = 0;
+                base = locate(d, null);
+            } else if (unreadable >= MOVED_READS) {
+                long moved = locate(d, player);
+                base = moved >= 0 ? moved : base;
+            }
+            party = base < 0 ? null : partyAt(d, (int) (base - RAM) + layout.party);
+            if (party == null) {
+                return null;
+            }
+        }
+        unreadable = 0;
+        int b = (int) (base - RAM);
+        if (!party.isEmpty()) {
+            player = trainerKey(d, b, trainerShift);
         }
         int ot = NdsPkm.u16(d, b + layout.trainerId + trainerShift);
         int badges = Integer.bitCount(d[b + layout.badges + trainerShift] & 0xFF);
@@ -201,6 +226,9 @@ public final class NdsReader implements GameReader {
         }
         int saved = layout.map >= 0 ? NdsPkm.u16(d, b + layout.map) : -1;
         int map = gen5() ? liveMap(d, saved) : saved;
+        if (gen5() && map == 0) {
+            map = -1; // a save buffer not filled in yet (the map tables name map 0 all the same)
+        }
         if (map >= 0 && info != null && info.hasMaps() && info.map(map) == null) {
             map = -1;
         }
@@ -451,9 +479,12 @@ public final class NdsReader implements GameReader {
     /**
      * Finds the save buffer: a party block whose trainer block (same buffer)
      * holds the player's ID and a name. When several copies exist, the live
-     * one is the one with money (the backup copy is blank there).
+     * one is the one with money (the backup copy is blank there). Other blocks of the RAM look like a party too: a
+     * scripted battle leaves its own, the Catching demonstration of generation 5 about ten of them, and they stay
+     * long after it. Generation 5 also wants the name of the first box, and with {@code trainer} only that
+     * trainer's buffer will do.
      */
-    private long locate(byte[] d) {
+    private long locate(byte[] d, String trainer) {
         long best = -1;
         int bestScore = -1;
         int bestShift = 0;
@@ -477,6 +508,12 @@ public final class NdsReader implements GameReader {
             if (money > 999_999) {
                 continue; // not the player's money: another buffer that happens to look alike
             }
+            if (gen5() && !party.isEmpty() && !boxNamed(d, start)) {
+                continue;
+            }
+            if (trainer != null && !trainer.equals(trainerKey(d, start, shift))) {
+                continue;
+            }
             int score = party.size() * 2 + (money > 0 ? 1 : 0);
             if (score > bestScore) {
                 bestScore = score;
@@ -484,8 +521,42 @@ public final class NdsReader implements GameReader {
                 bestShift = shift;
             }
         }
-        trainerShift = bestShift;
+        if (best >= 0) {
+            trainerShift = bestShift;
+        }
         return best;
+    }
+
+    /** The first box of the save buffer at {@code start} has a name: 1 to 19 characters terminated by 0xFFFF (UTF-16). */
+    private boolean boxNamed(byte[] d, int start) {
+        int off = start + layout.boxNames;
+        if (off + 0x28 > d.length) {
+            return false;
+        }
+        for (int i = 0; i < 0x14; i++) {
+            int ch = NdsPkm.u16(d, off + 2 * i);
+            if (ch == 0xFFFF) {
+                return i > 0;
+            }
+            if (ch < 0x20) {
+                return false;
+            }
+        }
+        return false;
+    }
+
+    /** Who plays the save buffer at {@code start}: trainer ID, secret ID and name. */
+    private String trainerKey(byte[] d, int start, int shift) {
+        int t = start + layout.trainerId + shift;
+        StringBuilder key = new StringBuilder(Long.toHexString(NdsPkm.u32(d, t))).append(':');
+        for (int i = 0; i < 8; i++) {
+            int ch = NdsPkm.u16(d, t - 0x10 + 2 * i);
+            if (ch == 0xFFFF) {
+                break;
+            }
+            key.append((char) ch);
+        }
+        return key.toString();
     }
 
     /**
@@ -514,11 +585,15 @@ public final class NdsReader implements GameReader {
 
     private boolean trainerOk(byte[] d, int start, int shift, List<Mon> party) {
         int t = start + layout.trainerId + shift;
-        if (t - 0x10 < 0 || t + 2 > d.length || !plausibleName(d, t - 0x10, !gen5())) {
+        if (t - 0x10 < 0 || t + 4 > d.length || !plausibleName(d, t - 0x10, !gen5())) {
             return false;
         }
+        if (party.isEmpty()) {
+            return true;
+        }
+        // no player has both IDs at 0, but scripted battles do, and free memory is full of zeros
         int ot = NdsPkm.u16(d, t);
-        return party.isEmpty() || party.stream().anyMatch(p -> p.otId() == ot);
+        return NdsPkm.u32(d, t) != 0 && party.stream().anyMatch(p -> p.otId() == ot);
     }
 
     /** Player name: 1 to 7 characters terminated by 0xFFFF (gen 4: the game's codes, all below 0x200; gen 5: UTF-16). */
