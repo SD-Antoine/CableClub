@@ -52,8 +52,8 @@ public final class LiveScreensTest {
         check(rooms.screen(id, bob, alice.id, 99) == null && rooms.putScreen(id, alice, image),
                 "regardée aussi quand il n'y a pas d'image neuve");
 
-        rooms.watched.put(key, System.currentTimeMillis() - Rooms.WATCH_MS - 1);
-        check(!rooms.putScreen(id, alice, image), "plus regardée après " + Rooms.WATCH_MS + " ms sans demande");
+        rooms.screens.watched.put(key, System.currentTimeMillis() - LiveScreens.WATCH_MS - 1);
+        check(!rooms.putScreen(id, alice, image), "plus regardée après " + LiveScreens.WATCH_MS + " ms sans demande");
         rooms.screen(id, alice, alice.id, 0);
         check(!rooms.putScreen(id, alice, image), "son propre regard ne compte pas");
         try {
@@ -64,11 +64,11 @@ public final class LiveScreensTest {
         }
         check(!rooms.putScreen(id, alice, image), "le regard refusé d'un autre joueur ne compte pas");
         rooms.screen(id, bob, "inconnu", 0);
-        check(!rooms.watched.containsKey(id + "/inconnu"), "pas de trace pour un joueur hors de la salle");
+        check(!rooms.screens.watched.containsKey(id + "/inconnu"), "pas de trace pour un joueur hors de la salle");
 
         rooms.screen(id, bob, alice.id, 0);
         rooms.delete(id, alice);
-        check(rooms.watched.keySet().stream().noneMatch(k -> k.startsWith(id + "/")), "oublié avec la salle");
+        check(rooms.screens.watched.keySet().stream().noneMatch(k -> k.startsWith(id + "/")), "oublié avec la salle");
     }
 
     private static void check(boolean ok, String what) {

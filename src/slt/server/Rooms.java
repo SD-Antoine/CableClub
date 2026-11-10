@@ -1,17 +1,14 @@
 package slt.server;
 
-import slt.Ghosts;
 import slt.Http;
 import slt.Ids;
 import slt.Json;
 import slt.Log;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -31,24 +28,21 @@ import java.util.regex.Pattern;
 public final class Rooms {
 
     private static final Pattern GAME_ID = Pattern.compile("[a-z0-9]{2,16}");
-    private static final int MAX_SCREEN = 400_000;
-    private static final int MAX_SAVE = 4 * 1024 * 1024;
     /** Rooms a player may lead that are not over (lobby or running): each one is a file on the server's disk. */
     static final int MAX_OPEN_ROOMS = 30;
     /** Rooms a player may create in a window of time. */
     static final int MAX_CREATIONS = 10;
     static final long CREATION_WINDOW_MS = 10 * 60_000L;
 
-    private record Screen(long seq, byte[] jpeg, long at) {
-    }
-
     private final Path dir;
-    private final Path logDir;
-    private final Path saveDir;
     private final Accounts accounts;
     private final Hub hub;
     private final Map<String, Room> rooms = new ConcurrentHashMap<>();
-    private final Map<String, Screen> screens = new ConcurrentHashMap<>();
+    /** Live images of the games (point 4), positions in game, journals, cloud saves: their own classes (point 8). */
+    final LiveScreens screens = new LiveScreens();
+    private final RoomGhosts ghosts;
+    private final RoomJournal journal;
+    private final CloudSaves saves;
     /**
      * Finished rooms not used lately, kept as a summary only (point 6b of the follow-up of the audit of 2026-11-10):
      * a finished run weighs about 265 KB in memory, and nobody plays in it any more. Its file is read again when it
@@ -67,10 +61,6 @@ public final class Rooms {
     /** Taken after the lock of a room, never before: a room is woken without holding any other. */
     private final Object wakeLock = new Object();
 
-    /** When the image of a player's game was last asked for by another member (room id/user id → ms). */
-    final Map<String, Long> watched = new ConcurrentHashMap<>();
-    /** An image asked for in this time is watched: the interface asks 4 times a second while it shows it. */
-    static final long WATCH_MS = 3_000;
     final Map<String, Deque<Long>> creations = new ConcurrentHashMap<>();
     ModeGallery gallery; // the public modes (set by the server; null: none)   // by user: when they created a room
     /** A room was deleted (its chat goes with it). */
@@ -78,13 +68,12 @@ public final class Rooms {
 
     Rooms(Path base, Accounts accounts, Hub hub) throws IOException {
         this.dir = base.resolve("salles");
-        this.logDir = base.resolve("journaux");
-        this.saveDir = base.resolve("sauvegardes");
         this.accounts = accounts;
         this.hub = hub;
         Files.createDirectories(dir);
-        Files.createDirectories(logDir);
-        Files.createDirectories(saveDir);
+        this.ghosts = new RoomGhosts(hub);
+        this.journal = new RoomJournal(base.resolve("journaux"));
+        this.saves = new CloudSaves(base.resolve("sauvegardes"));
         load();
     }
 
@@ -878,9 +867,9 @@ public final class Rooms {
             Room.Member m = r.member(user.id);
             Room.Out out = new Room.Out();
             switch (String.valueOf(Json.str(body, "action"))) {
-                case "offer" -> r.offerTrade(m, Json.str(body, "to"), Json.str(body, "uid"), out);
-                case "answer" -> r.answerTrade(m, Json.str(body, "trade"), Json.bool(body, "accept", false), Json.str(body, "uid"), out);
-                case "cancel" -> r.cancelTrade(m, Json.str(body, "trade"), out);
+                case "offer" -> r.trades.offer(m, Json.str(body, "to"), Json.str(body, "uid"), out);
+                case "answer" -> r.trades.answer(m, Json.str(body, "trade"), Json.bool(body, "accept", false), Json.str(body, "uid"), out);
+                case "cancel" -> r.trades.cancel(m, Json.str(body, "trade"), out);
                 default -> throw new Http.Fail(400, "Action inconnue");
             }
             out.changed = true;
@@ -894,7 +883,7 @@ public final class Rooms {
         synchronized (r) {
             Room.Member m = r.member(user.id);
             Room.Out out = new Room.Out();
-            r.tradeData(m, Json.str(body, "id"), Json.str(body, "phase"), Json.str(body, "blob"), out);
+            r.trades.data(m, Json.str(body, "id"), Json.str(body, "phase"), Json.str(body, "blob"), out);
             if (out.changed || !out.logs.isEmpty()) {
                 commit(r, out);
             }
@@ -910,7 +899,7 @@ public final class Rooms {
             Room.Member m = r.member(user.id);
             Room.Out out = new Room.Out();
             // what the game shows right now (field, dialogue, battle), from the position it sends to the room
-            Map<String, Object> seen = ghosts.get(r.id + "/" + m.userId);
+            Map<String, Object> seen = ghosts.latest(r.id, m.userId);
             Object shown = seen == null || System.currentTimeMillis() - Json.num(seen, "at", 0) > 10_000 ? null : seen.get("st");
             m.shown = shown == null ? null : shown.toString();
             for (Object o : events) {
@@ -967,7 +956,7 @@ public final class Rooms {
         for (Map<String, Object> l : out.logs) {
             l.put("seq", ++r.logSeq);
             l.put("at", System.currentTimeMillis());
-            appendLog(r, l);
+            journal.append(r, l);
         }
         save(r);
         if (rooms.get(r.id) != r) {
@@ -996,7 +985,7 @@ public final class Rooms {
         }
     }
 
-    private Collection<String> audience(Room r) {
+    static Collection<String> audience(Room r) {
         List<String> out = new ArrayList<>();
         for (Room.Member m : r.members) {
             out.add(m.userId);
@@ -1022,15 +1011,6 @@ public final class Rooms {
 
     // ----------------------------------------------------------- journal
 
-    private void appendLog(Room r, Map<String, Object> line) {
-        try {
-            Files.writeString(logDir.resolve(r.id + ".jsonl"), Json.stringify(line) + "\n", StandardCharsets.UTF_8,
-                    StandardOpenOption.CREATE, StandardOpenOption.APPEND);
-        } catch (IOException e) {
-            Log.warn("Serveur : journal non écrit : " + e.getMessage());
-        }
-    }
-
     List<Object> logs(String id, Accounts.User user, long after, int limit) {
         Room r = get(id);
         synchronized (r) {
@@ -1038,76 +1018,7 @@ public final class Rooms {
                 throw new Http.Fail(403, "Vous ne faites pas partie de cette salle.");
             }
         }
-        Path f = logDir.resolve(r.id + ".jsonl");
-        if (!Files.isRegularFile(f)) {
-            return new ArrayList<>();
-        }
-        try {
-            return tail(f, after, limit);
-        } catch (IOException | RuntimeException e) {
-            throw new Http.Fail(500, "Journal illisible : " + e.getMessage());
-        }
-    }
-
-    /**
-     * The last {@code limit} lines of a journal numbered after {@code after}, in their order. Read from the end by
-     * blocks: a request costs at most {@code limit} lines, however long the journal (a long run has thousands). The
-     * lines are numbered in order, so the reading stops at the first one not after {@code after}.
-     */
-    static List<Object> tail(Path f, long after, int limit) throws IOException {
-        java.util.ArrayDeque<Object> out = new java.util.ArrayDeque<>();
-        try (java.nio.channels.FileChannel ch = java.nio.channels.FileChannel.open(f, StandardOpenOption.READ)) {
-            long pos = ch.size();
-            byte[] rest = new byte[0]; // the start of a line cut by the beginning of the block read
-            java.nio.ByteBuffer buf = java.nio.ByteBuffer.allocate(64 * 1024);
-            while (out.size() < limit) {
-                if (pos == 0) {
-                    if (rest.length > 0) {
-                        add(out, rest, 0, rest.length, after); // the first line of the journal
-                    }
-                    break;
-                }
-                int n = (int) Math.min(buf.capacity(), pos);
-                pos -= n;
-                buf.clear().limit(n);
-                while (buf.hasRemaining()) {
-                    if (ch.read(buf, pos + buf.position()) < 0) {
-                        throw new IOException("fin du journal inattendue");
-                    }
-                }
-                byte[] block = new byte[n + rest.length];
-                System.arraycopy(buf.array(), 0, block, 0, n);
-                System.arraycopy(rest, 0, block, n, rest.length);
-                int end = block.length;
-                boolean more = true;
-                for (int i = block.length - 1; i >= 0 && more && out.size() < limit; i--) {
-                    if (block[i] == '\n') {
-                        more = add(out, block, i + 1, end, after);
-                        end = i;
-                    }
-                }
-                if (!more || out.size() >= limit) {
-                    break;
-                }
-                rest = java.util.Arrays.copyOf(block, end);
-            }
-        }
-        return new ArrayList<>(out);
-    }
-
-    /** One line of a journal read from the end: added in front if numbered after {@code after}; false to stop. */
-    private static boolean add(java.util.ArrayDeque<Object> out, byte[] b, int from, int to, long after) {
-        String line = new String(b, from, to - from, StandardCharsets.UTF_8);
-        if (line.isBlank()) {
-            return true;
-        }
-        Map<String, Object> l = Json.parseObject(line);
-        long seq = Json.num(l, "seq", 0);
-        if (seq > after) {
-            out.addFirst(l);
-            return true;
-        }
-        return seq <= 0; // a line without a number does not stop the reading
+        return journal.read(r, after, limit);
     }
 
     /** How many rooms in each state, players online in a running one, live screens kept and watched (numbers only). */
@@ -1136,194 +1047,46 @@ public final class Rooms {
         }
         long sleeping = asleep.keySet().stream().filter(id -> !seen.contains(id)).count();
         long now = System.currentTimeMillis();
-        long watching = watched.values().stream().filter(t -> now - t < WATCH_MS).count();
         return Json.map("lobby", lobby, "running", running, "over", over + sleeping, "asleep", sleeping,
-                "playersInRunning", playing, "screens", (long) screens.size(), "screensWatched", watching);
+                "playersInRunning", playing, "screens", screens.kept(), "screensWatched", screens.watching(now));
     }
 
     // ------------------------------------------------------ live screens
 
-    /**
-     * Keeps the latest image of a player's game. Returns whether another member asked for it lately: the
-     * application then sends one image every few seconds only while nobody looks (an older one ignores it).
-     */
+    /** The latest image of a player's game (see {@link LiveScreens#put}): whether another member watches it. */
     boolean putScreen(String id, Accounts.User user, byte[] jpeg) {
-        Room r = memberRoom(id, user);
-        if (jpeg.length > MAX_SCREEN) {
-            throw new Http.Fail(413, "Image trop grande");
-        }
-        String key = r.id + "/" + user.id;
-        Screen prev = screens.get(key);
-        long now = System.currentTimeMillis();
-        screens.put(key, new Screen(prev == null ? 1 : prev.seq() + 1, jpeg, now));
-        Long seen = watched.get(key);
-        return seen != null && now - seen < WATCH_MS;
+        return screens.put(memberRoom(id, user), user, jpeg);
     }
 
     /** Latest image of a player's game, or null if nothing newer than {@code since}; the image is watched. */
     Map<String, Object> screen(String id, Accounts.User user, String target, long since) {
-        Room r = memberRoom(id, user);
-        if (!user.id.equals(target) && r.member(target) != null) {
-            watched.put(r.id + "/" + target, System.currentTimeMillis());
-        }
-        Screen s = screens.get(r.id + "/" + target);
-        if (s == null || s.seq() <= since || System.currentTimeMillis() - s.at() > 20_000) {
-            return null;
-        }
-        return Json.map("seq", s.seq(), "jpeg", s.jpeg());
+        return screens.get(memberRoom(id, user), user, target, since);
     }
 
     // ------------------------------------------------- presence in game
 
-    private final Map<String, Map<String, Object>> ghosts = new ConcurrentHashMap<>();
-
-    /**
-     * Where a player stands in their game: relayed at once to the other
-     * members, who draw them in their own game. The way walked since the
-     * previous message ("pts") lets them replay it smoothly; each sprite
-     * travels once ("sprs"). The server keeps the latest position and every
-     * sprite for newcomers.
-     */
+    /** Where a player stands in their game, relayed to the other members ({@link RoomGhosts#put}). */
     void ghost(String id, Accounts.User user, Map<String, Object> body) {
-        Room r = memberRoom(id, user);
-        String key = r.id + "/" + user.id;
-        Map<String, Object> g = new LinkedHashMap<>();
-        for (String k : List.of("map", "x", "y", "z", "ow", "st", "sid", "spr", "sw", "sh", "t", "pts", "sprs")) {
-            if (body.containsKey(k)) {
-                g.put(k, body.get(k));
-            }
-        }
-        Object spr = g.get("spr");
-        if (spr != null && spr.toString().length() > 20_000) {
-            throw new Http.Fail(413, "Sprite trop grand");
-        }
-        List<Object> pts = Json.arr(g.get("pts"));
-        if (pts != null) {
-            g.put("pts", Ghosts.trimPoints(pts));
-        } else {
-            g.remove("pts");
-        }
-        Map<String, Object> sprs = Json.obj(g.get("sprs"));
-        if (sprs != null && (sprs.size() > Ghosts.MAX_SPRITES || Json.stringify(sprs).length() > 400_000)) {
-            throw new Http.Fail(413, "Sprites trop grands");
-        } else if (sprs == null) {
-            g.remove("sprs");
-        }
-        Map<String, Object> prev = ghosts.get(key);
-        Map<String, Object> stored = new LinkedHashMap<>(g);
-        stored.remove("pts");
-        if (spr == null && prev != null) {
-            stored.put("spr", prev.get("spr"));
-            stored.put("sw", prev.get("sw"));
-            stored.put("sh", prev.get("sh"));
-        }
-        Map<String, Object> known = prev == null ? null : Json.obj(prev.get("sprs"));
-        if (known != null || sprs != null) {
-            Map<String, Object> all = new LinkedHashMap<>(known == null ? Map.of() : known);
-            if (sprs != null) {
-                all.putAll(sprs);
-            }
-            stored.put("sprs", Ghosts.trimSprites(all));
-        }
-        stored.put("at", System.currentTimeMillis());
-        ghosts.put(key, stored);
-        Map<String, Object> msg = new LinkedHashMap<>(g);
-        msg.put("roomId", r.id);
-        msg.put("userId", user.id);
-        List<String> others = new ArrayList<>();
-        synchronized (r) {
-            for (Room.Member m : r.members) {
-                if (!m.userId.equals(user.id)) {
-                    others.add(m.userId);
-                }
-            }
-        }
-        hub.send(others, "ghost", msg);
-        battleFromGame(r, user.id, Json.str(g, "st"));
-    }
-
-    /**
-     * "In battle" in the list of players follows what the game itself shows: the encounters seen by the tracker can be
-     * false (a Pokémon of the player found in the memory of a DS game, no battle), and a DS game tells nothing of
-     * trainer battles. A game on the field clears the mark, a game in battle sets it.
-     */
-    private void battleFromGame(Room r, String userId, String state) {
-        if (!"battle".equals(state) && !"free".equals(state) && !"dialogue".equals(state)) {
-            return;
-        }
-        synchronized (r) {
-            Room.Member m = r.member(userId);
-            if (m == null) {
-                return;
-            }
-            boolean marked = m.live.containsKey("battle");
-            if ("battle".equals(state) == marked) {
-                return;
-            }
-            if (marked) {
-                m.live.remove("battle");
-            } else {
-                m.live.put("battle", "game");
-            }
-            hub.send(audience(r), "live", Json.map("roomId", r.id, "userId", m.userId, "live", m.live));
-        }
+        ghosts.put(memberRoom(id, user), user, body);
     }
 
     /** Latest position (and sprite) of every player of the room. */
     List<Object> ghosts(String id, Accounts.User user) {
-        Room r = memberRoom(id, user);
-        List<Object> out = new ArrayList<>();
-        for (Map.Entry<String, Map<String, Object>> e : ghosts.entrySet()) {
-            if (e.getKey().startsWith(r.id + "/")) {
-                Map<String, Object> g = new LinkedHashMap<>(e.getValue());
-                g.put("userId", e.getKey().substring(r.id.length() + 1));
-                out.add(g);
-            }
-        }
-        return out;
+        return ghosts.of(memberRoom(id, user));
     }
 
     // ------------------------------------------------------ cloud saves
 
     void putSave(String id, Accounts.User user, byte[] data, String name) {
-        Room r = memberRoom(id, user);
-        if (data.length == 0 || data.length > MAX_SAVE) {
-            throw new Http.Fail(413, "Sauvegarde invalide");
-        }
-        try {
-            Path d = saveDir.resolve(r.id);
-            Files.createDirectories(d);
-            Path tmp = d.resolve(user.id + ".tmp");
-            Files.write(tmp, data);
-            Files.move(tmp, d.resolve(user.id + ".sav"), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-            Files.writeString(d.resolve(user.id + ".json"), Json.stringify(Json.map("name", name, "size", (long) data.length,
-                    "at", System.currentTimeMillis())));
-        } catch (IOException e) {
-            throw new Http.Fail(500, "Sauvegarde non enregistrée : " + e.getMessage());
-        }
+        saves.put(memberRoom(id, user), user, data, name);
     }
 
     byte[] getSave(String id, Accounts.User user) {
-        Room r = memberRoom(id, user);
-        Path f = saveDir.resolve(r.id).resolve(user.id + ".sav");
-        if (!Files.isRegularFile(f)) {
-            return null;
-        }
-        try {
-            return Files.readAllBytes(f);
-        } catch (IOException e) {
-            throw new Http.Fail(500, e.getMessage());
-        }
+        return saves.get(memberRoom(id, user), user);
     }
 
     Map<String, Object> saveInfo(String id, Accounts.User user) {
-        Room r = memberRoom(id, user);
-        Path f = saveDir.resolve(r.id).resolve(user.id + ".json");
-        try {
-            return Files.isRegularFile(f) ? Json.parseObject(Files.readString(f)) : null;
-        } catch (IOException e) {
-            return null;
-        }
+        return saves.info(memberRoom(id, user), user);
     }
 
     // ------------------------------------------------- account deletion
@@ -1378,46 +1141,16 @@ public final class Rooms {
                         }
                     }
                 }
-                anonymizeLog(r, user);
+                journal.anonymize(r, user);
                 try {
-                    Files.deleteIfExists(saveDir.resolve(r.id).resolve(user.id + ".sav"));
-                    Files.deleteIfExists(saveDir.resolve(r.id).resolve(user.id + ".json"));
+                    saves.forget(r.id, user.id);
                 } catch (IOException e) {
                     Log.warn("Serveur : sauvegarde de " + user.username + " non supprimée : " + e.getMessage());
                 }
-                screens.remove(r.id + "/" + user.id);
-                watched.remove(r.id + "/" + user.id);
-                ghosts.remove(r.id + "/" + user.id);
+                screens.forget(r.id, user.id);
+                ghosts.forget(r.id, user.id);
                 commit(r, new Room.Out());
             }
-        }
-    }
-
-    /** The journal of a room without the name of a deleted account. */
-    private void anonymizeLog(Room r, Accounts.User user) {
-        Path f = logDir.resolve(r.id + ".jsonl");
-        if (!Files.isRegularFile(f)) {
-            return;
-        }
-        try {
-            StringBuilder sb = new StringBuilder();
-            for (String line : Files.readAllLines(f, StandardCharsets.UTF_8)) {
-                if (line.isBlank()) {
-                    continue;
-                }
-                Map<String, Object> m = Json.parseObject(line);
-                if (user.id.equals(Json.str(m, "user"))) {
-                    m.put("name", DELETED);
-                }
-                String text = Json.str(m, "text");
-                if (text != null && user.display.length() >= 2) {
-                    m.put("text", text.replace(user.display, DELETED));
-                }
-                sb.append(Json.stringify(m)).append('\n');
-            }
-            Accounts.write(f, sb.toString());
-        } catch (IOException | RuntimeException e) {
-            Log.warn("Serveur : journal de la salle " + r.id + " non anonymisé : " + e.getMessage());
         }
     }
 
@@ -1430,22 +1163,13 @@ public final class Rooms {
     private void deleteFiles(Room r) {
         try {
             Files.deleteIfExists(dir.resolve(r.id + ".json"));
-            Files.deleteIfExists(logDir.resolve(r.id + ".jsonl"));
-            Path saves = saveDir.resolve(r.id);
-            if (Files.isDirectory(saves)) {
-                try (DirectoryStream<Path> ds = Files.newDirectoryStream(saves)) {
-                    for (Path p : ds) {
-                        Files.deleteIfExists(p);
-                    }
-                }
-                Files.deleteIfExists(saves);
-            }
+            journal.delete(r.id);
+            saves.forgetRoom(r.id);
         } catch (IOException e) {
             Log.warn("Serveur : fichiers de la salle " + r.id + " non supprimés : " + e.getMessage());
         }
-        screens.keySet().removeIf(k -> k.startsWith(r.id + "/"));
-        watched.keySet().removeIf(k -> k.startsWith(r.id + "/"));
-        ghosts.keySet().removeIf(k -> k.startsWith(r.id + "/"));
+        screens.forgetRoom(r.id);
+        ghosts.forgetRoom(r.id);
     }
 
     private void load() throws IOException {

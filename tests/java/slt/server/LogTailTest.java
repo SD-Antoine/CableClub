@@ -44,7 +44,7 @@ public final class LogTailTest {
                     for (int limit : new int[]{1, 2, 5, 1000, 2000, 5000}) {
                         cases++;
                         String expected = Json.stringify(former(f, after, limit));
-                        String got = Json.stringify(Rooms.tail(f, after, limit));
+                        String got = Json.stringify(RoomJournal.tail(f, after, limit));
                         if (!expected.equals(got)) {
                             failed++;
                             if (failed <= 5) {
@@ -57,7 +57,7 @@ public final class LogTailTest {
             }
             Files.writeString(f, "");
             cases++;
-            check(Rooms.tail(f, 0, 10).isEmpty(), "journal vide");
+            check(RoomJournal.tail(f, 0, 10).isEmpty(), "journal vide");
         } finally {
             Files.deleteIfExists(f);
         }

@@ -15,7 +15,8 @@ classiques. Générations 1 à 5. Version dans `src/slt/Version.java`, historiqu
 1. **Moteur de modes** (serveur, l'arbitre) — `src/slt/server/`
    - `Room.java` : l'état de la salle et les mécanismes communs (zones, liens, journal, directives) ;
      `event()` passe chaque événement au mode de la salle, puis `dispatch()` (le `switch` sur les
-     types) pour ceux qui n'ont pas encore de règle propre.
+     types) pour ceux qui n'ont pas encore de règle propre. Sa vue et son fichier : `RoomStore.java` ;
+     les échanges entre joueurs (désactivés, `RoomTrades.ENABLED`) : `RoomTrades.java`.
    - `Mode.java` : le moteur des modes — rencontres (`EncounterLogic`), captures (`CaptureLogic`),
      morts, équipe, Hardcore, démarrage et fin (`RunLogic`) — composé de trois primitives (joueurs
      liés ou non, première rencontre ou chromatiques seuls, équipe libre ou d'un seul Pokémon) ; les
@@ -30,7 +31,9 @@ classiques. Générations 1 à 5. Version dans `src/slt/Version.java`, historiqu
      `ModeSpec.stored`), `POST /api/modes/check` (vérification). `ModeGallery.java` : galerie des modes
      publics (publication rattachée au compte, signalement via `/api/report`, retrait par un modérateur) ;
      une salle d'un mode importé n'est publique que si ce mode est publié et non retiré.
-   - `Rooms.java` : salles, journal, écrans en direct (JPEG relayés), copies cloud des sauvegardes.
+   - `Rooms.java` : salles (autorisations, salle d'attente, parties terminées gardées en résumé) ; à côté,
+     `RoomJournal.java` (journal), `LiveScreens.java` (écrans en direct, JPEG relayés à la demande),
+     `RoomGhosts.java` (positions en jeu), `CloudSaves.java` (copies cloud des sauvegardes).
    - `Records.java` : les parties terminées (bilan de fin de chaque salle) → statistiques d'un joueur
      (`/api/me/stats`) et classements (`/api/leaderboard`, mode officiel, jeu, nombre de joueurs ; seuls
      les comptes `ranked`, option du profil désactivée par défaut). Objectifs affichés :

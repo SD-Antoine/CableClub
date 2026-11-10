@@ -67,9 +67,6 @@ public final class Room {
 
     static final String STARTER = "depart";
 
-    /** Trades between players: switched off for now (no new offer; a trade already running finishes). */
-    static final boolean TRADES = false;
-
     // ------------------------------------------------------------------ model
 
     /** A Pokémon of one player, as the referee knows it. */
@@ -206,54 +203,6 @@ public final class Room {
         long at;
         final Map<String, Integer> items = new LinkedHashMap<>();
         final Map<String, String> itemNames = new LinkedHashMap<>();
-    }
-
-    /**
-     * A trade between two players of the room: offered, then the Pokémon are read in both games
-     * ("extract"), then each game puts the partner's in place of its own ("swap"), then done.
-     */
-    static final class Trade {
-        String id;
-        String from;
-        String to;
-        String fromUid;
-        String toUid;
-        String state = "offered";  // offered, extract, swap, done, cancelled
-        String fromBlob;
-        String toBlob;
-        boolean fromDone;
-        boolean toDone;
-        long at;
-
-        Map<String, Object> toJson(boolean withData) {
-            Map<String, Object> m = Json.map("id", id, "from", from, "to", to, "fromUid", fromUid, "toUid", toUid,
-                    "state", state, "fromDone", fromDone, "toDone", toDone, "at", at);
-            if (withData) {
-                m.put("fromBlob", fromBlob);
-                m.put("toBlob", toBlob);
-            }
-            return m;
-        }
-
-        static Trade fromJson(Map<String, Object> m) {
-            Trade t = new Trade();
-            t.id = Json.str(m, "id");
-            t.from = Json.str(m, "from");
-            t.to = Json.str(m, "to");
-            t.fromUid = Json.str(m, "fromUid");
-            t.toUid = Json.str(m, "toUid");
-            t.state = Json.str(m, "state") == null ? "cancelled" : Json.str(m, "state");
-            t.fromBlob = Json.str(m, "fromBlob");
-            t.toBlob = Json.str(m, "toBlob");
-            t.fromDone = Json.bool(m, "fromDone", false);
-            t.toDone = Json.bool(m, "toDone", false);
-            t.at = Json.num(m, "at", 0);
-            return t;
-        }
-
-        boolean active() {
-            return !"done".equals(state) && !"cancelled".equals(state);
-        }
     }
 
     /** Totals shown at the end of the Soul Link. */
@@ -463,7 +412,8 @@ public final class Room {
     final Set<String> invites = new LinkedHashSet<>();
     final Set<String> history = new LinkedHashSet<>();   // everybody who played in the room
     final Map<String, Zone> zones = new LinkedHashMap<>();
-    final Map<String, Trade> trades = new LinkedHashMap<>();
+    /** Trades between players (switched off: see {@link RoomTrades#ENABLED}). */
+    final RoomTrades trades = new RoomTrades(this);
     final Deque<String> namingQueue = new ArrayDeque<>();
     Map<String, Object> ended;
     long logSeq;
@@ -1454,7 +1404,7 @@ public final class Room {
                 // imposed in their game
                 "levelCap", (long) levelCap(m), "setMode", run.hardcore(this) || (run.classicRules() && rule("honorSetMode")),
                 "ban", ban, "noHeld", classic && rule("honorNoHeldItems"), "noFly", classic && rule("honorNoFly"),
-                "saveStates", rule("saveStates"), "state", state, "open", adventureOpen, "trade", tradeDirective(m));
+                "saveStates", rule("saveStates"), "state", state, "open", adventureOpen, "trade", trades.directive(m));
         // DS games: rooms saved before this have the rate in their ROM (SltPatches), and every player's copy must stay so
         if (Json.bool(rando, "shinyRam", false)) {
             directives.put("shinyRam", true);
@@ -1468,198 +1418,6 @@ public final class Room {
             done.add(String.valueOf(o));
         }
         m.refunds.removeIf(r -> done.contains(Json.str(r, "id")));
-    }
-
-    // --------------------------------------------------------------- trades
-
-    private List<Object> storedTrades() {
-        List<Object> out = new ArrayList<>();
-        for (Trade t : trades.values()) {
-            if (t.active()) {
-                out.add(t.toJson(true));
-            }
-        }
-        return out;
-    }
-
-    private Trade activeTradeOf(String userId) {
-        for (Trade t : trades.values()) {
-            if (t.active() && (userId.equals(t.from) || userId.equals(t.to))) {
-                return t;
-            }
-        }
-        return null;
-    }
-
-    /** A Pokémon of the player that may be traded right now (alive, theirs; shiny until both beat the League). */
-    private MonRec tradable(Member m, Member partner, String uid) {
-        MonRec r = uid == null ? null : m.mons.get(uid);
-        if (r == null || !"alive".equals(r.status) || "existing".equals(r.origin)) {
-            throw new Http.Fail(409, "Ce Pokémon ne peut pas être échangé (introuvable, mort ou relâché).");
-        }
-        boolean league = "champion".equals(m.status) && "champion".equals(partner.status);
-        if (!league && !r.shiny) {
-            throw new Http.Fail(409, "Tant que la Ligue n'est pas vaincue par les deux joueurs, seuls les Pokémon chromatiques s'échangent.");
-        }
-        return r;
-    }
-
-    /** A player offers one of their Pokémon to a partner. */
-    void offerTrade(Member m, String toUserId, String uid, Out out) {
-        if (!TRADES) {
-            throw new Http.Fail(409, "Les échanges sont désactivés pour le moment.");
-        }
-        if (!"running".equals(state)) {
-            throw new Http.Fail(409, "L'aventure n'est pas en cours.");
-        }
-        Member to = toUserId == null ? null : member(toUserId);
-        if (to == null || to == m) {
-            throw new Http.Fail(400, "Choisissez un partenaire de la salle.");
-        }
-        if (activeTradeOf(m.userId) != null || activeTradeOf(to.userId) != null) {
-            throw new Http.Fail(409, "Un échange est déjà en cours pour l'un de vous deux.");
-        }
-        MonRec r = tradable(m, to, uid);
-        Trade t = new Trade();
-        t.id = Long.toString(System.currentTimeMillis(), 36) + Integer.toString((int) (Math.random() * 1296), 36);
-        t.from = m.userId;
-        t.to = to.userId;
-        t.fromUid = uid;
-        t.at = System.currentTimeMillis();
-        trades.put(t.id, t);
-        out.log(m, "trade", m.name + " propose " + r.label() + " en échange à " + to.name, null);
-        out.notice(to, "info", m.name + " vous propose un échange : " + r.label() + ". Répondez depuis la salle.");
-        out.changed = true;
-    }
-
-    /** The partner accepts (with one of their Pokémon) or declines. */
-    void answerTrade(Member m, String tradeId, boolean accept, String uid, Out out) {
-        Trade t = trades.get(tradeId);
-        if (t == null || !"offered".equals(t.state) || !m.userId.equals(t.to)) {
-            throw new Http.Fail(409, "Cette proposition n'est plus valable.");
-        }
-        Member from = member(t.from);
-        if (from == null) {
-            t.state = "cancelled";
-            out.changed = true;
-            return;
-        }
-        if (!accept) {
-            t.state = "cancelled";
-            t.at = System.currentTimeMillis();
-            out.log(m, "trade", m.name + " refuse l'échange proposé par " + from.name, null);
-            out.notice(from, "warn", m.name + " a refusé votre échange.");
-            return;
-        }
-        tradable(from, m, t.fromUid);
-        MonRec mine = tradable(m, from, uid);
-        t.toUid = uid;
-        t.state = "extract";
-        t.at = System.currentTimeMillis();
-        out.log(m, "trade", m.name + " accepte et propose " + mine.label() + " : échange en cours (restez hors combat)", null);
-        out.notice(from, "ok", m.name + " a accepté l'échange : restez hors combat le temps du transfert.");
-        out.notice(m, "ok", "Échange accepté : restez hors combat le temps du transfert.");
-    }
-
-    void cancelTrade(Member m, String tradeId, Out out) {
-        Trade t = trades.get(tradeId);
-        if (t == null || !(m.userId.equals(t.from) || m.userId.equals(t.to))) {
-            throw new Http.Fail(404, "Échange inconnu.");
-        }
-        if ("swap".equals(t.state) || !t.active()) {
-            throw new Http.Fail(409, "Le transfert a commencé : il ne peut plus être annulé.");
-        }
-        t.state = "cancelled";
-        t.at = System.currentTimeMillis();
-        out.log(m, "trade", m.name + " annule l'échange", null);
-    }
-
-    /** What a game sends during a trade: the Pokémon read ("extract"), then "done". */
-    void tradeData(Member m, String tradeId, String phase, String blob, Out out) {
-        Trade t = trades.get(tradeId);
-        if (t == null || !(m.userId.equals(t.from) || m.userId.equals(t.to))) {
-            return;
-        }
-        boolean isFrom = m.userId.equals(t.from);
-        if ("extract".equals(phase) && "extract".equals(t.state) && blob != null && blob.length() < 4000) {
-            if (isFrom) {
-                t.fromBlob = blob;
-            } else {
-                t.toBlob = blob;
-            }
-            if (t.fromBlob != null && t.toBlob != null) {
-                t.state = "swap";
-                swapOwners(t, out);
-            }
-            out.changed = true;
-        } else if ("done".equals(phase) && "swap".equals(t.state)) {
-            if (isFrom) {
-                t.fromDone = true;
-            } else {
-                t.toDone = true;
-            }
-            if (t.fromDone && t.toDone) {
-                t.state = "done";
-                t.at = System.currentTimeMillis();
-                Member a = member(t.from);
-                Member b = member(t.to);
-                out.log(null, "trade", "Échange terminé entre " + (a == null ? "?" : a.name) + " et " + (b == null ? "?" : b.name) + ".", null);
-            }
-            out.changed = true;
-        }
-    }
-
-    /**
-     * Each Pokémon changes hands in the Soul Link before the games swap them, so that the new
-     * Pokémon seen in each party is recognised as this trade (not as a gift to release).
-     */
-    private void swapOwners(Trade t, Out out) {
-        Member a = member(t.from);
-        Member b = member(t.to);
-        if (a == null || b == null) {
-            return;
-        }
-        MonRec ra = a.mons.get(t.fromUid);
-        MonRec rb = b.mons.get(t.toUid);
-        if (ra == null || rb == null) {
-            return;
-        }
-        b.mons.put(ra.uid, received(ra, a));
-        a.mons.put(rb.uid, received(rb, b));
-        ra.status = "traded";
-        ra.reason = "échangé avec " + b.name;
-        rb.status = "traded";
-        rb.reason = "échangé avec " + a.name;
-        out.log(a, "trade", a.name + " donne " + ra.label() + " à " + b.name + " contre " + rb.label(), null);
-    }
-
-    /** The receiver's record of a Pokémon arriving by trade: theirs, outside any link. */
-    private static MonRec received(MonRec r, Member giver) {
-        MonRec x = MonRec.fromJson(r.toJson());
-        x.zoneKey = null;
-        x.bonus = true;
-        x.origin = "trade";
-        x.status = "alive";
-        x.reason = "reçu de " + giver.name;
-        x.at = System.currentTimeMillis();
-        return x;
-    }
-
-    /** What this player's game must do for a trade in progress, or null. */
-    private Map<String, Object> tradeDirective(Member m) {
-        Trade t = activeTradeOf(m.userId);
-        if (t == null) {
-            return null;
-        }
-        boolean isFrom = m.userId.equals(t.from);
-        String mine = isFrom ? t.fromUid : t.toUid;
-        if ("extract".equals(t.state)) {
-            return Json.map("id", t.id, "phase", "extract", "uid", mine);
-        }
-        if ("swap".equals(t.state)) {
-            return Json.map("id", t.id, "phase", "swap", "uid", mine, "blob", isFrom ? t.toBlob : t.fromBlob);
-        }
-        return null;
     }
 
     // ---------------------------------------------------------------- zones
@@ -1692,165 +1450,17 @@ public final class Room {
 
     // ------------------------------------------------------------ serialize
 
-    /** Full state for the members (and a short view for invited users). */
+    /** Full state for the members (and a short view for invited users): {@link RoomStore#view}. */
     Map<String, Object> view(Hub hub, boolean full) {
-        List<Object> ms = new ArrayList<>();
-        for (Member m : members) {
-            Map<String, Object> x = Json.map("userId", m.userId, "name", m.name, "slot", (long) m.slot,
-                    "ready", m.ready, "rom", m.rom, "status", m.status, "online", hub.online(m.userId),
-                    "leader", isLeader(m.userId), "hasBalls", m.hasBalls, "avatar", hub.avatar(m.userId));
-            if (full) {
-                List<Object> mons = new ArrayList<>();
-                for (MonRec r : m.mons.values()) {
-                    mons.add(r.toJson());
-                }
-                x.put("mons", mons);
-                x.put("live", m.live);
-                x.put("stats", m.stats.toJson());
-                x.put("refunds", (long) m.refunds.size());
-                x.put("levelCap", (long) levelCap(m));
-                x.put("hmNext", m.hmNext);
-            }
-            ms.add(x);
-        }
-        Map<String, Object> v = Json.map("id", id, "name", name, "mode", mode, "visibility", visibility,
-                "leaderId", leaderId, "createdAt", createdAt,
-                "launchedAt", launchedAt, "game", game, "maxPlayers", (long) maxPlayers, "state", state,
-                "adventureOpen", adventureOpen, "members", ms, "ended", ended, "linkStarted", linkStarted);
-        v.put("modeName", runName());
-        v.put("family", spec().family());
-        if (full) {
-            v.put("code", code);
-            v.put("rules", rules);
-            if (customSpec != null) {
-                v.put("modeFile", customSpec.toJson()); // the interface shows an imported mode's rules and objectives
-                v.put("modePublic", publishedMode.test(customSpec)); // in the gallery: the room may be public
-            }
-            v.put("rando", rando);
-            List<Object> zs = new ArrayList<>();
-            for (Zone z : zones.values()) {
-                zs.add(z.toJson());
-            }
-            v.put("zones", zs);
-            String active = namingQueue.peekFirst();
-            Zone nz = active == null ? null : zones.get(active);
-            v.put("naming", nz == null ? null : Json.map("zone", nz.key, "zoneName", nz.name, "queue", (long) namingQueue.size()));
-            v.put("invites", new ArrayList<Object>(invites));
-            List<Object> ts = new ArrayList<>();
-            for (Trade t : trades.values()) {
-                if (t.active() || System.currentTimeMillis() - t.at < 120_000) {
-                    ts.add(t.toJson(false));
-                }
-            }
-            v.put("trades", ts);
-        }
-        return v;
+        return RoomStore.view(this, hub, full);
     }
 
     Map<String, Object> toStore() {
-        List<Object> ms = new ArrayList<>();
-        for (Member m : members) {
-            ms.add(m.toStoreChecked());
-        }
-        List<Object> zs = new ArrayList<>();
-        for (Zone z : zones.values()) {
-            zs.add(z.toJson());
-        }
-        Map<String, Object> store = Json.map("version", 1L, "id", id, "code", code, "name", name, "mode", mode, "visibility", visibility,
-                "leaderId", leaderId,
-                "createdAt", createdAt, "launchedAt", launchedAt, "game", game, "maxPlayers", (long) maxPlayers,
-                "state", state, "adventureOpen", adventureOpen, "linkStarted", linkStarted, "rules", rules, "rando", rando, "members", ms,
-                "invites", new ArrayList<Object>(invites), "history", new ArrayList<Object>(history), "zones", zs,
-                "namingQueue", new ArrayList<Object>(namingQueue), "ended", ended, "logSeq", logSeq,
-                "refundSeq", refundSeq, "trades", storedTrades());
-        if (customSpec != null) {
-            store.put("modeFile", customSpec.toJson()); // the room keeps its own copy of an imported mode
-        } else if (unreadMode != null) {
-            store.put("modeFile", unreadMode); // kept as it was: a later version may read it again
-        }
-        return store;
+        return RoomStore.toStore(this);
     }
 
     static Room fromStore(Map<String, Object> m) {
-        Room r = new Room();
-        r.id = Json.str(m, "id");
-        r.code = Json.str(m, "code");
-        r.name = Json.str(m, "name");
-        r.leaderId = Json.str(m, "leaderId");
-        r.mode = Json.str(m, "mode") == null ? "soullink" : Json.str(m, "mode");
-        Map<String, Object> modeFile = Json.obj(m.get("modeFile"));
-        if (modeFile != null) {
-            // read again (ModeSpec.stored: a later, stricter validator does not make the room unreadable); a mode
-            // that no longer reads at all gives way to the official mode of its family, its file kept as it was
-            r.customSpec = ModeSpec.stored(Json.stringify(modeFile));
-            if (r.customSpec == null) {
-                Map<String, Object> engine = Json.obj(modeFile.get("engine"));
-                r.mode = ModeSpec.family(Json.str(engine, "links"), Json.str(engine, "encounters"), Json.str(engine, "team"));
-                r.unreadMode = modeFile;
-                Log.warn("Salle " + r.id + " : mode importé illisible, la salle suit le mode " + r.mode + ".");
-            }
-        }
-        r.visibility = "public".equals(Json.str(m, "visibility")) ? "public" : "private";
-        r.createdAt = Json.num(m, "createdAt", 0);
-        r.launchedAt = Json.num(m, "launchedAt", 0);
-        Map<String, Object> game = Json.obj(m.get("game"));
-        if (game != null) {
-            r.game = game;
-        }
-        r.maxPlayers = (int) Json.num(m, "maxPlayers", 4);
-        r.state = Json.str(m, "state");
-        r.adventureOpen = Json.bool(m, "adventureOpen", false);
-        // rooms started before this rule existed: already under way
-        r.linkStarted = Json.bool(m, "linkStarted", "running".equals(r.state) || "finished".equals(r.state));
-        // the rules of the room's own mode (a rule added since takes its default), never those of another mode
-        Map<String, Object> rules = r.spec().defaults();
-        Map<String, Object> saved = Json.obj(m.get("rules"));
-        if (saved != null) {
-            for (Map.Entry<String, Object> e : saved.entrySet()) {
-                if (rules.containsKey(e.getKey())) {
-                    rules.put(e.getKey(), e.getValue());
-                }
-            }
-        }
-        r.rules = rules;
-        Map<String, Object> rando = Json.obj(m.get("rando"));
-        if (rando != null) {
-            r.rando = rando;
-        }
-        List<Object> ms = Json.arr(m.get("members"));
-        if (ms != null) {
-            for (Object o : ms) {
-                r.members.add(Member.fromStore(Json.obj(o)));
-            }
-        }
-        Accounts.strings(m.get("invites"), r.invites);
-        Accounts.strings(m.get("history"), r.history);
-        List<Object> zs = Json.arr(m.get("zones"));
-        if (zs != null) {
-            for (Object o : zs) {
-                Zone z = Zone.fromJson(Json.obj(o));
-                r.zones.put(z.key, z);
-            }
-        }
-        List<Object> q = Json.arr(m.get("namingQueue"));
-        if (q != null) {
-            for (Object o : q) {
-                r.namingQueue.add(String.valueOf(o));
-            }
-        }
-        r.ended = Json.obj(m.get("ended"));
-        List<Object> ts = Json.arr(m.get("trades"));
-        if (ts != null) {
-            for (Object o : ts) {
-                Trade t = Trade.fromJson(Json.obj(o));
-                if (t.id != null) {
-                    r.trades.put(t.id, t);
-                }
-            }
-        }
-        r.logSeq = Json.num(m, "logSeq", 0);
-        r.refundSeq = Json.num(m, "refundSeq", 0);
-        return r;
+        return RoomStore.fromStore(m);
     }
 
     // --------------------------------------------------------------- helpers
