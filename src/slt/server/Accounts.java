@@ -36,6 +36,9 @@ public final class Accounts {
     private static final long SESSION_DAYS = 60;
     private static final int MAX_FAILURES = 8;
     private static final long FAILURE_WINDOW_MS = 10 * 60_000L;
+    /** Accounts created from one address (an IPv6 /64) in an hour: a family or a club behind one box stays under it. */
+    static final int MAX_REGISTRATIONS = 10;
+    private static final long REGISTRATION_WINDOW_MS = 60 * 60_000L;
 
     /** One account. Friend lists hold user ids. */
     public static final class User {
@@ -121,10 +124,17 @@ public final class Accounts {
 
     private final Path usersFile;
     private final Path sessionsFile;
+    /** Every account in creation order (search, comptes.json), changed and read under the lock. */
     private final Map<String, User> users = new LinkedHashMap<>();
+    /**
+     * The same accounts by id, read without the lock: every request with a session looks its user up here, and
+     * must not wait for a password being hashed or a file being written. Changed under the lock, with users.
+     */
+    private final Map<String, User> byId = new ConcurrentHashMap<>();
     private final Map<String, String> byName = new ConcurrentHashMap<>();
     private final Map<String, Session> sessions = new ConcurrentHashMap<>();
     private final Map<String, Deque<Long>> failures = new ConcurrentHashMap<>();
+    private final Map<String, Deque<Long>> registrations = new ConcurrentHashMap<>();
 
     Accounts(Path dir) throws IOException {
         Files.createDirectories(dir);
@@ -135,7 +145,16 @@ public final class Accounts {
 
     // ------------------------------------------------------------ accounts
 
-    public synchronized User register(String username, String password, String display, boolean terms) {
+    /** An account made by the server itself or a test: no limit per address. */
+    public User register(String username, String password, String display, boolean terms) {
+        return register(username, password, display, terms, null);
+    }
+
+    /**
+     * Creates an account. The password is hashed outside the lock (about 50 ms) and the name checked again inside;
+     * at most {@link #MAX_REGISTRATIONS} attempts that reach the hashing per address and per hour.
+     */
+    public User register(String username, String password, String display, boolean terms, String ip) {
         String u = username == null ? "" : username.trim();
         if (!USERNAME.matcher(u).matches()) {
             throw new Http.Fail(400, "Identifiant invalide : 3 à 20 caractères, lettres, chiffres, « . », « - » ou « _ ».");
@@ -146,112 +165,174 @@ public final class Accounts {
             throw new Http.Fail(409, "Cet identifiant est déjà pris.");
         }
         String name = cleanDisplay(display == null || display.isBlank() ? u : display);
+        if (ip != null) {
+            limitRegistrations(address(ip));
+        }
         User user = new User(Ids.id(10), u, name, System.currentTimeMillis());
-        setPassword(user, password);
+        Credentials c = hash(password);
+        user.salt = c.salt();
+        user.iterations = c.iterations();
+        user.hash = c.hash();
         // clients before 0.9 do not show the terms: the account is created all the same
         user.termsAt = terms ? user.createdAt : 0;
-        users.put(user.id, user);
-        byName.put(key, user.id);
-        save();
+        long v;
+        synchronized (this) {
+            if (byName.containsKey(key)) {
+                throw new Http.Fail(409, "Cet identifiant est déjà pris.");
+            }
+            users.put(user.id, user);
+            byId.put(user.id, user);
+            byName.put(key, user.id);
+            v = changed();
+        }
+        persist(v);
         Log.info("Serveur : nouveau compte " + u);
         return user;
     }
 
-    /** Whether this is the user's password (no throttling: the caller holds a session). */
+    /** Whether this is the user's password: the caller holds a session, wrong guesses are limited all the same. */
     public boolean passwordIs(User user, String password) {
-        return password != null && verify(user, password);
+        throttle("pw:" + user.id);
+        if (password == null || !verify(credentials(user), password)) {
+            fail("pw:" + user.id);
+            return false;
+        }
+        failures.remove("pw:" + user.id);
+        return true;
     }
 
     /**
      * Deletes an account: the user, their sessions, and their place in the friend lists and block lists of the
      * others. What they left elsewhere (rooms, chat, picture) is removed by the caller.
      */
-    public synchronized void delete(User user) {
-        users.remove(user.id);
-        byName.remove(user.username.toLowerCase(Locale.ROOT));
-        for (User o : users.values()) {
-            o.friends.remove(user.id);
-            o.incoming.remove(user.id);
-            o.outgoing.remove(user.id);
-            o.blocked.remove(user.id);
+    public void delete(User user) {
+        long v;
+        synchronized (this) {
+            users.remove(user.id);
+            byId.remove(user.id);
+            byName.remove(user.username.toLowerCase(Locale.ROOT));
+            for (User o : users.values()) {
+                o.friends.remove(user.id);
+                o.incoming.remove(user.id);
+                o.outgoing.remove(user.id);
+                o.blocked.remove(user.id);
+            }
+            sessions.values().removeIf(s -> s.userId().equals(user.id));
+            v = changed();
         }
-        sessions.values().removeIf(s -> s.userId().equals(user.id));
-        save();
-        saveSessions();
+        persist(v);
+        persistSessions(sessionsChanged());
         Log.info("Serveur : compte supprimé " + user.username);
     }
 
     /** Checks the password; throttled per identifier and per address. */
     public User login(String username, String password, String ip) {
         String key = username == null ? "" : username.trim().toLowerCase(Locale.ROOT);
+        String from = "ip:" + address(ip);
         throttle("u:" + key);
-        throttle("ip:" + ip);
-        User user;
-        synchronized (this) {
-            String id = byName.get(key);
-            user = id == null ? null : users.get(id);
-        }
-        if (user == null || password == null || !verify(user, password)) {
+        throttle(from);
+        String id = byName.get(key);
+        User user = id == null ? null : byId.get(id);
+        if (user == null || password == null || !verify(credentials(user), password)) {
             fail("u:" + key);
-            fail("ip:" + ip);
+            fail(from);
             throw new Http.Fail(401, "Identifiant ou mot de passe incorrect.");
         }
         failures.remove("u:" + key);
         return user;
     }
 
-    public synchronized void changePassword(User user, String oldPassword, String newPassword) {
-        if (!verify(user, oldPassword == null ? "" : oldPassword)) {
+    /**
+     * Both hashes are made outside the lock; the change is refused if the password changed in between (two
+     * devices at once). Wrong guesses of the current password are limited as at login.
+     */
+    public void changePassword(User user, String oldPassword, String newPassword) {
+        throttle("pw:" + user.id);
+        Credentials before = credentials(user);
+        if (!verify(before, oldPassword == null ? "" : oldPassword)) {
+            fail("pw:" + user.id);
             throw new Http.Fail(403, "Mot de passe actuel incorrect.");
         }
+        failures.remove("pw:" + user.id);
         checkPassword(newPassword);
-        setPassword(user, newPassword);
-        // every other device must log in again
-        sessions.values().removeIf(s -> s.userId().equals(user.id));
-        save();
+        Credentials next = hash(newPassword);
+        long v;
+        synchronized (this) {
+            if (!java.util.Objects.equals(user.hash, before.hash())) {
+                throw new Http.Fail(409, "Le mot de passe vient d'être changé ailleurs : reconnectez-vous.");
+            }
+            user.salt = next.salt();
+            user.iterations = next.iterations();
+            user.hash = next.hash();
+            // every other device must log in again (written too: they came back after a restart of the server)
+            sessions.values().removeIf(s -> s.userId().equals(user.id));
+            v = changed();
+        }
+        persist(v);
+        persistSessions(sessionsChanged());
     }
 
-    public synchronized void rename(User user, String display) {
-        user.display = cleanDisplay(display);
-        save();
+    public void rename(User user, String display) {
+        long v;
+        synchronized (this) {
+            user.display = cleanDisplay(display);
+            v = changed();
+        }
+        persist(v);
     }
 
     /** Changes the fields of the profile that are given (name, bio, favourite game and Pokémon, leaderboards). */
-    public synchronized void updateProfile(User user, Map<String, Object> b) {
-        String name = b.containsKey("name") ? cleanDisplay(Json.str(b, "name")) : user.display;
-        String bio = b.containsKey("bio") ? cleanText(Json.str(b, "bio"), 160, "Bio") : user.bio;
-        String game = b.containsKey("favGame") ? cleanText(Json.str(b, "favGame"), 40, "Jeu favori") : user.favGame;
-        String mon = b.containsKey("favPokemon") ? cleanText(Json.str(b, "favPokemon"), 24, "Pokémon favori") : user.favPokemon;
-        user.display = name;
-        user.bio = bio;
-        user.favGame = game;
-        user.favPokemon = mon;
-        if (b.get("ranked") instanceof Boolean on) {
-            user.ranked = on;
+    public void updateProfile(User user, Map<String, Object> b) {
+        long v;
+        synchronized (this) {
+            String name = b.containsKey("name") ? cleanDisplay(Json.str(b, "name")) : user.display;
+            String bio = b.containsKey("bio") ? cleanText(Json.str(b, "bio"), 160, "Bio") : user.bio;
+            String game = b.containsKey("favGame") ? cleanText(Json.str(b, "favGame"), 40, "Jeu favori") : user.favGame;
+            String mon = b.containsKey("favPokemon") ? cleanText(Json.str(b, "favPokemon"), 24, "Pokémon favori") : user.favPokemon;
+            user.display = name;
+            user.bio = bio;
+            user.favGame = game;
+            user.favPokemon = mon;
+            if (b.get("ranked") instanceof Boolean on) {
+                user.ranked = on;
+            }
+            v = changed();
         }
-        save();
+        persist(v);
     }
 
-    public synchronized void avatarChanged(User user, boolean present) {
-        user.avatarAt = present ? Math.max(System.currentTimeMillis(), user.avatarAt + 1) : 0;
-        save();
+    public void avatarChanged(User user, boolean present) {
+        long v;
+        synchronized (this) {
+            user.avatarAt = present ? Math.max(System.currentTimeMillis(), user.avatarAt + 1) : 0;
+            v = changed();
+        }
+        persist(v);
     }
 
-    public synchronized void block(User user, User other, boolean on) {
-        if (user.id.equals(other.id)) {
-            throw new Http.Fail(400, "Vous ne pouvez pas vous bloquer vous-même.");
+    public void block(User user, User other, boolean on) {
+        long v;
+        synchronized (this) {
+            if (user.id.equals(other.id)) {
+                throw new Http.Fail(400, "Vous ne pouvez pas vous bloquer vous-même.");
+            }
+            if (on) {
+                user.blocked.add(other.id);
+            } else {
+                user.blocked.remove(other.id);
+            }
+            v = changed();
         }
-        if (on) {
-            user.blocked.add(other.id);
-        } else {
-            user.blocked.remove(other.id);
-        }
-        save();
+        persist(v);
     }
 
-    public synchronized void mute(User user, long until) {
-        user.mutedUntil = until;
-        save();
+    public void mute(User user, long until) {
+        long v;
+        synchronized (this) {
+            user.mutedUntil = until;
+            v = changed();
+        }
+        persist(v);
     }
 
     /** One line of free text (no control characters, no angle brackets), at most {@code max} characters. */
@@ -263,17 +344,18 @@ public final class Accounts {
         return t;
     }
 
-    public synchronized int count() {
-        return users.size();
+    public int count() {
+        return byId.size();
     }
 
-    public synchronized User get(String id) {
-        return id == null ? null : users.get(id);
+    /** Without the lock (see {@link #byId}). */
+    public User get(String id) {
+        return id == null ? null : byId.get(id);
     }
 
-    public synchronized User byUsername(String username) {
+    public User byUsername(String username) {
         String id = username == null ? null : byName.get(username.trim().toLowerCase(Locale.ROOT));
-        return id == null ? null : users.get(id);
+        return id == null ? null : byId.get(id);
     }
 
     public synchronized List<Map<String, Object>> search(String q, String excludeId) {
@@ -310,19 +392,27 @@ public final class Accounts {
         }
     }
 
-    private void setPassword(User user, String password) {
-        byte[] salt = Ids.bytes(16);
-        user.salt = Base64.getEncoder().encodeToString(salt);
-        user.iterations = ITERATIONS;
-        user.hash = Base64.getEncoder().encodeToString(pbkdf2(password, salt, ITERATIONS));
+    /** The stored password of an account, read together (it is changed under the lock). */
+    private record Credentials(String hash, String salt, int iterations) {
     }
 
-    private static boolean verify(User user, String password) {
-        if (user.hash == null || user.salt == null) {
+    private synchronized Credentials credentials(User user) {
+        return new Credentials(user.hash, user.salt, user.iterations);
+    }
+
+    /** A new salt and hash: slow on purpose, never under the lock. */
+    private static Credentials hash(String password) {
+        byte[] salt = Ids.bytes(16);
+        return new Credentials(Base64.getEncoder().encodeToString(pbkdf2(password, salt, ITERATIONS)),
+                Base64.getEncoder().encodeToString(salt), ITERATIONS);
+    }
+
+    private static boolean verify(Credentials c, String password) {
+        if (c.hash() == null || c.salt() == null) {
             return false;
         }
-        byte[] expected = Base64.getDecoder().decode(user.hash);
-        byte[] actual = pbkdf2(password, Base64.getDecoder().decode(user.salt), user.iterations);
+        byte[] expected = Base64.getDecoder().decode(c.hash());
+        byte[] actual = pbkdf2(password, Base64.getDecoder().decode(c.salt()), c.iterations());
         return Ids.same(expected, actual);
     }
 
@@ -344,8 +434,60 @@ public final class Accounts {
         while (!d.isEmpty() && d.peekFirst() < limit) {
             d.pollFirst();
         }
-        if (d.size() >= MAX_FAILURES) {
+        if (d.isEmpty()) {
+            failures.remove(key, d); // the map does not keep every identifier ever tried
+        } else if (d.size() >= MAX_FAILURES) {
             throw new Http.Fail(429, "Trop de tentatives. Réessayez dans quelques minutes.");
+        }
+    }
+
+    /** Counts one more registration from an address, or refuses it beyond {@link #MAX_REGISTRATIONS} in an hour. */
+    private void limitRegistrations(String address) {
+        long now = System.currentTimeMillis();
+        Deque<Long> d = registrations.computeIfAbsent(address, k -> new java.util.ArrayDeque<>());
+        synchronized (d) {
+            while (!d.isEmpty() && d.peekFirst() < now - REGISTRATION_WINDOW_MS) {
+                d.pollFirst();
+            }
+            if (d.size() >= MAX_REGISTRATIONS) {
+                throw new Http.Fail(429, "Trop de comptes créés depuis cette adresse. Réessayez dans une heure.");
+            }
+            d.addLast(now);
+        }
+        if (registrations.size() > 10_000) {
+            registrations.values().removeIf(q -> {
+                synchronized (q) {
+                    return q.isEmpty() || q.peekLast() < now - REGISTRATION_WINDOW_MS;
+                }
+            });
+        }
+    }
+
+    /**
+     * The address a limit counts by: an IPv4 address, or the /64 network of an IPv6 one (a single home or machine
+     * gets a whole /64, and could otherwise change address at each attempt).
+     */
+    static String address(String ip) {
+        if (ip == null || ip.indexOf(':') < 0) {
+            return ip == null ? "?" : ip;
+        }
+        try {
+            String literal = ip.indexOf('%') >= 0 ? ip.substring(0, ip.indexOf('%')) : ip;
+            if (literal.startsWith("[") && literal.endsWith("]")) {
+                literal = literal.substring(1, literal.length() - 1);
+            }
+            // a literal address: no name lookup
+            byte[] a = java.net.InetAddress.getByName(literal).getAddress();
+            if (a.length == 4) {
+                return java.net.InetAddress.getByAddress(a).getHostAddress(); // ::ffff:a.b.c.d
+            }
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < 8; i += 2) {
+                sb.append(Integer.toHexString(((a[i] & 0xFF) << 8) | (a[i + 1] & 0xFF))).append(':');
+            }
+            return sb.append(":/64").toString();
+        } catch (IOException | RuntimeException e) {
+            return ip;
         }
     }
 
@@ -359,13 +501,13 @@ public final class Accounts {
         String token = Ids.token();
         long now = System.currentTimeMillis();
         sessions.put(Ids.sha256(token), new Session(user.id, now, now + SESSION_DAYS * 86_400_000L));
-        saveSessions();
+        persistSessions(sessionsChanged());
         return token;
     }
 
     public void closeSession(String token) {
         if (token != null && sessions.remove(Ids.sha256(token)) != null) {
-            saveSessions();
+            persistSessions(sessionsChanged());
         }
     }
 
@@ -388,30 +530,40 @@ public final class Accounts {
     // ------------------------------------------------------------- friends
 
     /** Sends (or accepts, when the other user already asked) a friend request. */
-    public synchronized String requestFriend(User from, User to) {
-        if (from.id.equals(to.id)) {
-            throw new Http.Fail(400, "Vous ne pouvez pas vous ajouter vous-même.");
+    public String requestFriend(User from, User to) {
+        String result;
+        long v;
+        synchronized (this) {
+            if (from.id.equals(to.id)) {
+                throw new Http.Fail(400, "Vous ne pouvez pas vous ajouter vous-même.");
+            }
+            if (from.friends.contains(to.id)) {
+                return "friends";
+            }
+            if (from.incoming.contains(to.id)) {
+                link(from, to);
+                result = "friends";
+            } else {
+                from.outgoing.add(to.id);
+                to.incoming.add(from.id);
+                result = "sent";
+            }
+            v = changed();
         }
-        if (from.friends.contains(to.id)) {
-            return "friends";
-        }
-        if (from.incoming.contains(to.id)) {
-            link(from, to);
-            save();
-            return "friends";
-        }
-        from.outgoing.add(to.id);
-        to.incoming.add(from.id);
-        save();
-        return "sent";
+        persist(v);
+        return result;
     }
 
-    public synchronized void accept(User user, User other) {
-        if (!user.incoming.contains(other.id)) {
-            throw new Http.Fail(404, "Aucune demande de cette personne.");
+    public void accept(User user, User other) {
+        long v;
+        synchronized (this) {
+            if (!user.incoming.contains(other.id)) {
+                throw new Http.Fail(404, "Aucune demande de cette personne.");
+            }
+            link(user, other);
+            v = changed();
         }
-        link(user, other);
-        save();
+        persist(v);
     }
 
     private static void link(User a, User b) {
@@ -424,14 +576,18 @@ public final class Accounts {
     }
 
     /** Declines a request, cancels one, or removes a friend. */
-    public synchronized void unlink(User user, User other) {
-        user.friends.remove(other.id);
-        user.incoming.remove(other.id);
-        user.outgoing.remove(other.id);
-        other.friends.remove(user.id);
-        other.incoming.remove(user.id);
-        other.outgoing.remove(user.id);
-        save();
+    public void unlink(User user, User other) {
+        long v;
+        synchronized (this) {
+            user.friends.remove(other.id);
+            user.incoming.remove(other.id);
+            user.outgoing.remove(other.id);
+            other.friends.remove(user.id);
+            other.incoming.remove(user.id);
+            other.outgoing.remove(user.id);
+            v = changed();
+        }
+        persist(v);
     }
 
     // --------------------------------------------------------- persistence
@@ -444,6 +600,7 @@ public final class Accounts {
                     for (Object o : list) {
                         User u = User.fromJson(Json.obj(o));
                         users.put(u.id, u);
+                        byId.put(u.id, u);
                         byName.put(u.username.toLowerCase(Locale.ROOT), u.id);
                     }
                 }
@@ -460,34 +617,164 @@ public final class Accounts {
                 }
             }
         } catch (IOException | RuntimeException e) {
-            throw new IllegalStateException("Comptes illisibles : " + e.getMessage(), e);
+            // never a copy loaded on its own: the accounts made since would vanish without anyone noticing
+            String copy = "";
+            try {
+                List<Path> copies = backups(usersFile.getParent());
+                if (!copies.isEmpty()) {
+                    copy = " ; copie de secours la plus récente : " + copies.get(copies.size() - 1)
+                            + " (à remettre à la main en comptes.json, le serveur arrêté)";
+                }
+            } catch (IOException ignored) {
+                // no copy to name
+            }
+            throw new IllegalStateException("Comptes illisibles : " + e.getMessage() + copy, e);
         }
     }
 
-    private synchronized void save() {
-        List<Object> list = new ArrayList<>();
-        for (User u : users.values()) {
-            list.add(u.toJson());
-        }
-        write(usersFile, Json.stringify(Json.map("version", 1L, "users", list)));
+    /*
+     * Writing. Every change counts a version under the lock (changed()); the caller then writes, outside the lock,
+     * a file holding at least its version (persist()), and answers only once it is on the disk: nothing is
+     * deferred. Changes made while a write is on its way share the next one, so a burst does not write the whole
+     * file once per change, and the requests with a session never wait for the disk (they do not take the lock).
+     */
+
+    /** Changes counted (under the lock) and written (under usersWrite). */
+    private long usersVersion;
+    private long usersWritten;
+    private final Object usersWrite = new Object();
+    private final java.util.concurrent.atomic.AtomicLong sessionsVersion = new java.util.concurrent.atomic.AtomicLong();
+    private long sessionsWritten;
+    private final Object sessionsWrite = new Object();
+    /** Files written, for the tests (fewer than the changes when they come together). */
+    final java.util.concurrent.atomic.AtomicLong writes = new java.util.concurrent.atomic.AtomicLong();
+
+    /** Copies of comptes.json kept, one a day. */
+    static final int BACKUPS = 7;
+    private static final Pattern BACKUP = Pattern.compile("comptes-\\d{4}-\\d{2}-\\d{2}\\.json");
+
+    /** Counts a change of the accounts; called under the lock, the caller then calls {@link #persist}. */
+    private long changed() {
+        return ++usersVersion;
     }
 
-    private void saveSessions() {
-        Map<String, Object> m = new LinkedHashMap<>();
-        for (Map.Entry<String, Session> e : sessions.entrySet()) {
-            Session s = e.getValue();
-            m.put(e.getKey(), Json.map("userId", s.userId(), "createdAt", s.createdAt(), "expiresAt", s.expiresAt()));
-        }
-        write(sessionsFile, Json.stringify(m));
+    private long sessionsChanged() {
+        return sessionsVersion.incrementAndGet();
     }
 
-    static synchronized void write(Path file, String text) {
+    /** Writes comptes.json unless a write made after the change {@code version} is already on the disk. */
+    private void persist(long version) {
+        synchronized (usersWrite) {
+            if (usersWritten >= version) {
+                return;
+            }
+            long v;
+            List<Object> list = new ArrayList<>();
+            synchronized (this) {
+                v = usersVersion;
+                for (User u : users.values()) {
+                    list.add(u.toJson());
+                }
+            }
+            String text = Json.stringify(Json.map("version", 1L, "users", list));
+            backup();
+            writeDurable(usersFile, text);
+            writes.incrementAndGet();
+            usersWritten = v;
+        }
+    }
+
+    private void persistSessions(long version) {
+        synchronized (sessionsWrite) {
+            if (sessionsWritten >= version) {
+                return;
+            }
+            long v = sessionsVersion.get();
+            Map<String, Object> m = new LinkedHashMap<>();
+            for (Map.Entry<String, Session> e : sessions.entrySet()) {
+                Session s = e.getValue();
+                m.put(e.getKey(), Json.map("userId", s.userId(), "createdAt", s.createdAt(), "expiresAt", s.expiresAt()));
+            }
+            writeDurable(sessionsFile, Json.stringify(m));
+            writes.incrementAndGet();
+            sessionsWritten = v;
+        }
+    }
+
+    /**
+     * Before the first write of a day, copies comptes.json as it was (comptes-AAAA-MM-JJ.json) and keeps the
+     * {@link #BACKUPS} latest copies. They hold the password hashes, as comptes.json.
+     */
+    private void backup() {
+        Path dir = usersFile.getParent();
+        Path today = dir.resolve("comptes-" + java.time.LocalDate.now() + ".json");
+        if (Files.exists(today) || !Files.isRegularFile(usersFile)) {
+            return;
+        }
         try {
-            Path tmp = file.resolveSibling(file.getFileName() + ".tmp");
-            Files.writeString(tmp, text);
-            Files.move(tmp, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            Files.copy(usersFile, today, StandardCopyOption.COPY_ATTRIBUTES);
+            List<Path> copies = backups(dir);
+            for (int i = 0; i < copies.size() - BACKUPS; i++) {
+                Files.deleteIfExists(copies.get(i));
+            }
         } catch (IOException e) {
-            Log.error("Serveur : écriture impossible de " + file, e);
+            Log.error("Serveur : copie de secours impossible de " + usersFile, e);
+        }
+    }
+
+    /** The daily copies of comptes.json, oldest first. */
+    static List<Path> backups(Path dir) throws IOException {
+        try (java.util.stream.Stream<Path> files = Files.list(dir)) {
+            return files.filter(f -> BACKUP.matcher(f.getFileName().toString()).matches()).sorted().toList();
+        }
+    }
+
+    /** Locks of the files being written (one per file: two files are written at the same time). */
+    private static final Map<Path, Object> FILE_LOCKS = new ConcurrentHashMap<>();
+
+    /** Writes a file whole (a temporary file, then moved over it): a crash never leaves it half written. */
+    static void write(Path file, String text) {
+        write(file, text, false);
+    }
+
+    /** As {@link #write(Path, String)}, and on the disk before it returns (a power cut keeps it). */
+    static void writeDurable(Path file, String text) {
+        write(file, text, true);
+    }
+
+    private static void write(Path file, String text, boolean durable) {
+        synchronized (FILE_LOCKS.computeIfAbsent(file.toAbsolutePath().normalize(), k -> new Object())) {
+            try {
+                Path tmp = file.resolveSibling(file.getFileName() + ".tmp");
+                if (durable) {
+                    try (java.nio.channels.FileChannel ch = java.nio.channels.FileChannel.open(tmp,
+                            java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.WRITE,
+                            java.nio.file.StandardOpenOption.TRUNCATE_EXISTING)) {
+                        java.nio.ByteBuffer b = java.nio.ByteBuffer.wrap(text.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                        while (b.hasRemaining()) {
+                            ch.write(b);
+                        }
+                        ch.force(true);
+                    }
+                } else {
+                    Files.writeString(tmp, text);
+                }
+                Files.move(tmp, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+                if (durable) {
+                    syncDirectory(file.getParent());
+                }
+            } catch (IOException e) {
+                Log.error("Serveur : écriture impossible de " + file, e);
+            }
+        }
+    }
+
+    /** The new name of the file is on the disk too (Linux; a directory cannot be opened this way on Windows). */
+    private static void syncDirectory(Path dir) {
+        try (java.nio.channels.FileChannel ch = java.nio.channels.FileChannel.open(dir, java.nio.file.StandardOpenOption.READ)) {
+            ch.force(true);
+        } catch (IOException | RuntimeException ignored) {
+            // not possible here
         }
     }
 

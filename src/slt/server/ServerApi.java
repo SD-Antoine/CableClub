@@ -148,7 +148,7 @@ final class ServerApi {
         r.on("POST", "/api/auth/register", (ex, p) -> {
             Map<String, Object> b = Http.readJson(ex);
             Accounts.User u = accounts.register(Json.str(b, "username"), Json.str(b, "password"), Json.str(b, "name"),
-                    Json.bool(b, "terms", false));
+                    Json.bool(b, "terms", false), Http.clientIp(ex));
             Http.json(ex, 200, Json.map("token", accounts.openSession(u), "user", me(u)));
         });
         r.on("POST", "/api/auth/login", (ex, p) -> {
