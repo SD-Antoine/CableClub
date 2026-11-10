@@ -26,12 +26,13 @@ public final class StoredFilesTest {
         Path dir = Files.createTempDirectory("cableclub-stored-test");
         try {
             rooms(dir);
+            others(dir);
         } finally {
             try (Stream<Path> files = Files.walk(dir)) {
                 files.sorted(Comparator.reverseOrder()).forEach(p -> p.toFile().delete());
             }
         }
-        System.out.println(failed == 0 ? "ok     fichiers enregistrés inchangés (salles de chaque état, autre version)"
+        System.out.println(failed == 0 ? "ok     fichiers enregistrés inchangés (salles, galerie, signalements, décisions ; autre version)"
                 : "ÉCHEC  fichiers enregistrés : " + failed + " cas");
         System.exit(failed == 0 ? 0 : 1);
     }
@@ -88,6 +89,54 @@ public final class StoredFilesTest {
         Room noGame = Room.fromStore(bare);
         check(noGame.game.gameId() == null && noGame.game.gen() == 0 && noGame.game.gen(3) == 3, "salle sans jeu enregistré");
         check(Json.stringify(noGame.toStore().get("game")).equals("{}"), "son jeu s'écrit comme avant ({})");
+    }
+
+    /**
+     * The gallery, the reports and the moderators' decisions: a file of another version (a key more in an entry) read,
+     * changed by one operation, written again: only what the operation changes moves, the unknown key stays.
+     */
+    private static void others(Path base) throws Exception {
+        Path dir = base.resolve("autres");
+        Files.createDirectories(dir);
+        Accounts accounts = new Accounts(dir);
+        Accounts.User a = accounts.register("test_autre_a", "mot-de-passe-de-test", "Alice", true);
+        Accounts.User mod = accounts.register("test_autre_m", "mot-de-passe-de-test", "Modo", true);
+
+        // gallery: one more room created with the mode
+        ModeSpec spec = ModeSpec.stored(Json.stringify(Json.map("schemaVersion", 1L, "id", "defi-fichier", "name", "Défi fichier",
+                "description", "Un mode de test.", "author", "Testeur", "license", "CC-BY-4.0", "players", Json.map("min", 1L, "max", 4L),
+                "needs", List.of(), "engine", Json.map("links", "none", "encounters", "firstPerZone", "team", "free"),
+                "rules", Json.map("autoEnd", true, "endWhen", "all", "wipeEndsRun", true), "win", List.of("champion"),
+                "lose", List.of("teamWiped"), "objectives", List.of())));
+        Map<String, Object> entry = Json.map("owner", a.id, "publishedAt", 5L, "uses", 2L, "hidden", false, "mode", spec.toJson(),
+                "updatedAt", 6L, "etiquette", "d'une autre version");
+        Files.writeString(dir.resolve("modes-publics.json"), Json.stringify(Json.map("version", 1L, "modes", List.of(entry))));
+        new ModeGallery(dir, accounts).used(spec);
+        Map<String, Object> expected = new LinkedHashMap<>(entry);
+        expected.put("uses", 3L);
+        check(Files.readString(dir.resolve("modes-publics.json")).equals(Json.stringify(Json.map("version", 1L, "modes", List.of(expected)))),
+                "galerie : une utilisation de plus, le reste du fichier inchangé");
+
+        // reports: one marked handled
+        Map<String, Object> report = Json.map("id", 4L, "at", 1L, "by", mod.id, "byName", "Modo", "userId", a.id, "userName", "Alice",
+                "username", "test_autre_a", "reason", "test", "done", false, "note", "d'une autre version");
+        Files.writeString(dir.resolve("signalements.json"), Json.stringify(Json.map("version", 1L, "reports", List.of(report))));
+        new Reports(dir).done(4, mod, true);
+        Map<String, Object> handled = new LinkedHashMap<>(report);
+        handled.put("done", true);
+        handled.put("doneBy", "Modo");
+        check(Files.readString(dir.resolve("signalements.json")).equals(Json.stringify(Json.map("version", 1L, "reports", List.of(handled)))),
+                "signalements : un signalement traité, le reste inchangé");
+
+        // the moderators' decisions: one more
+        Map<String, Object> verdict = Json.map("verdict", "cleared", "by", mod.id, "at", 5L, "note", "d'une autre version");
+        Files.writeString(dir.resolve("parties-verifiees.json"), Json.stringify(Json.map("version", 1L, "runs", Json.map("salle1/" + a.id, verdict))));
+        RunReviews reviews = new RunReviews(dir);
+        reviews.decide("salle2", a.id, RunReviews.REMOVED, mod);
+        Map<String, Object> runs = Json.obj(Json.parseObject(Files.readString(dir.resolve("parties-verifiees.json"))).get("runs"));
+        check(Json.stringify(runs.get("salle1/" + a.id)).equals(Json.stringify(verdict)), "décisions : l'ancienne inchangée");
+        check(RunReviews.REMOVED.equals(new RunReviews(dir).verdict("salle2", a.id))
+                && RunReviews.CLEARED.equals(reviews.verdict("salle1", a.id)), "décisions : la nouvelle enregistrée, l'ancienne lue");
     }
 
     /** A room of two players launched, with a few events, ended with {@code outcome} (null: still running). */

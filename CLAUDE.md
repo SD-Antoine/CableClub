@@ -16,7 +16,10 @@ classiques. Générations 1 à 5. Version dans `src/slt/Version.java`, historiqu
    - `Room.java` : l'état de la salle et les mécanismes communs (zones, liens, journal, directives) ;
      `event()` passe chaque événement au mode de la salle, puis `dispatch()` (le `switch` sur les
      types) pour ceux qui n'ont pas encore de règle propre. Sa vue et son fichier : `RoomStore.java` ;
-     les échanges entre joueurs (désactivés, `RoomTrades.ENABLED`) : `RoomTrades.java`.
+     les échanges entre joueurs (désactivés, `RoomTrades.ENABLED`) : `RoomTrades.java`. Ce qui est enregistré
+     se lit par des vues typées qui gardent la map lue et la réécrivent telle quelle (`RoomGame`, `RoomEnd`,
+     `MemberRom`, `ModeGallery.Entry`, `Reports.Report`, `RunReviews.Verdict`) : un fichier enregistré ne change
+     jamais à cause d'elles (`StoredFilesTest`) ; ne pas les remplacer par des `record` qui recréeraient la map.
    - `Mode.java` : le moteur des modes — rencontres (`EncounterLogic`), captures (`CaptureLogic`),
      morts, équipe, Hardcore, démarrage et fin (`RunLogic`) — composé de trois primitives (joueurs
      liés ou non, première rencontre ou chromatiques seuls, équipe libre ou d'un seul Pokémon) ; les
