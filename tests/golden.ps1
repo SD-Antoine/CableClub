@@ -37,7 +37,8 @@ $web = "-Dslt.web=$(Join-Path $Root 'web')"
 # the DS shiny rate in RAM (8b), the live screens on demand, then the scenarios
 foreach ($check in @('slt.server.EventSchemaTest', 'slt.server.CapabilitiesTest', 'slt.server.ModeSpecTest', 'slt.server.RecordsTest',
         'slt.server.RunChecksTest', 'slt.player.DsShinyTest', 'slt.player.DsSaveTest', 'slt.player.track.NdsMapTest',
-        'slt.server.ShinyRamTest', 'slt.server.LiveScreensTest', 'slt.client.LiveCastTest')) {
+        'slt.server.ShinyRamTest', 'slt.server.LiveScreensTest', 'slt.client.LiveCastTest',
+        'slt.server.LogTailTest', 'slt.server.RoomsDormantTest')) {
     & $java '--enable-preview' '-Dstdout.encoding=UTF-8' $web '-cp' $Classes $check
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }

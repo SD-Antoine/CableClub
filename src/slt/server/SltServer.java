@@ -107,6 +107,14 @@ public final class SltServer {
                 Log.warn("Serveur : " + e.getMessage());
             }
         }, 5, 5, java.util.concurrent.TimeUnit.SECONDS);
+        // the finished rooms not used for a while go back to sleep (point 6b)
+        timer.scheduleWithFixedDelay(() -> {
+            try {
+                rooms.sweep(System.currentTimeMillis());
+            } catch (RuntimeException e) {
+                Log.warn("Serveur : " + e.getMessage());
+            }
+        }, 5, 5, java.util.concurrent.TimeUnit.MINUTES);
         hub.onPresence((userId, online) -> {
             Accounts.User u = accounts.get(userId);
             if (u != null) {

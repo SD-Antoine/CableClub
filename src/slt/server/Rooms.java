@@ -49,6 +49,24 @@ public final class Rooms {
     private final Hub hub;
     private final Map<String, Room> rooms = new ConcurrentHashMap<>();
     private final Map<String, Screen> screens = new ConcurrentHashMap<>();
+    /**
+     * Finished rooms not used lately, kept as a summary only (point 6b of the follow-up of the audit of 2026-11-10):
+     * a finished run weighs about 265 KB in memory, and nobody plays in it any more. Its file is read again when it
+     * is asked for ({@link #find}), and it goes back to sleep {@link #SLEEP_AFTER_MS} after its last use. Its results
+     * stay here for the statistics and the leaderboards. A room is in rooms or here (both an instant while it moves:
+     * then rooms counts).
+     */
+    record Asleep(String id, String code, String outcome, Set<String> history, Set<String> members, Set<String> invites,
+                  List<Records.Run> runs, Map<String, Object> card) {
+    }
+
+    private final Map<String, Asleep> asleep = new ConcurrentHashMap<>();
+    /** Finished rooms awake: their last use (ms), from the first sweep after they ended. */
+    private final Map<String, Long> used = new ConcurrentHashMap<>();
+    static final long SLEEP_AFTER_MS = 30 * 60_000L;
+    /** Taken after the lock of a room, never before: a room is woken without holding any other. */
+    private final Object wakeLock = new Object();
+
     /** When the image of a player's game was last asked for by another member (room id/user id → ms). */
     final Map<String, Long> watched = new ConcurrentHashMap<>();
     /** An image asked for in this time is watched: the interface asks 4 times a second while it shows it. */
@@ -73,16 +91,106 @@ public final class Rooms {
     // ------------------------------------------------------------- queries
 
     Room get(String id) {
-        Room r = id == null ? null : rooms.get(id);
+        Room r = find(id);
         if (r == null) {
             throw new Http.Fail(404, "Salle introuvable.");
         }
         return r;
     }
 
-    /** The room, or null. */
+    /** A room, or null; a finished room asleep is read again from its file. */
     Room find(String id) {
-        return id == null ? null : rooms.get(id);
+        if (id == null) {
+            return null;
+        }
+        Room r = rooms.get(id);
+        if (r == null) {
+            return asleep.containsKey(id) ? wake(id) : null;
+        }
+        used.computeIfPresent(id, (k, t) -> System.currentTimeMillis());
+        return r;
+    }
+
+    private static boolean over(Room r) {
+        return !"lobby".equals(r.state) && !"running".equals(r.state);
+    }
+
+    /** What a finished room keeps asleep: its players, its results and its card in the history (a few KB). */
+    private Asleep summary(Room r) {
+        Set<String> members = new java.util.LinkedHashSet<>();
+        for (Room.Member m : r.members) {
+            members.add(m.userId);
+        }
+        return new Asleep(r.id, r.code, r.ended == null ? null : Json.str(r.ended, "outcome"), Set.copyOf(r.history),
+                Set.copyOf(members), Set.copyOf(r.invites), List.copyOf(Records.of(r)),
+                Json.obj(Json.copy(historyCard(r)))); // a copy: nothing of the room is kept
+    }
+
+    /** A room as the history shows it. */
+    private Map<String, Object> historyCard(Room r) {
+        Map<String, Object> v = r.view(hub, false);
+        v.put("summary", r.ended != null ? r.ended.get("summary") : r.summary());
+        return v;
+    }
+
+    /** A finished room read from its file, kept awake (its last use: now). Null if it cannot be read. */
+    private Room wake(String id) {
+        synchronized (wakeLock) {
+            Room r = rooms.get(id);
+            if (r != null || !asleep.containsKey(id)) {
+                return r;
+            }
+            r = read(id);
+            if (r == null) {
+                return null;
+            }
+            used.put(id, System.currentTimeMillis());
+            rooms.put(id, r);
+            asleep.remove(id);
+            return r;
+        }
+    }
+
+    /** A room as its file holds it (not kept). */
+    private Room read(String id) {
+        try {
+            return Room.fromStore(Json.parseObject(Files.readString(dir.resolve(id + ".json"))));
+        } catch (IOException | RuntimeException e) {
+            Log.warn("Serveur : salle illisible " + id + " : " + e.getMessage());
+            return null;
+        }
+    }
+
+    /** Whether a room is asleep (for the tests). */
+    boolean isAsleep(String id) {
+        return asleep.containsKey(id) && !rooms.containsKey(id);
+    }
+
+    /**
+     * Puts to sleep the finished rooms not used for {@link #SLEEP_AFTER_MS}: called every few minutes by the server.
+     * A room that just ended starts its time at the first call.
+     */
+    void sweep(long now) {
+        for (Room r : new ArrayList<>(rooms.values())) {
+            synchronized (r) {
+                if (!over(r)) {
+                    used.remove(r.id);
+                    continue;
+                }
+                Long t = used.putIfAbsent(r.id, now);
+                if (t == null || now - t < SLEEP_AFTER_MS) {
+                    continue;
+                }
+                synchronized (wakeLock) {
+                    if (rooms.get(r.id) != r) {
+                        continue;
+                    }
+                    asleep.put(r.id, summary(r));
+                    rooms.remove(r.id);
+                    used.remove(r.id);
+                }
+            }
+        }
     }
 
     /** Rooms this user plays in that are not over (lobby or running). */
@@ -165,7 +273,9 @@ public final class Rooms {
         long played = 0;
         long won = 0;
         long running = 0;
+        Set<String> seen = new java.util.HashSet<>();
         for (Room r : rooms.values()) {
+            seen.add(r.id);
             synchronized (r) {
                 if (!r.history.contains(userId) || "lobby".equals(r.state)) {
                     continue;
@@ -174,6 +284,14 @@ public final class Rooms {
                 if ("running".equals(r.state)) {
                     running++;
                 } else if (r.ended != null && "victory".equals(Json.str(r.ended, "outcome"))) {
+                    won++;
+                }
+            }
+        }
+        for (Asleep a : asleep.values()) {
+            if (!seen.contains(a.id()) && a.history().contains(userId)) {
+                played++;
+                if ("victory".equals(a.outcome())) {
                     won++;
                 }
             }
@@ -208,6 +326,14 @@ public final class Rooms {
         for (Room r : rooms.values()) {
             if (c.equals(r.code)) {
                 return r;
+            }
+        }
+        for (Asleep a : asleep.values()) {
+            if (c.equals(a.code())) {
+                Room r = wake(a.id());
+                if (r != null) {
+                    return r;
+                }
             }
         }
         throw new Http.Fail(404, "Aucune salle avec ce code.");
@@ -252,9 +378,16 @@ public final class Rooms {
     /** Every finished run on this server (statistics and leaderboards). */
     List<Records.Run> runs() {
         List<Records.Run> out = new ArrayList<>();
+        Set<String> seen = new java.util.HashSet<>();
         for (Room r : rooms.values()) {
+            seen.add(r.id);
             synchronized (r) {
                 out.addAll(Records.of(r));
+            }
+        }
+        for (Asleep a : asleep.values()) {
+            if (!seen.contains(a.id())) {
+                out.addAll(a.runs());
             }
         }
         return out;
@@ -263,15 +396,32 @@ public final class Rooms {
     /** Every Soul Link the user took part in (history). */
     List<Object> history(Accounts.User user) {
         List<Object> out = new ArrayList<>();
+        Set<String> seen = new java.util.HashSet<>();
         for (Room r : rooms.values()) {
+            seen.add(r.id);
             synchronized (r) {
                 if (!r.history.contains(user.id) || "lobby".equals(r.state)) {
                     continue;
                 }
-                Map<String, Object> v = r.view(hub, false);
-                v.put("summary", r.ended != null ? r.ended.get("summary") : r.summary());
-                out.add(v);
+                out.add(historyCard(r));
             }
+        }
+        // the finished rooms asleep: their card kept, with who is online and their pictures of now
+        for (Asleep a : asleep.values()) {
+            if (seen.contains(a.id()) || !a.history().contains(user.id)) {
+                continue;
+            }
+            Map<String, Object> v = Json.obj(Json.copy(a.card()));
+            List<Object> ms = Json.arr(v.get("members"));
+            if (ms != null) {
+                for (Object o : ms) {
+                    Map<String, Object> m = Json.obj(o);
+                    String uid = Json.str(m, "userId");
+                    m.put("online", hub.online(uid));
+                    m.put("avatar", hub.avatar(uid));
+                }
+            }
+            out.add(v);
         }
         out.sort((a, b) -> Long.compare(Json.num(Json.obj(b), "launchedAt", 0), Json.num(Json.obj(a), "launchedAt", 0)));
         return out;
@@ -606,6 +756,8 @@ public final class Rooms {
             }
             Collection<String> before = audience(r);
             rooms.remove(r.id);
+            asleep.remove(r.id);
+            used.remove(r.id);
             deleteFiles(r);
             hub.send(before, "room-deleted", Json.map("roomId", r.id));
             onDeleted.accept(r.id);
@@ -818,6 +970,9 @@ public final class Rooms {
             appendLog(r, l);
         }
         save(r);
+        if (rooms.get(r.id) != r) {
+            asleep.computeIfPresent(r.id, (k, a) -> summary(r));
+        }
         Collection<String> who = audience(r);
         for (Map<String, Object> l : out.logs) {
             Map<String, Object> msg = new LinkedHashMap<>(l);
@@ -884,28 +1039,75 @@ public final class Rooms {
             }
         }
         Path f = logDir.resolve(r.id + ".jsonl");
-        List<Object> out = new ArrayList<>();
         if (!Files.isRegularFile(f)) {
-            return out;
+            return new ArrayList<>();
         }
         try {
-            List<String> lines = Files.readAllLines(f, StandardCharsets.UTF_8);
-            for (String line : lines) {
-                if (line.isBlank()) {
-                    continue;
-                }
-                Map<String, Object> l = Json.parseObject(line);
-                if (Json.num(l, "seq", 0) > after) {
-                    out.add(l);
-                }
-            }
+            return tail(f, after, limit);
         } catch (IOException | RuntimeException e) {
             throw new Http.Fail(500, "Journal illisible : " + e.getMessage());
         }
-        if (out.size() > limit) {
-            return new ArrayList<>(out.subList(out.size() - limit, out.size()));
+    }
+
+    /**
+     * The last {@code limit} lines of a journal numbered after {@code after}, in their order. Read from the end by
+     * blocks: a request costs at most {@code limit} lines, however long the journal (a long run has thousands). The
+     * lines are numbered in order, so the reading stops at the first one not after {@code after}.
+     */
+    static List<Object> tail(Path f, long after, int limit) throws IOException {
+        java.util.ArrayDeque<Object> out = new java.util.ArrayDeque<>();
+        try (java.nio.channels.FileChannel ch = java.nio.channels.FileChannel.open(f, StandardOpenOption.READ)) {
+            long pos = ch.size();
+            byte[] rest = new byte[0]; // the start of a line cut by the beginning of the block read
+            java.nio.ByteBuffer buf = java.nio.ByteBuffer.allocate(64 * 1024);
+            while (out.size() < limit) {
+                if (pos == 0) {
+                    if (rest.length > 0) {
+                        add(out, rest, 0, rest.length, after); // the first line of the journal
+                    }
+                    break;
+                }
+                int n = (int) Math.min(buf.capacity(), pos);
+                pos -= n;
+                buf.clear().limit(n);
+                while (buf.hasRemaining()) {
+                    if (ch.read(buf, pos + buf.position()) < 0) {
+                        throw new IOException("fin du journal inattendue");
+                    }
+                }
+                byte[] block = new byte[n + rest.length];
+                System.arraycopy(buf.array(), 0, block, 0, n);
+                System.arraycopy(rest, 0, block, n, rest.length);
+                int end = block.length;
+                boolean more = true;
+                for (int i = block.length - 1; i >= 0 && more && out.size() < limit; i--) {
+                    if (block[i] == '\n') {
+                        more = add(out, block, i + 1, end, after);
+                        end = i;
+                    }
+                }
+                if (!more || out.size() >= limit) {
+                    break;
+                }
+                rest = java.util.Arrays.copyOf(block, end);
+            }
         }
-        return out;
+        return new ArrayList<>(out);
+    }
+
+    /** One line of a journal read from the end: added in front if numbered after {@code after}; false to stop. */
+    private static boolean add(java.util.ArrayDeque<Object> out, byte[] b, int from, int to, long after) {
+        String line = new String(b, from, to - from, StandardCharsets.UTF_8);
+        if (line.isBlank()) {
+            return true;
+        }
+        Map<String, Object> l = Json.parseObject(line);
+        long seq = Json.num(l, "seq", 0);
+        if (seq > after) {
+            out.addFirst(l);
+            return true;
+        }
+        return seq <= 0; // a line without a number does not stop the reading
     }
 
     /** How many rooms in each state, players online in a running one, live screens kept and watched (numbers only). */
@@ -914,7 +1116,9 @@ public final class Rooms {
         long running = 0;
         long over = 0;
         long playing = 0;
+        Set<String> seen = new java.util.HashSet<>();
         for (Room r : rooms.values()) {
+            seen.add(r.id);
             synchronized (r) {
                 switch (r.state == null ? "" : r.state) {
                     case "lobby" -> lobby++;
@@ -930,10 +1134,11 @@ public final class Rooms {
                 }
             }
         }
+        long sleeping = asleep.keySet().stream().filter(id -> !seen.contains(id)).count();
         long now = System.currentTimeMillis();
-        long seen = watched.values().stream().filter(t -> now - t < WATCH_MS).count();
-        return Json.map("lobby", lobby, "running", running, "over", over, "playersInRunning", playing,
-                "screens", (long) screens.size(), "screensWatched", seen);
+        long watching = watched.values().stream().filter(t -> now - t < WATCH_MS).count();
+        return Json.map("lobby", lobby, "running", running, "over", over + sleeping, "asleep", sleeping,
+                "playersInRunning", playing, "screens", (long) screens.size(), "screensWatched", watching);
     }
 
     // ------------------------------------------------------ live screens
@@ -1132,6 +1337,11 @@ public final class Rooms {
      * A room nobody else played in goes with it.
      */
     void accountDeleted(Accounts.User user) {
+        for (Asleep a : new ArrayList<>(asleep.values())) {
+            if (a.history().contains(user.id) || a.members().contains(user.id) || a.invites().contains(user.id)) {
+                wake(a.id());
+            }
+        }
         for (Room r : new ArrayList<>(rooms.values())) {
             synchronized (r) {
                 Room.Member m = r.member(user.id);
@@ -1150,6 +1360,7 @@ public final class Rooms {
                 if (!others) {
                     Collection<String> before = audience(r);
                     rooms.remove(r.id);
+                    used.remove(r.id);
                     deleteFiles(r);
                     hub.send(before, "room-deleted", Json.map("roomId", r.id));
                     onDeleted.accept(r.id);
@@ -1242,13 +1453,17 @@ public final class Rooms {
             for (Path p : ds) {
                 try {
                     Room r = Room.fromStore(Json.parseObject(Files.readString(p)));
-                    rooms.put(r.id, r);
+                    if (over(r)) {
+                        asleep.put(r.id, summary(r));
+                    } else {
+                        rooms.put(r.id, r);
+                    }
                 } catch (IOException | RuntimeException e) {
                     Log.warn("Serveur : salle illisible " + p.getFileName() + " : " + e.getMessage());
                 }
             }
         }
-        Log.info("Serveur : " + rooms.size() + " salle(s) chargée(s)");
+        Log.info("Serveur : " + rooms.size() + " salle(s) chargée(s), " + asleep.size() + " partie(s) terminée(s) en résumé");
     }
 
     Set<String> ids() {
