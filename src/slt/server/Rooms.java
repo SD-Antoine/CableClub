@@ -389,6 +389,7 @@ public final class Rooms {
         }
         Map<String, Object> rando = Json.obj(body.get("rando"));
         r.rando = rando == null ? new LinkedHashMap<>() : rando;
+        r.rando.put("shinyRam", true); // DS games: the rate is applied while playing, nothing of it in the ROM
         if (Json.num(r.rando, "seed", -1) < 0) {
             r.rando.put("seed", String.valueOf(Ids.seed()));
         } else {
@@ -469,6 +470,7 @@ public final class Rooms {
                     throw new Http.Fail(409, "La randomisation ne peut plus changer une fois l'aventure lancée.");
                 }
                 r.rando = rando;
+                r.rando.put("shinyRam", true); // every ROM is generated again: none of them has the rate any more
                 if (Json.num(rando, "seed", -1) < 0) {
                     r.rando.put("seed", String.valueOf(Ids.seed()));
                 } else {

@@ -82,12 +82,10 @@ export function shinyNum(rando) {
   return n > 0 && n < SHINY_DENOMINATOR ? Math.max(1, Math.round(SHINY_DENOMINATOR / n)) : 0;
 }
 
-/** The shiny rate of a room (part of the randomization: the DS games get it in their ROM). Not in generation 1. */
+/** The shiny rate of a room (part of the randomization, applied while playing). Not in generation 1. */
 function shinyCard(rando, gen, changed) {
   if (gen < 2) return null;
-  const how = gen >= 4
-    ? 'Écrit dans la ROM de la salle : vaut pour tous les Pokémon du jeu, sauvages comme ceux des dresseurs.'
-    : 'Appliqué pendant la partie : chaque Pokémon sauvage a cette chance d’apparaître chromatique (étincelles, couleurs, et chromatique une fois capturé).';
+  const how = 'Appliqué pendant la partie : chaque Pokémon sauvage a cette chance d’apparaître chromatique (étincelles, couleurs, et chromatique une fois capturé).';
   const k = shinyNum(rando);
   const custom = k > 1 || rando.shinyCustom === true;
   const odds = (n) => (n >= SHINY_DENOMINATOR ? 'tous les Pokémon' : `≈ 1 sur ${Math.round(SHINY_DENOMINATOR / n)}`);

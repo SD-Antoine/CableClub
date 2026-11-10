@@ -16,6 +16,25 @@ public final class NdsReader implements GameReader {
     private static final int RAM_SIZE = 4 << 20;
     /** Full scans for wild Pokémon are spaced out (they read the whole 4 MB). */
     private static final long WILD_SCAN_NS = 900_000_000L;
+    /**
+     * Generation 5: the map of the save buffer only changes at a door; outside it keeps the map of the last one (the
+     * French White on Route 1, still Nuvema; White 2 in Floccesy, still Route 19). The game's place-name panels know
+     * the real one: their block in the heap starts with this magic and the name of its source file, then the current
+     * map further on (measured on the French White and White 2: towns, routes, buildings, gates). Gone during a battle.
+     */
+    private static final byte[] PLACE_NAME = "field_place_name.c".getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+    private static final long PLACE_NAME_MAGIC = 0x194E0093L;
+    private static final int PLACE_NAME_MAP_BW = 0x5E;
+    private static final int PLACE_NAME_MAP_B2W2 = 0x66;
+    /** The save buffer of generation 5, day care included (after the boxes, unlike generation 4). */
+    private static final int SAVE_SPAN_GEN5 = 0x26000;
+    /**
+     * Unreadable readings in a row of the party of the save found (one reading every 30 images): from the first
+     * number, it may have moved, and only a buffer of the same trainer takes over; from the second, the game was
+     * reset, another save may be playing. A reading alone proves nothing: the save stays where it was found.
+     */
+    private static final int MOVED_READS = 6;
+    private static final int RESET_READS = 120;
 
     /**
      * Save buffer layout of one family (offsets from the start of the save buffer):
@@ -28,11 +47,18 @@ public final class NdsReader implements GameReader {
     }
 
     /**
-     * Black / White / Black 2 / White 2 (party, trainer, money, badges and map verified on Black 2 / White 2).
+     * Black 2 / White 2 (party, trainer, money, badges and map of the last door verified on Black 2 / White 2).
      * Poké Balls are in the main item pocket.
      */
     static final Layout GEN5 = new Layout(NdsPkm.GEN5_PARTY_SIZE, 649, 0x18E00, 0x19414, 0x21104, -1,
             0x21100, 0x19504, 0x400, 24, 0x1000, 0x18400, 310, 0x4);
+
+    /**
+     * Black / White: as Black 2 / White 2, with money and badges 0x100 further (party, trainer, money and box names
+     * verified on the French White; at the other offset the money reads 0xFFFFFFFF and the save was never found).
+     */
+    static final Layout BW = new Layout(NdsPkm.GEN5_PARTY_SIZE, 649, 0x18E00, 0x19414, 0x21204, -1,
+            0x21200, 0x19504, 0x400, 24, 0x1000, 0x18400, 310, 0x4);
 
     /*
      * Generation 4: "general" save block (layout of the save file, as documented by save editors),
@@ -69,17 +95,23 @@ public final class NdsReader implements GameReader {
         if (layout == DP || layout == PT) {
             return new int[]{186, 187};
         }
-        return layout == GEN5 ? new int[]{145} : new int[0];
+        return layout == GEN5 || layout == BW ? new int[]{145} : new int[0];
     }
 
     private final Layout layout;
     private final String game;
     private final GameInfo info;
-    private long base = -1;
-    private int trainerShift;
+    private volatile long base = -1;
+    private volatile int trainerShift;
+    /** The trainer of the save found (ID and name), null until its party has a Pokémon. */
+    private String player;
+    private int unreadable;
     private long lastWildScan;
     private List<Mon> lastWild = List.of();
     private volatile boolean fieldShown;
+    private int placeName = -1;
+    private int lastPlace = -1;
+    private int lastSaved = -1;
 
     public NdsReader(Layout layout, String game, GameInfo info) {
         this.layout = layout;
@@ -89,7 +121,8 @@ public final class NdsReader implements GameReader {
 
     public static NdsReader forGame(String game, GameInfo info) {
         return switch (game) {
-            case "black", "white", "black2", "white2" -> new NdsReader(GEN5, game, info);
+            case "black", "white" -> new NdsReader(BW, game, info);
+            case "black2", "white2" -> new NdsReader(GEN5, game, info);
             case "diamond", "pearl" -> new NdsReader(DP, game, info);
             case "platinum" -> new NdsReader(PT, game, info);
             case "heartgold", "soulsilver" -> new NdsReader(HGSS, game, info);
@@ -105,6 +138,16 @@ public final class NdsReader implements GameReader {
         fieldShown = on;
     }
 
+    /** Whether the field is shown (ShinyBoost: a wild battle starts when it goes away). */
+    public boolean fieldShown() {
+        return fieldShown;
+    }
+
+    /** Console address and size of the main RAM, where the Pokémon structures are (ShinyBoost). */
+    public static long[] ram() {
+        return new long[]{RAM, RAM_SIZE};
+    }
+
     /** The game ("white2"…). */
     public String game() {
         return game;
@@ -112,7 +155,7 @@ public final class NdsReader implements GameReader {
 
     /** Generation 5 (Black / White, Black 2 / White 2). */
     public boolean gen5() {
-        return layout == GEN5;
+        return layout == GEN5 || layout == BW;
     }
 
     /** Console address of the current map number (u16) in the live save buffer, -1 until the save is found. */
@@ -129,7 +172,7 @@ public final class NdsReader implements GameReader {
         if (base < 0) {
             return -1;
         }
-        return base + layout.trainerId + trainerShift + (layout == GEN5 ? 0x0D : 8);
+        return base + layout.trainerId + trainerShift + (gen5() ? 0x0D : 8);
     }
 
     @Override
@@ -149,24 +192,43 @@ public final class NdsReader implements GameReader {
             return null;
         }
         byte[] d = ram.data;
-        if (base < 0 || partyAt(d, (int) (base - RAM) + layout.party) == null) {
-            base = locate(d);
+        if (base < 0) {
+            base = locate(d, null);
             if (base < 0) {
                 return null;
             }
         }
-        int b = (int) (base - RAM);
-        List<Mon> party = partyAt(d, b + layout.party);
+        List<Mon> party = partyAt(d, (int) (base - RAM) + layout.party);
         if (party == null) {
-            base = -1;
-            return null;
+            unreadable++;
+            if (unreadable >= RESET_READS) {
+                player = null;
+                unreadable = 0;
+                base = locate(d, null);
+            } else if (unreadable >= MOVED_READS) {
+                long moved = locate(d, player);
+                base = moved >= 0 ? moved : base;
+            }
+            party = base < 0 ? null : partyAt(d, (int) (base - RAM) + layout.party);
+            if (party == null) {
+                return null;
+            }
+        }
+        unreadable = 0;
+        int b = (int) (base - RAM);
+        if (!party.isEmpty()) {
+            player = trainerKey(d, b, trainerShift);
         }
         int ot = NdsPkm.u16(d, b + layout.trainerId + trainerShift);
         int badges = Integer.bitCount(d[b + layout.badges + trainerShift] & 0xFF);
         if (layout.badgesExtra >= 0) {
             badges += Integer.bitCount(d[b + layout.badgesExtra + trainerShift] & 0xFF);
         }
-        int map = layout.map >= 0 ? NdsPkm.u16(d, b + layout.map) : -1;
+        int saved = layout.map >= 0 ? NdsPkm.u16(d, b + layout.map) : -1;
+        int map = gen5() ? liveMap(d, saved) : saved;
+        if (gen5() && map == 0) {
+            map = -1; // a save buffer not filled in yet (the map tables name map 0 all the same)
+        }
         if (map >= 0 && info != null && info.hasMaps() && info.map(map) == null) {
             map = -1;
         }
@@ -180,7 +242,7 @@ public final class NdsReader implements GameReader {
             lastWildScan = now;
             lastWild = scanWild(d, party, ot);
         }
-        long money = layout.money >= 0 ? NdsPkm.u32(d, b + layout.money + (layout == GEN5 ? 0 : trainerShift)) : -1;
+        long money = layout.money >= 0 ? NdsPkm.u32(d, b + layout.money + (gen5() ? 0 : trainerShift)) : -1;
         if (money > 9_999_999) {
             money = -1;
         }
@@ -190,7 +252,7 @@ public final class NdsReader implements GameReader {
         if (hof.length > 0 && map >= 0) {
             cleared = 0;
             for (int h : hof) {
-                if (map == h && badges >= 8) {
+                if (saved == h && badges >= 8) {
                     cleared = 1;
                 }
             }
@@ -199,7 +261,7 @@ public final class NdsReader implements GameReader {
     }
 
     private int[][] pockets() {
-        if (layout == GEN5) {
+        if (gen5()) {
             return POCKETS_GEN5;
         }
         if (layout == PT) {
@@ -359,7 +421,7 @@ public final class NdsReader implements GameReader {
      */
     private int usualPocket(int item) {
         boolean ball = (item >= 1 && item <= 16) || (item >= 492 && item <= 500) || item == 576;
-        if (layout == GEN5) {
+        if (gen5()) {
             return item >= 17 && item <= 54 ? 3 : 0;
         }
         if (ball) {
@@ -417,9 +479,12 @@ public final class NdsReader implements GameReader {
     /**
      * Finds the save buffer: a party block whose trainer block (same buffer)
      * holds the player's ID and a name. When several copies exist, the live
-     * one is the one with money (the backup copy is blank there).
+     * one is the one with money (the backup copy is blank there). Other blocks of the RAM look like a party too: a
+     * scripted battle leaves its own, the Catching demonstration of generation 5 about ten of them, and they stay
+     * long after it. Generation 5 also wants the name of the first box, and with {@code trainer} only that
+     * trainer's buffer will do.
      */
-    private long locate(byte[] d) {
+    private long locate(byte[] d, String trainer) {
         long best = -1;
         int bestScore = -1;
         int bestShift = 0;
@@ -443,6 +508,12 @@ public final class NdsReader implements GameReader {
             if (money > 999_999) {
                 continue; // not the player's money: another buffer that happens to look alike
             }
+            if (gen5() && !party.isEmpty() && !boxNamed(d, start)) {
+                continue;
+            }
+            if (trainer != null && !trainer.equals(trainerKey(d, start, shift))) {
+                continue;
+            }
             int score = party.size() * 2 + (money > 0 ? 1 : 0);
             if (score > bestScore) {
                 bestScore = score;
@@ -450,8 +521,42 @@ public final class NdsReader implements GameReader {
                 bestShift = shift;
             }
         }
-        trainerShift = bestShift;
+        if (best >= 0) {
+            trainerShift = bestShift;
+        }
         return best;
+    }
+
+    /** The first box of the save buffer at {@code start} has a name: 1 to 19 characters terminated by 0xFFFF (UTF-16). */
+    private boolean boxNamed(byte[] d, int start) {
+        int off = start + layout.boxNames;
+        if (off + 0x28 > d.length) {
+            return false;
+        }
+        for (int i = 0; i < 0x14; i++) {
+            int ch = NdsPkm.u16(d, off + 2 * i);
+            if (ch == 0xFFFF) {
+                return i > 0;
+            }
+            if (ch < 0x20) {
+                return false;
+            }
+        }
+        return false;
+    }
+
+    /** Who plays the save buffer at {@code start}: trainer ID, secret ID and name. */
+    private String trainerKey(byte[] d, int start, int shift) {
+        int t = start + layout.trainerId + shift;
+        StringBuilder key = new StringBuilder(Long.toHexString(NdsPkm.u32(d, t))).append(':');
+        for (int i = 0; i < 8; i++) {
+            int ch = NdsPkm.u16(d, t - 0x10 + 2 * i);
+            if (ch == 0xFFFF) {
+                break;
+            }
+            key.append((char) ch);
+        }
+        return key.toString();
     }
 
     /**
@@ -480,11 +585,15 @@ public final class NdsReader implements GameReader {
 
     private boolean trainerOk(byte[] d, int start, int shift, List<Mon> party) {
         int t = start + layout.trainerId + shift;
-        if (t - 0x10 < 0 || t + 2 > d.length || !plausibleName(d, t - 0x10, layout != GEN5)) {
+        if (t - 0x10 < 0 || t + 4 > d.length || !plausibleName(d, t - 0x10, !gen5())) {
             return false;
         }
+        if (party.isEmpty()) {
+            return true;
+        }
+        // no player has both IDs at 0, but scripted battles do, and free memory is full of zeros
         int ot = NdsPkm.u16(d, t);
-        return party.isEmpty() || party.stream().anyMatch(p -> p.otId() == ot);
+        return NdsPkm.u32(d, t) != 0 && party.stream().anyMatch(p -> p.otId() == ot);
     }
 
     /** Player name: 1 to 7 characters terminated by 0xFFFF (gen 4: the game's codes, all below 0x200; gen 5: UTF-16). */
@@ -531,6 +640,133 @@ public final class NdsReader implements GameReader {
             }
         }
         return out;
+    }
+
+    /**
+     * Generation 5: the map the player is on. Without the place-name block (battle, menus) it stays the last one known,
+     * unless the map of the save changed meanwhile (a door); without any, the map of the save.
+     */
+    private int liveMap(byte[] d, int saved) {
+        int place = placeNameMap(d);
+        if (place >= 0) {
+            lastPlace = place;
+        } else if (saved != lastSaved) {
+            lastPlace = -1;
+        }
+        lastSaved = saved;
+        return lastPlace >= 0 ? lastPlace : saved;
+    }
+
+    /** The current map in the place-name block of the game, found once and looked at again each time; -1 if none. */
+    private int placeNameMap(byte[] d) {
+        int value = placeName < 0 ? -1 : placeNameAt(d, placeName);
+        if (value >= 0) {
+            return value;
+        }
+        placeName = -1;
+        for (int off = 0; off + PLACE_NAME.length + 0x70 <= d.length; off += 4) {
+            if (NdsPkm.u32(d, off) == PLACE_NAME_MAGIC) {
+                value = placeNameAt(d, off);
+                if (value >= 0) {
+                    placeName = off;
+                    return value;
+                }
+            }
+        }
+        return -1;
+    }
+
+    private int placeNameAt(byte[] d, int off) {
+        if (NdsPkm.u32(d, off) != PLACE_NAME_MAGIC || off + 4 + PLACE_NAME.length > d.length) {
+            return -1;
+        }
+        for (int i = 0; i < PLACE_NAME.length; i++) {
+            if (d[off + 4 + i] != PLACE_NAME[i]) {
+                return -1;
+            }
+        }
+        int at = off + 4 + (layout == BW ? PLACE_NAME_MAP_BW : PLACE_NAME_MAP_B2W2);
+        if (at + 2 > d.length) {
+            return -1;
+        }
+        int value = NdsPkm.u16(d, at);
+        boolean known = info != null && info.hasMaps() ? info.map(value) != null : value < 0x400;
+        return value > 0 && known ? value : -1;
+    }
+
+    /**
+     * Every copy, in the image {@code d} of the main RAM, of the Pokémon that look wild right now (the player's ID, not
+     * an egg, not in the party), by personality: the offsets of the party structures, then of the box structures (the
+     * first 136 bytes) that carry the same personality and checksum. A Pokémon with a copy in the save buffer is the
+     * player's (PC, day care: its summary screen makes a party copy that looks wild) and is left out. Empty until the
+     * save is found.
+     */
+    public java.util.Map<Long, List<int[]>> wildCopies(byte[] d) {
+        java.util.Map<Long, List<int[]>> out = new java.util.LinkedHashMap<>();
+        long at = base;
+        if (at < 0) {
+            return out;
+        }
+        int b = (int) (at - RAM);
+        List<Mon> party = partyAt(d, b + layout.party);
+        if (party == null) {
+            return out;
+        }
+        int ot = NdsPkm.u16(d, b + layout.trainerId + trainerShift);
+        long[] mine = party.stream().mapToLong(Mon::uid).toArray();
+        int size = layout.partySize;
+        for (int off = 0; off + size <= d.length && out.size() <= 8; off += 4) {
+            if (!NdsPkm.plausible(d, off, size)) {
+                continue;
+            }
+            Mon mon = NdsPkm.decode(d, off, size, layout.maxSpecies, RAM);
+            if (mon != null && mon.otId() == ot && !mon.egg() && !contains(mine, mon.uid())) {
+                out.computeIfAbsent(mon.uid(), k -> new ArrayList<>()).add(new int[]{off, size});
+            }
+        }
+        for (java.util.Map.Entry<Long, List<int[]>> e : out.entrySet()) {
+            int first = e.getValue().get(0)[0];
+            for (int off = 0; off + NdsPkm.BOX_SIZE <= d.length; off += 4) {
+                if (NdsPkm.u32(d, off) == e.getKey() && d[off + 4] == 0 && d[off + 5] == 0
+                        && NdsPkm.u16(d, off + 6) == NdsPkm.u16(d, first + 6) && !covered(e.getValue(), off)) {
+                    e.getValue().add(new int[]{off, NdsPkm.BOX_SIZE});
+                }
+            }
+        }
+        int span = gen5() ? SAVE_SPAN_GEN5 : layout.boxes + layout.boxCount * layout.boxStride;
+        out.values().removeIf(copies -> copies.stream().anyMatch(c -> c[0] >= b && c[0] < b + span));
+        return out;
+    }
+
+    /**
+     * The personalities of the Pokémon in the boxes of the PC, in the image {@code d} of the main RAM (ShinyBoost: a
+     * Pokémon held in the PC screen is out of its box, and looks wild). Empty until the save is found.
+     */
+    public java.util.Set<Long> boxPersonalities(byte[] d) {
+        java.util.Set<Long> out = new java.util.HashSet<>();
+        long at = base;
+        if (at < 0) {
+            return out;
+        }
+        int b = (int) (at - RAM) + layout.boxes;
+        for (int box = 0; box < layout.boxCount; box++) {
+            for (int slot = 0; slot < 30; slot++) {
+                int off = b + box * layout.boxStride + slot * NdsPkm.BOX_SIZE;
+                if (off + 4 <= d.length && NdsPkm.u32(d, off) != 0) {
+                    out.add(NdsPkm.u32(d, off));
+                }
+            }
+        }
+        return out;
+    }
+
+    private static boolean covered(List<int[]> copies, int off) {
+        for (int[] c : copies) {
+            if (c[0] == off) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static boolean contains(long[] a, long v) {
@@ -643,7 +879,7 @@ public final class NdsReader implements GameReader {
         if (live != null && name.equals(live.nickname())) {
             return List.of();
         }
-        byte[] fresh = NdsPkm.withNickname(block, off, name, layout != GEN5);
+        byte[] fresh = NdsPkm.withNickname(block, off, name, !gen5());
         return fresh == null ? null : List.of(new Write(hdr + off, fresh));
     }
 
@@ -723,7 +959,7 @@ public final class NdsReader implements GameReader {
         out.add(new Write(hdr, partyWithout(block, i)));
         if (dead && layout.boxNames >= 0) {
             byte[] name = new byte[0x28];
-            boolean gen4 = layout != GEN5;
+            boolean gen4 = !gen5();
             int n = 0;
             for (char ch : DEAD_BOX_NAME.toCharArray()) {
                 int code = gen4 ? NdsPkm.gen4Code(String.valueOf(ch)) : ch;

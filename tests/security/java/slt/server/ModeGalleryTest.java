@@ -101,6 +101,9 @@ public final class ModeGalleryTest {
                 "son auteur le voit, marqué retiré");
         check(!listed(rooms, mod, pub), "ses salles ne sont plus dans les salles publiques");
         status(() -> gallery.publish(alice, mode("defi-alice", "Défi d’Alice, version 3")), 409, "un mode retiré ne se republie pas");
+        // nor by taking it out of the gallery first: that would erase the moderation's decision
+        status(() -> gallery.unpublish(alice, "defi-alice"), 409, "un mode retiré par la modération ne s'efface pas");
+        status(() -> gallery.publish(alice, mode("defi-alice", "Défi d’Alice, version 4")), 409, "ni ne se republie ensuite");
 
         // checks of a mode file (the editor): within a minute's bound, another player not slowed down
         long now = System.currentTimeMillis();

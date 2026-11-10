@@ -1,6 +1,7 @@
 # On every push and pull request: no third-party resource enters the repository (point 6, legal guardrail 1).
 # Fails on a ROM, a save, a BIOS or firmware, a ROM patch, an emulator state, a file whose header is the one of a
 # cartridge (whatever its name), or a picture, sound, font or archive that is not in tests/assets-allowlist.txt.
+# Then the tests: the referee's scenarios, the interface's data, the security tests and fuzzers (audit 9f).
 name: Contrôles
 
 on:
@@ -25,3 +26,36 @@ jobs:
         run: |
           node tests/assets-check.mjs
           node tests/assets-check.test.mjs
+
+  # the referee's non-regression and the security tests (audit 9f: the fuzzers on every pull request, not only at
+  # release time); the scripts are PowerShell and call javac.exe, hence Windows
+  tests:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Arbitre (scénarios golden)
+        shell: powershell
+        run: .\tests\golden.ps1
+
+      - name: Interface
+        shell: powershell
+        run: |
+          foreach ($t in 'battleteam', 'capabilities', 'objectives') {
+            node "tests\$t.test.mjs"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+
+      # Host check, fuzzers (JSON, DS saves, mode files, adapter manifests), gallery and room limits
+      - name: Tests de sécurité
+        shell: powershell
+        run: .\tests\security\security-tests.ps1

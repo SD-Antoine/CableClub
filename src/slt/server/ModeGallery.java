@@ -94,11 +94,17 @@ final class ModeGallery {
         return view(spec.id, e, user);
     }
 
-    /** The owner takes their mode out of the gallery (rooms already created keep their copy). */
+    /**
+     * The owner takes their mode out of the gallery (rooms already created keep their copy). A mode the moderation took
+     * out stays recorded: removing it would let its owner publish it again under the same id.
+     */
     synchronized void unpublish(Accounts.User user, String id) {
         Map<String, Object> e = entries.get(id);
         if (e == null || !user.id.equals(Json.str(e, "owner"))) {
             throw new Http.Fail(404, "Mode publié introuvable.");
+        }
+        if (Json.bool(e, "hidden", false)) {
+            throw new Http.Fail(409, "Ce mode a été retiré de la galerie par la modération : il n'y est déjà plus visible.");
         }
         entries.remove(id);
         save();

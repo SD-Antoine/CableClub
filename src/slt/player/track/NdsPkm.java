@@ -15,12 +15,12 @@ package slt.player.track;
 public final class NdsPkm {
 
     /**
-     * A Pokémon is shiny when its shiny value is under this: 8 in the games, the room's threshold when its ROM
-     * got another shiny rate (SltPatches), given by the room's directives.
+     * A Pokémon is shiny when its shiny value is under this: 8 in the games, the room's threshold when its ROM got
+     * another shiny rate (SltPatches, DS rooms of older versions), given by the room's directives.
      */
     static volatile int shinyThreshold = 8;
 
-    /** The room's shiny rate ({@code num} out of 8192, 0: the game's), as the patched ROM tests it (SltPatches). */
+    /** The shiny rate in the room's ROM ({@code num} out of 8192, 0: the game's), as that ROM tests it (SltPatches). */
     public static void shinyNumerator(int num) {
         shinyThreshold = slt.ShinyOdds.dsThreshold(num);
     }
@@ -80,6 +80,11 @@ public final class NdsPkm {
 
     static long u32(byte[] m, int off) {
         return (u16(m, off) | ((long) u16(m, off + 2) << 16)) & 0xFFFFFFFFL;
+    }
+
+    /** The u32 at {@code off} (ShinyBoost). */
+    public static long u32At(byte[] m, int off) {
+        return u32(m, off);
     }
 
     private static long next(long s) {
@@ -369,6 +374,73 @@ public final class NdsPkm {
         data[b + 6] = ups[0] | (ups[1] << 8);
         data[b + 7] = ups[2] | (ups[3] << 8);
         return true;
+    }
+
+    /**
+     * Trainer ID (low 16 bits) and secret ID (high 16 bits) the Pokémon at {@code off} carries (block A words 2-3),
+     * and its species in bits 32-47; -1 when the checksum fails.
+     */
+    public static long trainer(byte[] m, int off) {
+        long pid = u32(m, off);
+        int checksum = u16(m, off + 6);
+        int[] data = decrypt(m, off + 8, 64, checksum);
+        int sum = 0;
+        for (int w : data) {
+            sum = (sum + w) & 0xFFFF;
+        }
+        if (sum != checksum) {
+            return -1;
+        }
+        int a = ORDER[(int) (((pid & 0x3E000L) >>> 13) % 24)][0] * 16;
+        return (data[a + 2] & 0xFFFFL) | ((data[a + 3] & 0xFFFFL) << 16) | ((data[a] & 0xFFFFL) << 32);
+    }
+
+    /**
+     * The Pokémon at {@code off} with another personality, the way the game would store it: the four blocks moved to
+     * the order of the new value (the checksum, a sum of the words, does not change, so their encryption does not
+     * either), the party part encrypted again with the new value as seed. {@code size}: {@link #BOX_SIZE} or the party
+     * size. Null when the checksum fails.
+     */
+    public static byte[] withPersonality(byte[] m, int off, int size, long pid) {
+        long old = u32(m, off);
+        int checksum = u16(m, off + 6);
+        int[] data = decrypt(m, off + 8, 64, checksum);
+        int sum = 0;
+        for (int w : data) {
+            sum = (sum + w) & 0xFFFF;
+        }
+        if (sum != checksum || off + size > m.length) {
+            return null;
+        }
+        int[] from = ORDER[(int) (((old & 0x3E000L) >>> 13) % 24)];
+        int[] to = ORDER[(int) (((pid & 0x3E000L) >>> 13) % 24)];
+        int[] moved = new int[64];
+        for (int block = 0; block < 4; block++) {
+            System.arraycopy(data, from[block] * 16, moved, to[block] * 16, 16);
+        }
+        byte[] out = java.util.Arrays.copyOfRange(m, off, off + size);
+        out[0] = (byte) pid;
+        out[1] = (byte) (pid >>> 8);
+        out[2] = (byte) (pid >>> 16);
+        out[3] = (byte) (pid >>> 24);
+        long s = checksum;
+        for (int i = 0; i < 64; i++) {
+            s = next(s);
+            int v = moved[i] ^ (int) (s >>> 16);
+            out[8 + 2 * i] = (byte) v;
+            out[9 + 2 * i] = (byte) (v >>> 8);
+        }
+        if (size > BOX_SIZE) {
+            int[] party = decrypt(m, off + BOX_SIZE, (size - BOX_SIZE) / 2, old);
+            s = pid;
+            for (int i = 0; i < party.length; i++) {
+                s = next(s);
+                int v = party[i] ^ (int) (s >>> 16);
+                out[BOX_SIZE + 2 * i] = (byte) v;
+                out[BOX_SIZE + 1 + 2 * i] = (byte) (v >>> 8);
+            }
+        }
+        return out;
     }
 
     /**

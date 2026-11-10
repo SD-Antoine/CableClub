@@ -33,8 +33,11 @@ if ($LASTEXITCODE -ne 0) { throw 'Compilation du harnais impossible' }
 $java = Join-Path $JavaHome 'bin\java.exe'
 # the capabilities of the games are read from web\js\data (point 1d), whatever the current directory
 $web = "-Dslt.web=$(Join-Path $Root 'web')"
-# the event-schema, capabilities and mode-file checks first (points 1b, 1d, 2a), then the scenarios
-foreach ($check in @('slt.server.EventSchemaTest', 'slt.server.CapabilitiesTest', 'slt.server.ModeSpecTest', 'slt.server.RecordsTest', 'slt.server.RunChecksTest')) {
+# the event-schema, capabilities and mode-file checks first (points 1b, 1d, 2a), the verified runs (3e-1),
+# the DS shiny rate in RAM (8b), then the scenarios
+foreach ($check in @('slt.server.EventSchemaTest', 'slt.server.CapabilitiesTest', 'slt.server.ModeSpecTest', 'slt.server.RecordsTest',
+        'slt.server.RunChecksTest', 'slt.player.DsShinyTest', 'slt.player.DsSaveTest', 'slt.player.track.NdsMapTest',
+        'slt.server.ShinyRamTest')) {
     & $java '--enable-preview' '-Dstdout.encoding=UTF-8' $web '-cp' $Classes $check
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
