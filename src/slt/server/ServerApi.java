@@ -41,6 +41,7 @@ final class ServerApi {
     }
 
     void handle(HttpExchange ex) {
+        long start = System.nanoTime();
         String path = ex.getRequestURI().getPath();
         try {
             if (!path.startsWith("/api/")) {
@@ -59,6 +60,11 @@ final class ServerApi {
         } catch (Exception e) {
             Log.error("Serveur : erreur sur " + ex.getRequestMethod() + " " + path, e);
             Http.error(ex, 500, e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
+        } finally {
+            if (path.startsWith("/api/")) {
+                // an event stream lasts the whole session: counted, not timed
+                server.metrics.request(ex.getResponseCode(), "/api/stream".equals(path) ? -1 : System.nanoTime() - start);
+            }
         }
     }
 
@@ -109,6 +115,26 @@ final class ServerApi {
         for (String f : told) {
             hub.send(f, "friends", Json.map("reason", "removed"));
         }
+    }
+
+    private Map<String, Object> metrics() {
+        Runtime rt = Runtime.getRuntime();
+        long mb = 1024 * 1024;
+        double load = -1;
+        if (java.lang.management.ManagementFactory.getOperatingSystemMXBean() instanceof com.sun.management.OperatingSystemMXBean os) {
+            load = os.getProcessCpuLoad(); // share of all the cores, below 0 when not known yet
+        }
+        long now = System.currentTimeMillis();
+        return Json.map(
+                "server", Json.map("version", SltServer.VERSION, "startedAt", server.metrics.startedAt,
+                        "uptimeS", (now - server.metrics.startedAt) / 1000),
+                "online", Json.map("players", (long) hub.onlineUsers().size(), "streams", (long) hub.streamCount()),
+                "rooms", rooms.metrics(hub),
+                "accounts", (long) accounts.count(),
+                "memory", Json.map("usedMb", (rt.totalMemory() - rt.freeMemory()) / mb, "allocatedMb", rt.totalMemory() / mb,
+                        "maxMb", rt.maxMemory() / mb),
+                "cpu", Json.map("cores", (long) rt.availableProcessors(), "load", load < 0 ? null : Math.round(load * 1000) / 1000.0),
+                "requests", server.metrics.requests());
     }
 
     private Accounts.User admin(HttpExchange ex) {
@@ -315,6 +341,11 @@ final class ServerApi {
             Map<String, Object> report = reports.add(u, about, key, msg, Json.str(b, "reason"));
             hub.send(chat.onlineAdmins(), "report", Json.map("open", reports.open(), "report", report));
             Http.ok(ex);
+        });
+        // the state of the server for the moderators (point 5): numbers only, nobody named
+        r.on("GET", "/api/admin/metrics", (ex, p) -> {
+            admin(ex);
+            Http.json(ex, 200, metrics());
         });
         r.on("GET", "/api/admin/reports", (ex, p) -> {
             admin(ex);

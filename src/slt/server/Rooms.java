@@ -908,6 +908,34 @@ public final class Rooms {
         return out;
     }
 
+    /** How many rooms in each state, players online in a running one, live screens kept and watched (numbers only). */
+    Map<String, Object> metrics(Hub hub) {
+        long lobby = 0;
+        long running = 0;
+        long over = 0;
+        long playing = 0;
+        for (Room r : rooms.values()) {
+            synchronized (r) {
+                switch (r.state == null ? "" : r.state) {
+                    case "lobby" -> lobby++;
+                    case "running" -> {
+                        running++;
+                        for (Room.Member m : r.members) {
+                            if (hub.online(m.userId)) {
+                                playing++;
+                            }
+                        }
+                    }
+                    default -> over++;
+                }
+            }
+        }
+        long now = System.currentTimeMillis();
+        long seen = watched.values().stream().filter(t -> now - t < WATCH_MS).count();
+        return Json.map("lobby", lobby, "running", running, "over", over, "playersInRunning", playing,
+                "screens", (long) screens.size(), "screensWatched", seen);
+    }
+
     // ------------------------------------------------------ live screens
 
     /**

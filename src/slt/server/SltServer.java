@@ -61,6 +61,8 @@ public final class SltServer {
     final Reports reports;
     final ModeGallery gallery;
     final RunReviews reviews;
+    /** Counts of the requests, for the moderators (GET /api/admin/metrics). */
+    final Metrics metrics = new Metrics();
     final String name;
     private final java.util.concurrent.ScheduledExecutorService timer =
             Executors.newSingleThreadScheduledExecutor(r -> {

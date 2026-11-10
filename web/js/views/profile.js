@@ -6,7 +6,7 @@ import { local, srv } from '../api.js';
 import { store, refreshState, refreshFriends, me } from '../store.js';
 import { GAMES, gameName } from '../data/games.js';
 import { mobile } from '../platform.js';
-import { openReport, openDeleteAccount, adminDeleteAccount, reportsCard, flaggedRunsCard, legalLinks } from './moderation.js';
+import { openReport, openDeleteAccount, adminDeleteAccount, reportsCard, flaggedRunsCard, serverCard, legalLinks } from './moderation.js';
 
 const BIO_MAX = 160;
 
@@ -192,7 +192,8 @@ export function renderProfile(container) {
           h('div', { class: 'grow' }, h('b', null, 'Supprimer mon compte'),
             h('div', { class: 'tiny muted' }, 'Définitif : profil, amis, messages et sauvegardes du serveur.')),
           btn('Supprimer…', () => openDeleteAccount(), { kind: 'ghost danger small', iconName: 'trash' }))),
-      u.admin ? [h('div', { class: 'section-title' }, h('h2', null, 'Modération')), reportsCard(),
+      u.admin ? [h('div', { class: 'section-title' }, h('h2', null, 'État du serveur')), serverCard(),
+        h('div', { class: 'section-title' }, h('h2', null, 'Modération')), reportsCard(),
         h('div', { class: 'section-title' }, h('h2', null, 'Parties à vérifier')), flaggedRunsCard()] : null,
       h('div', { class: 'center mt' }, legalLinks()),
       u.createdAt ? h('p', { class: 'tiny faint center' }, `Compte créé le ${dateTime(u.createdAt)}`) : null);

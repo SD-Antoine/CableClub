@@ -64,6 +64,15 @@ public final class Hub {
         return streams.keySet();
     }
 
+    /** Event streams open (one per open application: a player may have several). */
+    int streamCount() {
+        int n = 0;
+        for (List<Sse.Sink> list : streams.values()) {
+            n += list.size();
+        }
+        return n;
+    }
+
     public void send(String userId, String event, Object data) {
         List<Sse.Sink> list = streams.get(userId);
         if (list == null) {

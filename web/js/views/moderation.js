@@ -144,6 +144,35 @@ export function flaggedRunsCard() {
   return box;
 }
 
+/** For the moderators: the state of the server (numbers only), read again on demand. */
+export function serverCard() {
+  const box = h('div', { class: 'card stack' }, h('p', { class: 'muted small' }, 'Chargement de l’état du serveur…'));
+  const line = (label, value) => h('div', { class: 'row small' }, h('span', { class: 'grow muted' }, label), h('b', null, String(value)));
+  const duration = (s) => (s >= 86400 ? `${Math.floor(s / 86400)} j ${Math.floor((s % 86400) / 3600)} h`
+    : s >= 3600 ? `${Math.floor(s / 3600)} h ${Math.floor((s % 3600) / 60)} min` : `${Math.floor(s / 60)} min`);
+  async function load() {
+    let m;
+    try { m = await srv.get('/admin/metrics'); } catch (e) { mount(box, h('p', { class: 'muted small' }, e.message)); return; }
+    const q = m.requests || {};
+    mount(box,
+      h('div', { class: 'row' }, h('b', { class: 'grow' }, `Serveur ${m.server?.version || ''}, en marche depuis ${duration(m.server?.uptimeS || 0)}`),
+        btn('Actualiser', load, { kind: 'ghost small', iconName: 'refresh' })),
+      line('Joueurs connectés', `${m.online?.players ?? 0} (${m.online?.streams ?? 0} fenêtres ouvertes)`),
+      line('Salles en cours', `${m.rooms?.running ?? 0} (${m.rooms?.playersInRunning ?? 0} joueurs connectés dedans)`),
+      line('Salles en attente / terminées', `${m.rooms?.lobby ?? 0} / ${m.rooms?.over ?? 0}`),
+      line('Écrans en direct regardés', `${m.rooms?.screensWatched ?? 0} sur ${m.rooms?.screens ?? 0}`),
+      line('Comptes', m.accounts ?? 0),
+      line('Requêtes', `${q.perSecond ?? 0}/s sur la dernière minute, ${q.total ?? 0} depuis le démarrage`),
+      line('Temps de réponse', `${q.meanMs ?? 0} ms en moyenne, ${q.maxMs ?? 0} ms au plus (dernière minute)`),
+      line('Erreurs', `${q.serverErrors ?? 0} du serveur, ${q.clientErrors ?? 0} refus (4xx)`),
+      line('Mémoire', `${m.memory?.usedMb ?? 0} Mo utilisés, ${m.memory?.maxMb ?? 0} Mo au plus`),
+      line('Processeur', m.cpu?.load == null ? `${m.cpu?.cores ?? '?'} cœur(s)`
+        : `${Math.round(m.cpu.load * 100)} % de ${m.cpu.cores} cœur(s)`));
+  }
+  load();
+  return box;
+}
+
 /** For the moderators: the reports, newest first, with what can be done. */
 export function reportsCard() {
   const box = h('div', { class: 'card stack' }, h('p', { class: 'muted small' }, 'Chargement des signalements…'));
