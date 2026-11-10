@@ -38,13 +38,13 @@ public final class RecordsTest {
         Room r = new Room();
         r.mode = mode;
         r.rules = r.spec().defaults();
-        r.game = Json.map("gameId", gameId, "gen", 3L);
+        r.game = new RoomGame(Json.map("gameId", gameId, "gen", 3L));
         List<Object> summary = new ArrayList<>();
         for (Object[] p : players) {
             summary.add(Json.map("userId", p[0], "status", p[1], "captures", (long) (int) p[2], "deaths", (long) (int) p[3],
                     "badges", (long) (int) p[4], "alive", (long) (int) p[5]));
         }
-        r.ended = Json.map("at", 1L, "outcome", outcome, "summary", summary);
+        r.ended = RoomEnd.read(Json.map("at", 1L, "outcome", outcome, "summary", summary));
         return r;
     }
 

@@ -154,7 +154,7 @@ final class Battles {
                 throw new Http.Fail(400, "Choisissez un adversaire de la salle.");
             }
             name = r.member(u.id).name;
-            gen = (int) Json.num(r.game, "gen", 3);
+            gen = r.game.gen(3);
             if (team(r.member(u.id)).isEmpty()) {
                 throw new Http.Fail(409, "Votre équipe n'est pas encore connue : lancez votre jeu un instant.");
             }

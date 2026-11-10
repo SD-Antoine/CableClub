@@ -85,7 +85,7 @@ public final class CapabilitiesTest {
         Room r = new Room();
         r.mode = mode;
         r.rules = Room.defaultRules(mode);
-        r.game = Json.map("gameId", gameId, "name", "Pokémon " + gameId, "gen", (long) gen);
+        r.game = new RoomGame(Json.map("gameId", gameId, "name", "Pokémon " + gameId, "gen", (long) gen));
         Room.Member m = new Room.Member();
         m.userId = "alice";
         m.name = "Alice";

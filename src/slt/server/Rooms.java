@@ -110,7 +110,7 @@ public final class Rooms {
         for (Room.Member m : r.members) {
             members.add(m.userId);
         }
-        return new Asleep(r.id, r.code, r.ended == null ? null : Json.str(r.ended, "outcome"), Set.copyOf(r.history),
+        return new Asleep(r.id, r.code, r.ended == null ? null : r.ended.outcome(), Set.copyOf(r.history),
                 Set.copyOf(members), Set.copyOf(r.invites), List.copyOf(Records.of(r)),
                 Json.obj(Json.copy(historyCard(r)))); // a copy: nothing of the room is kept
     }
@@ -118,7 +118,7 @@ public final class Rooms {
     /** A room as the history shows it. */
     private Map<String, Object> historyCard(Room r) {
         Map<String, Object> v = r.view(hub, false);
-        v.put("summary", r.ended != null ? r.ended.get("summary") : r.summary());
+        v.put("summary", r.ended != null ? r.ended.summary() : r.summary());
         return v;
     }
 
@@ -272,7 +272,7 @@ public final class Rooms {
                 played++;
                 if ("running".equals(r.state)) {
                     running++;
-                } else if (r.ended != null && "victory".equals(Json.str(r.ended, "outcome"))) {
+                } else if (r.ended != null && r.ended.victory()) {
                     won++;
                 }
             }
@@ -497,9 +497,8 @@ public final class Rooms {
         r.name = cleanName(Json.str(body, "name"), user.display + " — " + Json.str(game, "name"));
         r.leaderId = user.id;
         r.createdAt = System.currentTimeMillis();
-        r.game = Json.map("gameId", gameId, "name", Json.str(game, "name"), "gen", Json.num(game, "gen", 0),
-                "platform", Json.str(game, "platform"), "romCode", Json.str(game, "romCode"), "lang", Json.str(game, "lang"),
-                "crc", Json.str(game, "crc"));
+        r.game = RoomGame.of(gameId, Json.str(game, "name"), Json.num(game, "gen", 0), Json.str(game, "platform"),
+                Json.str(game, "romCode"), Json.str(game, "lang"), Json.str(game, "crc"));
         Object modeFile = body.get("modeFile");
         if (modeFile != null) {
             // an imported mode: checked like any mode file, kept in the room (its own copy)
@@ -556,7 +555,7 @@ public final class Rooms {
         m.name = user.display;
         m.joinedAt = System.currentTimeMillis();
         m.slot = slot;
-        m.rom.put("status", "missing");
+        m.rom = MemberRom.missing();
         return m;
     }
 
@@ -582,7 +581,7 @@ public final class Rooms {
                 if (changed.stream().anyMatch(Room.ROM_RULES::contains)) {
                     // a rule of the ROM (no evolution): every generated ROM is now outdated
                     for (Room.Member m : r.members) {
-                        m.rom = new LinkedHashMap<>(Map.of("status", "missing"));
+                        m.rom = MemberRom.missing();
                         m.ready = false;
                     }
                 }
@@ -621,7 +620,7 @@ public final class Rooms {
                 }
                 // every generated ROM is now outdated
                 for (Room.Member m : r.members) {
-                    m.rom = new LinkedHashMap<>(Map.of("status", "missing"));
+                    m.rom = MemberRom.missing();
                     m.ready = false;
                 }
             }
@@ -758,10 +757,8 @@ public final class Rooms {
         synchronized (r) {
             Room.Member m = r.member(user.id);
             String status = Json.str(body, "status");
-            Map<String, Object> rom = Json.map("status", status == null ? "missing" : status,
-                    "crc", Json.str(body, "crc"), "sourceCrc", Json.str(body, "sourceCrc"), "lang", Json.str(body, "lang"),
-                    "gameId", Json.str(body, "gameId"), "error", Json.str(body, "error"), "at", System.currentTimeMillis());
-            m.rom = rom;
+            m.rom = MemberRom.of(status == null ? "missing" : status, Json.str(body, "crc"), Json.str(body, "sourceCrc"),
+                    Json.str(body, "lang"), Json.str(body, "gameId"), Json.str(body, "error"), System.currentTimeMillis());
             List<Object> fam = Json.arr(body.get("families"));
             if (fam != null && fam.size() < 2000) {
                 m.families = new int[fam.size()];
@@ -783,7 +780,7 @@ public final class Rooms {
                 return;
             }
             Room.Member m = r.member(user.id);
-            if (ready && !"ready".equals(Json.str(m.rom, "status"))) {
+            if (ready && !m.rom.ready()) {
                 throw new Http.Fail(409, "Votre ROM n'est pas encore prête.");
             }
             m.ready = ready;
@@ -813,7 +810,7 @@ public final class Rooms {
             if (!Json.bool(r.rando, "perPlayer", false)) {
                 String crc = null;
                 for (Room.Member m : r.members) {
-                    String c = Json.str(m.rom, "crc");
+                    String c = m.rom.crc();
                     if (crc != null && c != null && !crc.equals(c)) {
                         throw new Http.Fail(409, "Les ROMs générées ne sont pas identiques (versions ou langues différentes ?). "
                                 + "Chaque joueur doit utiliser la même version du jeu, ou activez « une ROM par joueur ».");

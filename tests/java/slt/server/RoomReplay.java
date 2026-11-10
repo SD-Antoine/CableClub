@@ -142,7 +142,7 @@ public final class RoomReplay {
         if (game == null) {
             throw new Bad("jeu absent");
         }
-        r.game = Json.map("gameId", Json.str(game, "id"), "name", Json.str(game, "name"), "gen", Json.num(game, "gen", 0));
+        r.game = new RoomGame(Json.map("gameId", Json.str(game, "id"), "name", Json.str(game, "name"), "gen", Json.num(game, "gen", 0)));
         r.rules = r.spec().defaults();
         Map<String, Object> rules = Json.obj(sc.get("rules"));
         if (rules != null) {
@@ -171,7 +171,7 @@ public final class RoomReplay {
         StringBuilder out = new StringBuilder();
         out.append("# ").append(r.name).append('\n');
         out.append("mode ").append(r.mode).append(", ").append(r.gameName()).append(", génération ")
-                .append(Json.num(r.game, "gen", 0)).append(", joueurs ");
+                .append((long) r.game.gen()).append(", joueurs ");
         for (Room.Member m : r.members) {
             out.append(m.userId).append(m.userId.equals(r.leaderId) ? " (chef)" : "").append(m == r.members.getLast() ? "" : ", ");
         }
@@ -267,7 +267,7 @@ public final class RoomReplay {
         m.name = Json.str(p, "name") == null ? m.userId : Json.str(p, "name");
         m.slot = slot;
         m.ready = true;
-        m.rom = Json.map("status", "ready");
+        m.rom = new MemberRom(Json.map("status", "ready"));
         // the evolution lines of the player's ROM: species -> first species of its line (0: itself)
         Map<String, Object> fam = Json.obj(p.get("families"));
         if (fam != null) {

@@ -38,7 +38,7 @@ $web = "-Dslt.web=$(Join-Path $Root 'web')"
 foreach ($check in @('slt.server.EventSchemaTest', 'slt.server.CapabilitiesTest', 'slt.server.ModeSpecTest', 'slt.server.RecordsTest',
         'slt.server.RunChecksTest', 'slt.player.DsShinyTest', 'slt.player.DsSaveTest', 'slt.player.track.NdsMapTest',
         'slt.server.ShinyRamTest', 'slt.server.LiveScreensTest', 'slt.client.LiveCastTest',
-        'slt.server.LogTailTest', 'slt.server.RoomsDormantTest',
+        'slt.server.LogTailTest', 'slt.server.RoomsDormantTest', 'slt.server.StoredFilesTest',
         'slt.player.track.GbReaderTest', 'slt.player.track.Gen3ReaderTest', 'slt.player.track.NdsReaderTest')) {
     & $java '--enable-preview' '-Dstdout.encoding=UTF-8' $web '-cp' $Classes $check
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

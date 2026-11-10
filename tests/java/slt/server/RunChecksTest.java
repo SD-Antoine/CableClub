@@ -78,7 +78,7 @@ public final class RunChecksTest {
 
         // the run ends: it waits for a moderator
         r.state = "finished";
-        r.ended = Json.map("at", 1L, "outcome", "victory", "reason", "test", "summary", r.summary());
+        r.ended = RoomEnd.of(1L, "victory", "test", r.summary());
         List<Records.Run> runs = Records.of(r);
         check(Records.leaderboard(runs, accounts, reviews, "nuzlocke", null, 0, alice.id).isEmpty(), "partie signalée : pas au classement");
         check(Records.pending(runs, reviews, "nuzlocke", null, 0, alice.id) == 1, "le joueur la voit en cours de vérification");
@@ -93,7 +93,7 @@ public final class RunChecksTest {
         // a run nobody flagged counts, unless removed
         Room clean = room(alice);
         clean.state = "finished";
-        clean.ended = Json.map("at", 2L, "outcome", "victory", "reason", "test", "summary", clean.summary());
+        clean.ended = RoomEnd.of(2L, "victory", "test", clean.summary());
         List<Records.Run> cleanRuns = Records.of(clean);
         check(Records.leaderboard(cleanRuns, accounts, reviews, "nuzlocke", null, 0, alice.id).size() == 1, "partie sans signalement : au classement");
     }
@@ -106,7 +106,7 @@ public final class RunChecksTest {
         r.name = "Salle de test";
         r.mode = "nuzlocke";
         r.rules = r.spec().defaults();
-        r.game = Json.map("gameId", "red", "name", "Pokémon Rouge", "gen", 1L);
+        r.game = new RoomGame(Json.map("gameId", "red", "name", "Pokémon Rouge", "gen", 1L));
         Room.Member m = new Room.Member();
         m.userId = user.id;
         m.name = user.display;

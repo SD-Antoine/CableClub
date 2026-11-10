@@ -219,7 +219,7 @@ public final class ModeSpecTest {
         Room r = new Room();
         r.mode = mode;
         r.rules = Room.defaultRules(mode);
-        r.game = Json.map("gameId", "emerald", "name", "Pokémon Émeraude", "gen", 3L);
+        r.game = new RoomGame(Json.map("gameId", "emerald", "name", "Pokémon Émeraude", "gen", 3L));
         Room.Member m = new Room.Member();
         m.userId = "alice";
         m.name = "Alice";

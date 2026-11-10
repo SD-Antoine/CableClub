@@ -253,7 +253,7 @@ public final class Room {
         long joinedAt;
         int slot;
         boolean ready;
-        Map<String, Object> rom = new LinkedHashMap<>();
+        MemberRom rom = new MemberRom(null);
         int[] families = new int[0];
         String status = "playing";  // playing, champion, wiped
         boolean hasBalls;           // has had Poké Balls (the Soul Link starts when everybody has)
@@ -287,7 +287,7 @@ public final class Room {
                 mons.put(r.uid, r.toJson());
             }
             return Json.map("userId", userId, "name", name, "joinedAt", joinedAt, "slot", (long) slot, "ready", ready,
-                    "rom", rom, "families", families, "status", status, "mons", mons, "refunds", refunds,
+                    "rom", rom.toJson(), "families", families, "status", status, "mons", mons, "refunds", refunds,
                     "stats", stats.toJson(), "lastZone", lastZone, "hasBalls", hasBalls, "soloUid", soloUid,
                     "capGyms", capGyms == null ? null : java.util.Arrays.stream(capGyms).mapToObj(v -> (Object) (long) v).toList(),
                     "capLeague", (long) capLeague, "hmNext", hmNext);
@@ -314,7 +314,7 @@ public final class Room {
             x.ready = Json.bool(m, "ready", false);
             Map<String, Object> rom = Json.obj(m.get("rom"));
             if (rom != null) {
-                x.rom = rom;
+                x.rom = new MemberRom(rom);
             }
             List<Object> fam = Json.arr(m.get("families"));
             if (fam != null) {
@@ -401,7 +401,7 @@ public final class Room {
     String visibility = "private";
     long createdAt;
     long launchedAt;
-    Map<String, Object> game = new LinkedHashMap<>();
+    RoomGame game = new RoomGame(null);
     int maxPlayers = 4;
     String state = "lobby";     // lobby, running, finished, abandoned
     boolean adventureOpen;
@@ -415,7 +415,7 @@ public final class Room {
     /** Trades between players (switched off: see {@link RoomTrades#ENABLED}). */
     final RoomTrades trades = new RoomTrades(this);
     final Deque<String> namingQueue = new ArrayDeque<>();
-    Map<String, Object> ended;
+    RoomEnd ended;
     long logSeq;
     long refundSeq;
 
@@ -487,7 +487,7 @@ public final class Room {
                     throw new Http.Fail(409, "Cette règle est écrite dans la ROM de la salle : elle ne peut plus changer une fois l'aventure lancée.");
                 }
                 if (Boolean.TRUE.equals(e.getValue())) {
-                    String missing = Capabilities.missingForRule(e.getKey(), Json.str(game, "gameId"), (int) Json.num(game, "gen", 0));
+                    String missing = Capabilities.missingForRule(e.getKey(), game.gameId(), game.gen());
                     if (missing != null) {
                         throw new Http.Fail(409, "Règle indisponible avec " + gameName() + " : " + missing + ".");
                     }
@@ -516,7 +516,7 @@ public final class Room {
     }
 
     String gameName() {
-        String n = Json.str(game, "name");
+        String n = game.name();
         return n == null ? "Pokémon" : n;
     }
 
@@ -538,7 +538,7 @@ public final class Room {
 
     /** The checks look at the event (point 3e): they may flag the run, never change it. */
     private void check(Member m, Map<String, Object> ev) {
-        RunCheck.Run run = new RunCheck.Run(id, m.userId, mode, Json.str(game, "gameId"), (int) Json.num(game, "gen", 0),
+        RunCheck.Run run = new RunCheck.Run(id, m.userId, mode, game.gameId(), game.gen(),
                 java.util.Collections.unmodifiableMap(rules), m.checkState, System.currentTimeMillis());
         for (RunCheck c : checks) {
             List<RunCheck.Flag> raised;
@@ -1266,7 +1266,7 @@ public final class Room {
     /** Poké Balls of the room's game (thrown in battle: always allowed). */
     boolean ball(long item) {
         int id = (int) item;
-        return switch ((int) Json.num(game, "gen", 0)) {
+        return switch (game.gen()) {
             case 1 -> (id >= 1 && id <= 4) || id == 8;
             case 2 -> Set.of(1, 2, 4, 5, 157, 159, 160, 161, 164, 165, 166, 177).contains(id);
             case 3 -> id >= 1 && id <= 12;
@@ -1320,7 +1320,7 @@ public final class Room {
         state = "abandon".equals(outcome) ? "abandoned" : "finished";
         adventureOpen = false;
         namingQueue.clear();
-        ended = Json.map("at", System.currentTimeMillis(), "outcome", outcome, "reason", reason, "summary", summary());
+        ended = RoomEnd.of(System.currentTimeMillis(), outcome, reason, summary());
         String title = switch (outcome) {
             case "victory" -> runName() + " réussi !";
             case "defeat" -> runName() + " perdu.";

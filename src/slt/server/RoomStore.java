@@ -25,7 +25,7 @@ final class RoomStore {
         List<Object> ms = new ArrayList<>();
         for (Member m : room.members) {
             Map<String, Object> x = Json.map("userId", m.userId, "name", m.name, "slot", (long) m.slot,
-                    "ready", m.ready, "rom", m.rom, "status", m.status, "online", hub.online(m.userId),
+                    "ready", m.ready, "rom", m.rom.toJson(), "status", m.status, "online", hub.online(m.userId),
                     "leader", room.isLeader(m.userId), "hasBalls", m.hasBalls, "avatar", hub.avatar(m.userId));
             if (full) {
                 List<Object> mons = new ArrayList<>();
@@ -43,8 +43,8 @@ final class RoomStore {
         }
         Map<String, Object> v = Json.map("id", room.id, "name", room.name, "mode", room.mode, "visibility", room.visibility,
                 "leaderId", room.leaderId, "createdAt", room.createdAt,
-                "launchedAt", room.launchedAt, "game", room.game, "maxPlayers", (long) room.maxPlayers, "state", room.state,
-                "adventureOpen", room.adventureOpen, "members", ms, "ended", room.ended, "linkStarted", room.linkStarted);
+                "launchedAt", room.launchedAt, "game", room.game.toJson(), "maxPlayers", (long) room.maxPlayers, "state", room.state,
+                "adventureOpen", room.adventureOpen, "members", ms, "ended", room.ended == null ? null : room.ended.toJson(), "linkStarted", room.linkStarted);
         v.put("modeName", room.runName());
         v.put("family", room.spec().family());
         if (full) {
@@ -81,10 +81,10 @@ final class RoomStore {
         }
         Map<String, Object> store = Json.map("version", 1L, "id", room.id, "code", room.code, "name", room.name, "mode", room.mode, "visibility", room.visibility,
                 "leaderId", room.leaderId,
-                "createdAt", room.createdAt, "launchedAt", room.launchedAt, "game", room.game, "maxPlayers", (long) room.maxPlayers,
+                "createdAt", room.createdAt, "launchedAt", room.launchedAt, "game", room.game.toJson(), "maxPlayers", (long) room.maxPlayers,
                 "state", room.state, "adventureOpen", room.adventureOpen, "linkStarted", room.linkStarted, "rules", room.rules, "rando", room.rando, "members", ms,
                 "invites", new ArrayList<Object>(room.invites), "history", new ArrayList<Object>(room.history), "zones", zs,
-                "namingQueue", new ArrayList<Object>(room.namingQueue), "ended", room.ended, "logSeq", room.logSeq,
+                "namingQueue", new ArrayList<Object>(room.namingQueue), "ended", room.ended == null ? null : room.ended.toJson(), "logSeq", room.logSeq,
                 "refundSeq", room.refundSeq, "trades", room.trades.stored());
         if (room.customSpec != null) {
             store.put("modeFile", room.customSpec.toJson()); // the room keeps its own copy of an imported room.mode
@@ -119,7 +119,7 @@ final class RoomStore {
         r.launchedAt = Json.num(m, "launchedAt", 0);
         Map<String, Object> game = Json.obj(m.get("game"));
         if (game != null) {
-            r.game = game;
+            r.game = new RoomGame(game);
         }
         r.maxPlayers = (int) Json.num(m, "maxPlayers", 4);
         r.state = Json.str(m, "state");
@@ -162,7 +162,7 @@ final class RoomStore {
                 r.namingQueue.add(String.valueOf(o));
             }
         }
-        r.ended = Json.obj(m.get("ended"));
+        r.ended = RoomEnd.read(Json.obj(m.get("ended")));
         r.trades.load(Json.arr(m.get("trades")));
         r.logSeq = Json.num(m, "logSeq", 0);
         r.refundSeq = Json.num(m, "refundSeq", 0);

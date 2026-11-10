@@ -31,27 +31,19 @@ final class Records {
     /** The runs of a room that ended (none otherwise); the caller holds the room's lock. */
     static List<Run> of(Room r) {
         List<Run> out = new ArrayList<>();
-        if (r.ended == null) {
+        if (r.ended == null || r.ended.summary() == null) {
             return out;
         }
-        String outcome = Json.str(r.ended, "outcome");
-        List<Object> summary = Json.arr(r.ended.get("summary"));
-        if (summary == null) {
-            return out;
-        }
+        String outcome = r.ended.outcome();
+        int players = r.ended.summary().size();
         ModeSpec spec = r.spec();
-        for (Object o : summary) {
-            Map<String, Object> s = Json.obj(o);
-            if (s == null || Json.str(s, "userId") == null) {
-                continue;
-            }
+        for (RoomEnd.PlayerEnd s : r.ended.players()) {
             // won: the player beat the Champion, or the linked players won together
-            boolean won = "champion".equals(Json.str(s, "status")) || (spec.shared() && "victory".equals(outcome));
-            Room.Member m = r.member(Json.str(s, "userId"));
+            boolean won = "champion".equals(s.status()) || (spec.shared() && r.ended.victory());
+            Room.Member m = r.member(s.userId());
             List<Map<String, Object>> flags = m == null ? List.of() : List.copyOf(m.flags);
-            out.add(new Run(r.id, r.name, Json.str(s, "userId"), r.mode, spec.family(), Json.str(r.game, "gameId"), summary.size(),
-                    outcome, won, Json.num(s, "captures", 0), Json.num(s, "deaths", 0), Json.num(s, "badges", 0),
-                    Json.num(s, "alive", 0), Json.num(r.ended, "at", 0), flags));
+            out.add(new Run(r.id, r.name, s.userId(), r.mode, spec.family(), r.game.gameId(), players,
+                    outcome, won, s.captures(), s.deaths(), s.badges(), s.alive(), r.ended.at(), flags));
         }
         return out;
     }
