@@ -25,6 +25,32 @@ public final class SltServer {
 
     public static final String VERSION = slt.Version.VERSION;
     public static final int DEFAULT_PORT = 47330;
+    /** Connections waiting to be accepted (Linux caps it with net.core.somaxconn): every player back at a restart. */
+    static final int BACKLOG = 1024;
+
+    /**
+     * The settings of the JDK's HTTP server, as system properties: it reads them once, when its classes are loaded
+     * (the first server created, the local API of the application included), so they are set before, from
+     * {@link slt.Main}. A value given to the JVM ({@code -D…}) is kept.
+     * <ul>
+     *   <li>maxIdleConnections: beyond 200 idle keep-alive connections (the default) the server closes the one that
+     *       just answered, and with HTTPS nearly every request of a player then pays a new TLS handshake (load test
+     *       of 2026-11-10: 500 players collapse at 200, pass at 20000);</li>
+     *   <li>maxReqTime: a request (headers and body) must arrive within 2 minutes, enough for a 4 MB save on a slow
+     *       link, so that a client sending its headers a byte at a time does not hold its connection forever.</li>
+     * </ul>
+     * No maxRspTime: the event streams (SSE) are answers that never end.
+     */
+    public static void tuneHttp() {
+        setDefault("sun.net.httpserver.maxIdleConnections", "20000");
+        setDefault("sun.net.httpserver.maxReqTime", "120");
+    }
+
+    private static void setDefault(String key, String value) {
+        if (System.getProperty(key) == null) {
+            System.setProperty(key, value);
+        }
+    }
 
     final Accounts accounts;
     final Hub hub = new Hub();
@@ -97,6 +123,7 @@ public final class SltServer {
      * @param keystore optional PKCS#12 file for HTTPS (null = plain HTTP)
      */
     public void start(String bind, int port, Path keystore, String keystorePassword) throws Exception {
+        tuneHttp(); // no effect once an HTTP server was created: slt.Main sets them first
         InetSocketAddress addr = new InetSocketAddress(bind == null ? "0.0.0.0" : bind, port);
         if (keystore != null) {
             KeyStore ks = KeyStore.getInstance("PKCS12");
@@ -108,11 +135,11 @@ public final class SltServer {
             kmf.init(ks, pw);
             SSLContext ssl = SSLContext.getInstance("TLS");
             ssl.init(kmf.getKeyManagers(), null, null);
-            HttpsServer s = HttpsServer.create(addr, 128);
+            HttpsServer s = HttpsServer.create(addr, BACKLOG);
             s.setHttpsConfigurator(new HttpsConfigurator(ssl));
             http = s;
         } else {
-            http = HttpServer.create(addr, 128);
+            http = HttpServer.create(addr, BACKLOG);
         }
         ServerApi api = new ServerApi(this);
         http.createContext("/", api::handle);

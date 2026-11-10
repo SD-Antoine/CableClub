@@ -16,6 +16,8 @@ public final class Main {
     }
 
     public static void main(String[] args) throws Exception {
+        // before any HTTP server, the local API of the application included (it is created before the hosted server)
+        slt.server.SltServer.tuneHttp();
         if (Arrays.asList(args).contains("--player")) {
             slt.player.PlayerMain.main(args);
         } else if (Arrays.asList(args).contains("--server")) {

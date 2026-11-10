@@ -116,6 +116,7 @@ node tests/objectives.test.mjs   # objectifs des modes et progression des joueur
 node tests/assets-check.mjs      # aucune ressource tierce dans le dépôt (--package <dossier> : un paquet)
 .\tests\security\security-tests.ps1      # tests de sécurité et fuzzers (contrôle Host, JSON, sauvegardes DS, modes, galerie)
 .\tests\security\start-test-server.ps1   # instance de test locale (127.0.0.1:47399), seule cible permise des scans
+.\tests\load\load.ps1                    # banc de charge du serveur (500 joueurs, 2 cœurs, serveur jetable sur 127.0.0.1)
 ```
 
 La CI (`checks.yml`, à chaque push et pull request) lance les ressources tierces, `golden.ps1`, les tests
