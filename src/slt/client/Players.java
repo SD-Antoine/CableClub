@@ -31,6 +31,10 @@ final class Players {
         return t;
     });
     private final AtomicBoolean screenBusy = new AtomicBoolean();
+    /** Whether the live images go out (fewer while nobody watches), and the room they are for. */
+    private LiveCast cast = new LiveCast();
+    private String castRoom;
+    private final Object castLock = new Object();
     private volatile GameProcess process;
     private volatile String roomId;
     private volatile Map<String, Object> state = Json.map("state", "stopped");
@@ -192,15 +196,30 @@ final class Players {
         });
     }
 
-    /** Live image of the game: sent to the server at most one at a time (older ones are dropped). */
+    /**
+     * Live image of the game: sent to the server at most one at a time (older ones are dropped), and only one
+     * every few seconds while no other player looks at it (see {@link LiveCast}).
+     */
     void screen(byte[] jpeg) {
         String room = roomId;
         if (room == null || !app.link.loggedIn() || !screenBusy.compareAndSet(false, true)) {
             return;
         }
+        LiveCast c;
+        synchronized (castLock) {
+            if (!room.equals(castRoom)) {
+                cast = new LiveCast();
+                castRoom = room;
+            }
+            c = cast;
+        }
+        if (!c.shouldSend(System.currentTimeMillis())) {
+            screenBusy.set(false);
+            return;
+        }
         slt.Jobs.background("slt-envoi", () -> {
             try {
-                app.link.postBytes("/api/rooms/" + room + "/screen", jpeg);
+                c.answered(app.link.postBytesReply("/api/rooms/" + room + "/screen", jpeg));
             } finally {
                 screenBusy.set(false);
             }

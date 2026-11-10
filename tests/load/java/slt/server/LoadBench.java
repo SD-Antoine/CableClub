@@ -45,10 +45,13 @@ public final class LoadBench {
         if (args.length >= 3 && args[0].equals("seed")) {
             seed(Path.of(args[1]), Integer.parseInt(args[2]));
         } else if (args.length >= 6 && args[0].equals("run")) {
+            watching = args.length > 6 ? Integer.parseInt(args[6]) : 100;
+            oldClient = args.length > 7 && args[7].equals("1");
             run(Integer.parseInt(args[1]), Path.of(args[2]), Long.parseLong(args[3]), Integer.parseInt(args[4]),
                     Integer.parseInt(args[5]));
         } else {
-            System.err.println("LoadBench seed <data> <joueurs> | run <port> <data> <pid> <chauffe s> <mesure s>");
+            System.err.println("LoadBench seed <data> <joueurs> | run <port> <data> <pid> <chauffe s> <mesure s>"
+                    + " [<% d'écrans regardés> [<1 = ancien client>]]");
             System.exit(2);
         }
     }
@@ -88,10 +91,22 @@ public final class LoadBench {
 
     // -------------------------------------------------------------------- run
 
-    /** One player: their own HTTP client (connections of their own, as a browser), room and partner. */
+    /**
+     * One player: their own HTTP client (connections of their own, as a browser), room and partner; whether they
+     * look at their partner's screen, and what the server last said of theirs (watched or not).
+     */
     private record Player(HttpClient http, String room, String id, String token, String partner, byte[] screen,
-                          AtomicLong seen, java.util.concurrent.atomic.AtomicBoolean[] busy) {
+                          AtomicLong seen, java.util.concurrent.atomic.AtomicBoolean[] busy, boolean watcher,
+                          java.util.concurrent.atomic.AtomicBoolean watched, AtomicLong lastScreen) {
     }
+
+    /** Share of the players who look at their partner's screen (%), and whether the senders ignore "watched". */
+    private static int watching = 100;
+    private static boolean oldClient;
+    /** As the application (LiveCast): one image every 2 s while the server says nobody looks. */
+    private static final long IDLE_MS = 2_000;
+    private static final AtomicLong upBytes = new AtomicLong();
+    private static final AtomicLong downBytes = new AtomicLong();
 
     private static final AtomicLong done = new AtomicLong();
     private static final AtomicLong errors = new AtomicLong();
@@ -135,7 +150,8 @@ public final class LoadBench {
                     busy[j] = new java.util.concurrent.atomic.AtomicBoolean();
                 }
                 players.add(new Player(client(ssl, executor), f[0], f[1 + 2 * k], f[2 + 2 * k], f[3 - 2 * k], screen,
-                        new AtomicLong(), busy));
+                        new AtomicLong(), busy, random.nextInt(100) < watching,
+                        new java.util.concurrent.atomic.AtomicBoolean(true), new AtomicLong(Long.MIN_VALUE / 2)));
             }
         }
         System.out.printf("%d joueurs, %d salles : connexion…%n", players.size(), players.size() / 2);
@@ -147,10 +163,19 @@ public final class LoadBench {
             Player p = players.get(i);
             long d = (long) (i * step) + random.nextInt(250);
             timer.schedule(() -> stream(p, base), d, TimeUnit.MILLISECONDS);
-            timer.scheduleAtFixedRate(() -> send(p, HttpRequest.newBuilder(URI.create(base + "/api/rooms/" + p.room + "/screen"))
-                    .POST(HttpRequest.BodyPublishers.ofByteArray(p.screen)), 0), d, 250, TimeUnit.MILLISECONDS);
-            timer.scheduleAtFixedRate(() -> send(p, HttpRequest.newBuilder(URI.create(base + "/api/rooms/" + p.room
-                    + "/screen/" + p.partner + "?since=" + p.seen.get())).GET(), 1), d + 125, 250, TimeUnit.MILLISECONDS);
+            timer.scheduleAtFixedRate(() -> {
+                long now = System.currentTimeMillis();
+                if (!oldClient && !p.watched.get() && now - p.lastScreen.get() < IDLE_MS) {
+                    return;
+                }
+                p.lastScreen.set(now);
+                send(p, HttpRequest.newBuilder(URI.create(base + "/api/rooms/" + p.room + "/screen"))
+                        .POST(HttpRequest.BodyPublishers.ofByteArray(p.screen)), 0);
+            }, d, 250, TimeUnit.MILLISECONDS);
+            if (p.watcher) {
+                timer.scheduleAtFixedRate(() -> send(p, HttpRequest.newBuilder(URI.create(base + "/api/rooms/" + p.room
+                        + "/screen/" + p.partner + "?since=" + p.seen.get())).GET(), 1), d + 125, 250, TimeUnit.MILLISECONDS);
+            }
             timer.scheduleAtFixedRate(() -> send(p, json(base + "/api/rooms/" + p.room + "/ghost",
                     "{\"map\":3,\"x\":" + random.nextInt(40) + ",\"y\":" + random.nextInt(40) + ",\"st\":0}"), 2),
                     d + 60, 200, TimeUnit.MILLISECONDS);
@@ -179,6 +204,10 @@ public final class LoadBench {
         System.out.printf("Latence           : médiane %d ms, 95 %% %d ms, 99 %% %d ms, max %d ms%n",
                 percentile(n, 0.50), percentile(n, 0.95), percentile(n, 0.99), percentile(n, 1.0));
         System.out.printf("Processeur serveur: %.2f cœur%n", (cpu1 - cpu0) / (double) wall);
+        double perPlayer = players.size() * (wall / 1e9) * 1e6 / 8; // bytes in a Mbit/s of one player
+        System.out.printf("Débit par joueur  : %.2f Mbit/s reçus par le serveur, %.2f envoyés (corps des requêtes)%n",
+                upBytes.get() / perPlayer, downBytes.get() / perPlayer);
+        System.out.printf("Écrans regardés   : %d %% des joueurs%s%n", watching, oldClient ? ", ancien client (ignore « watched »)" : "");
         System.exit(errors.get() == 0 && streams.get() == players.size() ? 0 : 1);
     }
 
@@ -234,10 +263,18 @@ public final class LoadBench {
         HttpRequest r = b.header("Authorization", "Bearer " + p.token).timeout(Duration.ofSeconds(30)).build();
         long start = System.nanoTime();
         boolean counted = measuring;
+        long sent = r.bodyPublisher().map(HttpRequest.BodyPublisher::contentLength).orElse(0L);
         p.http.sendAsync(r, HttpResponse.BodyHandlers.ofByteArray()).whenComplete((res, e) -> {
             p.busy[loop].set(false);
+            if (loop == 0 && res != null && res.statusCode() == 200) {
+                p.watched.set(!new String(res.body(), java.nio.charset.StandardCharsets.UTF_8).contains("\"watched\":false"));
+            }
             if (!counted) {
                 return;
+            }
+            upBytes.addAndGet(Math.max(0, sent));
+            if (res != null && res.body() != null) {
+                downBytes.addAndGet(res.body().length);
             }
             String kind = null;
             if (e != null) {

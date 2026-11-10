@@ -540,8 +540,9 @@ final class ServerApi {
         });
         r.on("POST", "/api/rooms/{id}/screen", (ex, p) -> {
             Accounts.User u = user(ex);
-            rooms.putScreen(p.get("id"), u, Http.readBody(ex, 400_000));
-            Http.ok(ex);
+            boolean watched = rooms.putScreen(p.get("id"), u, Http.readBody(ex, 400_000));
+            // "watched": whether another member looks at it (older applications only read the status)
+            Http.json(ex, 200, Json.map("ok", true, "watched", watched));
         });
         r.on("GET", "/api/rooms/{id}/screen/{user}", (ex, p) -> {
             Map<String, Object> s = rooms.screen(p.get("id"), user(ex), p.get("user"), parse(Http.query(ex).get("since"), 0));

@@ -49,6 +49,10 @@ public final class Rooms {
     private final Hub hub;
     private final Map<String, Room> rooms = new ConcurrentHashMap<>();
     private final Map<String, Screen> screens = new ConcurrentHashMap<>();
+    /** When the image of a player's game was last asked for by another member (room id/user id → ms). */
+    final Map<String, Long> watched = new ConcurrentHashMap<>();
+    /** An image asked for in this time is watched: the interface asks 4 times a second while it shows it. */
+    static final long WATCH_MS = 3_000;
     final Map<String, Deque<Long>> creations = new ConcurrentHashMap<>();
     ModeGallery gallery; // the public modes (set by the server; null: none)   // by user: when they created a room
     /** A room was deleted (its chat goes with it). */
@@ -906,19 +910,29 @@ public final class Rooms {
 
     // ------------------------------------------------------ live screens
 
-    void putScreen(String id, Accounts.User user, byte[] jpeg) {
+    /**
+     * Keeps the latest image of a player's game. Returns whether another member asked for it lately: the
+     * application then sends one image every few seconds only while nobody looks (an older one ignores it).
+     */
+    boolean putScreen(String id, Accounts.User user, byte[] jpeg) {
         Room r = memberRoom(id, user);
         if (jpeg.length > MAX_SCREEN) {
             throw new Http.Fail(413, "Image trop grande");
         }
         String key = r.id + "/" + user.id;
         Screen prev = screens.get(key);
-        screens.put(key, new Screen(prev == null ? 1 : prev.seq() + 1, jpeg, System.currentTimeMillis()));
+        long now = System.currentTimeMillis();
+        screens.put(key, new Screen(prev == null ? 1 : prev.seq() + 1, jpeg, now));
+        Long seen = watched.get(key);
+        return seen != null && now - seen < WATCH_MS;
     }
 
-    /** Latest image of a player's game, or null if nothing newer than {@code since}. */
+    /** Latest image of a player's game, or null if nothing newer than {@code since}; the image is watched. */
     Map<String, Object> screen(String id, Accounts.User user, String target, long since) {
         Room r = memberRoom(id, user);
+        if (!user.id.equals(target) && r.member(target) != null) {
+            watched.put(r.id + "/" + target, System.currentTimeMillis());
+        }
         Screen s = screens.get(r.id + "/" + target);
         if (s == null || s.seq() <= since || System.currentTimeMillis() - s.at() > 20_000) {
             return null;
@@ -1133,6 +1147,7 @@ public final class Rooms {
                     Log.warn("Serveur : sauvegarde de " + user.username + " non supprimée : " + e.getMessage());
                 }
                 screens.remove(r.id + "/" + user.id);
+                watched.remove(r.id + "/" + user.id);
                 ghosts.remove(r.id + "/" + user.id);
                 commit(r, new Room.Out());
             }
@@ -1190,6 +1205,7 @@ public final class Rooms {
             Log.warn("Serveur : fichiers de la salle " + r.id + " non supprimés : " + e.getMessage());
         }
         screens.keySet().removeIf(k -> k.startsWith(r.id + "/"));
+        watched.keySet().removeIf(k -> k.startsWith(r.id + "/"));
         ghosts.keySet().removeIf(k -> k.startsWith(r.id + "/"));
     }
 

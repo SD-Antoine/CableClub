@@ -5,12 +5,16 @@
   against another machine. Not part of the CI (it takes a few minutes and most of the processor).
   Fails (exit code 1) on any error or unopened event stream. Measured on 2 cores of a Ryzen 7800X3D (2026-11-10):
   500 players 0 error, median 4 ms, 0.71 core; with -MaxIdle 200, 196 errors and 0.8 s; 1000 players saturate
-  (median 230 ms, 29 % of the sendings skipped, 1.35 core); -NoDelay brought nothing.
+  (median 230 ms, 29 % of the sendings skipped, 1.35 core); -NoDelay brought nothing. Live screens on demand: with
+  nobody looking at the partner's screen, 0.22 core and 0.06 Mbit/s received per player, against 0.55 core and
+  0.48 Mbit/s with applications that send every image (-OldClient); 0.76 core when every screen is watched.
 
     .\tests\load\load.ps1                       # 500 players, 2 cores
     .\tests\load\load.ps1 -Players 1000
     .\tests\load\load.ps1 -MaxIdle 200          # the JDK's former default, to compare
     .\tests\load\load.ps1 -NoDelay              # TCP_NODELAY on the server's connections
+    .\tests\load\load.ps1 -Watching 0           # nobody looks at the partner's screen (solo rooms, panel closed)
+    .\tests\load\load.ps1 -Watching 0 -OldClient  # the same with applications that ignore "watched"
     .\tests\load\load.ps1 -Keep                 # keeps the server's folder (its log) to look at afterwards
 
   Requirements: JDK 21+ (javac, java).
@@ -24,7 +28,9 @@ param(
     [string]$Heap = '1g',
     [int]$MaxIdle = 0,
     [switch]$NoDelay,
-    [switch]$Keep
+    [switch]$Keep,
+    [int]$Watching = 100,
+    [switch]$OldClient
 )
 $ErrorActionPreference = 'Stop'
 $Root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
@@ -77,7 +83,7 @@ try {
     $clientMask = ([long][math]::Pow(2, $logical) - 1) -bxor ([long][math]::Pow(2, $Cores) - 1)
     $client = Start-Process -FilePath $java -NoNewWindow -PassThru -ArgumentList @('--enable-preview',
         '-Dstdout.encoding=UTF-8', '-Djdk.internal.httpclient.disableHostnameVerification=true', '-Xmx4g', '-cp', $Classes,
-        'slt.server.LoadBench', 'run', $Port, $Data, $server.Id, $Warmup, $Seconds)
+        'slt.server.LoadBench', 'run', $Port, $Data, $server.Id, $Warmup, $Seconds, $Watching, $(if ($OldClient) { 1 } else { 0 }))
     $null = $client.Handle # keeps the exit code readable once the process is gone
     $client.ProcessorAffinity = [IntPtr]$clientMask
     $client.WaitForExit()

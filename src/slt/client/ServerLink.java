@@ -483,15 +483,21 @@ final class ServerLink {
     }
 
     boolean postBytes(String path, byte[] data) {
+        return postBytesReply(path, data) != null;
+    }
+
+    /** Binary POST: the body of the answer when it succeeded (empty if none), null otherwise. */
+    byte[] postBytesReply(String path, byte[] data) {
         String token = config.str("token");
         if (base() == null || token == null) {
-            return false;
+            return null;
         }
         try {
-            return http.send("POST", base() + path, Map.of("Authorization", "Bearer " + token,
-                    "Content-Type", "application/octet-stream"), data, 30_000).status() == 200;
+            Net.Response r = http.send("POST", base() + path, Map.of("Authorization", "Bearer " + token,
+                    "Content-Type", "application/octet-stream"), data, 30_000);
+            return r.status() != 200 ? null : r.body() == null ? new byte[0] : r.body();
         } catch (IOException e) {
-            return false;
+            return null;
         }
     }
 
