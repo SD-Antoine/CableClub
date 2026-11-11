@@ -126,7 +126,9 @@ node tests/assets-check.mjs      # aucune ressource tierce dans le dépôt (--pa
 ```
 
 La CI (`checks.yml`, à chaque push et pull request) lance les ressources tierces, `golden.ps1`, les tests
-`node` de l'interface et `security-tests.ps1` ; `release.yml` les relance avant de publier.
+`node` de l'interface et `security-tests.ps1` ; `release.yml` les relance avant de publier. `android.yml`
+(pull requests et `main`, seulement si `android/`, `src/` hors serveur, `web/`, les cœurs ou les scripts de
+construction changent) construit l'APK de test, cœurs et moteur de randomisation en cache.
 
 Toute modification de `src/slt/server/Room.java` (ou de ce qu'il appelle) passe par `tests\golden.ps1`.
 Une référence réécrite avec `-Update` se relit dans le diff et se justifie dans le message de commit.

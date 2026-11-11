@@ -1,0 +1,86 @@
+# The Android app still builds (point 11 of the follow-up of the audit of 2026-11-10): the debug APK, built on the
+# pull requests and on main when something it is made of changes (the shared sources src and web, the Android project,
+# the cores, the build scripts; not the server, which Android does not compile: pcOnly in android/app/build.gradle.kts).
+# Until now only release.yml built it, so a shared source the Android build refuses (Java 17, see CLAUDE.md) was found
+# at release time. An API missing from old Android versions still compiles (compileSdk is recent): it is not caught.
+#
+# Debug key, no secret. The cores are kept in a cache keyed by cores.lock.json: those of the libretro buildbot change
+# every night, and a new nightly must not fail a pull request that has nothing to do with it (release.yml downloads
+# them again). The randomizer engine (build\lib\upr-zx.jar) is kept by the commit written in build.ps1.
+# The APK is left in the run's artifacts for 7 days (to try on a phone).
+name: Android
+
+on:
+  pull_request:
+    paths:
+      - 'android/**'
+      - 'src/**'
+      - '!src/slt/server/**'
+      - 'web/**'
+      - 'CHANGELOG.md'
+      - 'cores.lock.json'
+      - 'build.ps1'
+      - 'build-android.ps1'
+      - '.github/workflows/android.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'android/**'
+      - 'src/**'
+      - '!src/slt/server/**'
+      - 'web/**'
+      - 'CHANGELOG.md'
+      - 'cores.lock.json'
+      - 'build.ps1'
+      - 'build-android.ps1'
+      - '.github/workflows/android.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  apk:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      # one build per run: no daemon left holding the cached files
+      GRADLE_OPTS: -Dorg.gradle.daemon=false
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - name: Coeurs d'emulation (cache)
+        uses: actions/cache@v4
+        with:
+          path: build/cores-android
+          key: cores-android-${{ hashFiles('cores.lock.json') }}
+
+      - name: Moteur de randomisation (cache)
+        uses: actions/cache@v4
+        with:
+          path: build/lib/upr-zx.jar
+          key: upr-zx-${{ hashFiles('build.ps1') }}
+
+      - name: SDK Android
+        shell: powershell
+        run: |
+          $sdkmanager = Join-Path $env:ANDROID_HOME 'cmdline-tools\latest\bin\sdkmanager.bat'
+          "y`ny`ny`ny`ny`ny`ny`ny`n" | & $sdkmanager --licenses | Out-Null
+          & $sdkmanager 'platforms;android-36.1' 'ndk;29.0.14206865' 'build-tools;36.0.0' | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'sdkmanager a echoue' }
+
+      - name: APK de test
+        shell: powershell
+        run: .\build-android.ps1 -Debug -Out dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apk-debug
+          path: dist/*-android-debug.apk*
+          retention-days: 7
